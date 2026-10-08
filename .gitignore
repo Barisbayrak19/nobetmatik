@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# PyInstaller / Build artifacts
+build/
+dist/
+*.spec
+installer/Output/
+
+# Application runtime data & school documents
+*.db
+*.db-journal
+*.sqlite
+*.pdf
+*.html
+*.xlsx
+*.xlsm
+all_students.json
+logs/
+*.log
+backups/
+exports/
+
+# Excel temporary files
+~$*.xlsx
+~$*.xlsm
+~$*.doc
+~$*.docx
+
+# OS specific
+Thumbs.db
+desktop.ini
+.DS_Store

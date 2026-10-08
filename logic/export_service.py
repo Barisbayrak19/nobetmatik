@@ -1,0 +1,1590 @@
+"""
+Çıktı (Dışa Aktarım) Servisi
+PDF, Excel (.xlsx), Word (.docx), HTML ve CSV formatlarını üretir.
+En üste tarih aralığı ve müdür imza bloğunun üstüne günün tarihi eklenir.
+"""
+import os
+import csv
+import datetime
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+)
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+
+from core.models import SchoolInfo, Day, Location, Teacher, Assignment, AttendanceRecord, TeacherLesson
+from core.database import Database
+from core.logger import logger
+
+PERIOD_TIMES = {
+    1: "07:40 - 08:20",
+    2: "08:30 - 09:10",
+    3: "09:20 - 10:00",
+    4: "10:10 - 10:50",
+    5: "11:00 - 11:40",
+    6: "11:50 - 12:30",
+    7: "12:40 - 13:20"
+}
+
+# Font kayıtları (Türkçe karakter desteği için sistem Arial fontu)
+_FONT_REGISTERED = False
+def _register_pdf_fonts():
+    global _FONT_REGISTERED
+    if _FONT_REGISTERED:
+        return
+    font_path = Path("C:/Windows/Fonts/arial.ttf")
+    font_bold_path = Path("C:/Windows/Fonts/arialbd.ttf")
+    if font_path.exists():
+        try:
+            pdfmetrics.registerFont(TTFont("CustomArial", str(font_path)))
+            if font_bold_path.exists():
+                pdfmetrics.registerFont(TTFont("CustomArial-Bold", str(font_bold_path)))
+            else:
+                pdfmetrics.registerFont(TTFont("CustomArial-Bold", str(font_path)))
+            _FONT_REGISTERED = True
+        except Exception as e:
+            logger.warning(f"Arial font yüklenirken hata: {e}")
+
+class ExportService:
+    def __init__(self, db: Database):
+        self.db = db
+
+    def _prepare_table_data(self, week_start: str) -> Dict[str, Any]:
+        school = self.db.get_school_info()
+        days = self.db.get_days()
+        locations = self.db.get_locations(active_only=True)
+        assignments = self.db.get_assignments_for_week(week_start)
+        teachers = {t.id: t for t in self.db.get_teachers()}
+
+        # Tarih aralığı ve günün tarihi hesaplama
+        try:
+            start_dt = datetime.date.fromisoformat(week_start)
+            end_dt = start_dt + datetime.timedelta(days=4)
+            date_range_str = f"{start_dt.strftime('%d.%m.%Y')} - {end_dt.strftime('%d.%m.%Y')}"
+        except Exception:
+            date_range_str = week_start
+
+        today_str = datetime.date.today().strftime("%d.%m.%Y")
+
+        # (day_id, loc_id) -> list of teacher names
+        table_matrix: Dict[str, Dict[str, List[str]]] = {}
+        for d in days:
+            table_matrix[d.id] = {loc.id: [] for loc in locations}
+
+        for a in assignments:
+            if a.day_id in table_matrix and a.location_id in table_matrix[a.day_id]:
+                if a.teacher_id and a.teacher_id in teachers:
+                    t_name = teachers[a.teacher_id].name
+                    table_matrix[a.day_id][a.location_id].append(t_name)
+
+        return {
+            "school": school,
+            "days": days,
+            "locations": locations,
+            "matrix": table_matrix,
+            "week_start": week_start,
+            "date_range_str": date_range_str,
+            "today_str": today_str
+        }
+
+    # 1. EXCEL (.xlsx)
+    def export_excel(self, week_start: str, output_path: Path) -> Path:
+        data = self._prepare_table_data(week_start)
+        school = data["school"]
+        days = data["days"]
+        locations = data["locations"]
+        matrix = data["matrix"]
+        date_range_str = data["date_range_str"]
+        today_str = data["today_str"]
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Haftalık Nöbet Çizelgesi"
+
+        # Başlık Stilleri
+        header_font = Font(name="Calibri", size=14, bold=True, color="1F497D")
+        sub_font = Font(name="Calibri", size=11, bold=True)
+        date_font = Font(name="Calibri", size=10, bold=True, color="2F5597")
+        tbl_hdr_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        tbl_fill = PatternFill(start_color="2F5597", end_color="2F5597", fill_type="solid")
+        day_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        cell_font = Font(name="Calibri", size=10)
+        
+        thin_border = Border(
+            left=Side(style='thin', color='A6A6A6'),
+            right=Side(style='thin', color='A6A6A6'),
+            top=Side(style='thin', color='A6A6A6'),
+            bottom=Side(style='thin', color='A6A6A6')
+        )
+
+        col_count = len(locations) + 1
+
+        # Başlık satırları
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=col_count)
+        ws.cell(row=1, column=1, value="T.C.").alignment = Alignment(horizontal="center")
+        ws.cell(row=1, column=1).font = sub_font
+
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=col_count)
+        ws.cell(row=2, column=1, value=f"{school.district.upper()} KAYMAKAMLIĞI").alignment = Alignment(horizontal="center")
+        ws.cell(row=2, column=1).font = sub_font
+
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
+        ws.cell(row=3, column=1, value=f"{school.name} Müdürlüğü").alignment = Alignment(horizontal="center")
+        ws.cell(row=3, column=1).font = header_font
+
+        ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=col_count)
+        ws.cell(row=4, column=1, value=f"HAFTALIK NÖBET ÇİZELGESİ ({school.academic_year})").alignment = Alignment(horizontal="center")
+        ws.cell(row=4, column=1).font = sub_font
+
+        # En Üst Tarih Aralığı Satırı
+        ws.merge_cells(start_row=5, start_column=1, end_row=5, end_column=col_count)
+        ws.cell(row=5, column=1, value=f"Tarih Aralığı: {date_range_str}").alignment = Alignment(horizontal="center")
+        ws.cell(row=5, column=1).font = date_font
+
+        # Tablo Başlığı
+        start_row = 7
+        ws.cell(row=start_row, column=1, value="Günler / Yerler").font = tbl_hdr_font
+        ws.cell(row=start_row, column=1).fill = tbl_fill
+        ws.cell(row=start_row, column=1).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=start_row, column=1).border = thin_border
+
+        for col_idx, loc in enumerate(locations, start=2):
+            c = ws.cell(row=start_row, column=col_idx, value=loc.name)
+            c.font = tbl_hdr_font
+            c.fill = tbl_fill
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+
+        # Satırlar (Günler)
+        current_row = start_row + 1
+        for d in days:
+            c = ws.cell(row=current_row, column=1, value=d.name)
+            c.font = Font(name="Calibri", size=10, bold=True)
+            c.fill = day_fill
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+
+            for col_idx, loc in enumerate(locations, start=2):
+                teachers_list = matrix[d.id].get(loc.id, [])
+                cell_value = "\n".join(teachers_list) if teachers_list else "-"
+                cell = ws.cell(row=current_row, column=col_idx, value=cell_value)
+                cell.font = cell_font
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                cell.border = thin_border
+            current_row += 1
+
+        # Nöbet Kuralları
+        current_row += 1
+        ws.cell(row=current_row, column=1, value="NÖBETÇİ ÖĞRETMENLERİN GÖREVLERİ").font = Font(name="Calibri", size=10, bold=True)
+        current_row += 1
+        for rule_line in school.duty_rules.split("\n"):
+            if rule_line.strip():
+                ws.cell(row=current_row, column=1, value=rule_line.strip()).font = Font(name="Calibri", size=9)
+                current_row += 1
+
+        # İmza Bloğu (Müdürün üstüne günün tarihi eklenir)
+        current_row += 1
+        ws.cell(row=current_row, column=col_count, value=today_str).alignment = Alignment(horizontal="center")
+        ws.cell(row=current_row, column=col_count).font = Font(name="Calibri", size=10, italic=True)
+        current_row += 1
+        ws.cell(row=current_row, column=col_count, value=school.principal_name).alignment = Alignment(horizontal="center")
+        ws.cell(row=current_row, column=col_count).font = Font(name="Calibri", size=10, bold=True)
+        current_row += 1
+        ws.cell(row=current_row, column=col_count, value="Müdür").alignment = Alignment(horizontal="center")
+        ws.cell(row=current_row, column=col_count).font = Font(name="Calibri", size=10)
+
+        # Sütun genişliklerini ayarla
+        ws.column_dimensions["A"].width = 18
+        for col_idx in range(2, col_count + 1):
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = 24
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Excel çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+    # 2. WORD (.docx)
+    def export_word(self, week_start: str, output_path: Path) -> Path:
+        data = self._prepare_table_data(week_start)
+        school = data["school"]
+        days = data["days"]
+        locations = data["locations"]
+        matrix = data["matrix"]
+        date_range_str = data["date_range_str"]
+        today_str = data["today_str"]
+
+        doc = Document()
+        
+        # Sayfa kenar boşlukları
+        sections = doc.sections
+        for section in sections:
+            section.top_margin = Inches(0.6)
+            section.bottom_margin = Inches(0.6)
+            section.left_margin = Inches(0.6)
+            section.right_margin = Inches(0.6)
+
+        # Başlıklar
+        p1 = doc.add_paragraph()
+        p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r1 = p1.add_run(f"T.C.\n{school.district.upper()} KAYMAKAMLIĞI\n{school.name} Müdürlüğü\n")
+        r1.bold = True
+        r1.font.size = Pt(11)
+
+        p2 = doc.add_paragraph()
+        p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r2 = p2.add_run(f"HAFTALIK NÖBET ÇİZELGESİ ({school.academic_year})\n")
+        r2.bold = True
+        r2.font.size = Pt(12)
+
+        # En Üste Tarih Aralığı
+        p_dates = doc.add_paragraph()
+        p_dates.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r_dates = p_dates.add_run(f"Tarih Aralığı: {date_range_str}\n")
+        r_dates.font.size = Pt(10)
+        r_dates.font.color.rgb = RGBColor(0x2F, 0x55, 0x97)
+        r_dates.bold = True
+
+        # Tablo
+        table = doc.add_table(rows=len(days) + 1, cols=len(locations) + 1)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        table.style = 'Table Grid'
+
+        # Tablo Başlığı
+        hdr_cells = table.rows[0].cells
+        hdr_cells[0].text = "Nöbet Yerleri ->"
+        hdr_cells[0].paragraphs[0].runs[0].font.bold = True
+        hdr_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        for col_idx, loc in enumerate(locations, start=1):
+            hdr_cells[col_idx].text = loc.name
+            hdr_cells[col_idx].paragraphs[0].runs[0].font.bold = True
+            hdr_cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Tablo Verileri
+        for row_idx, d in enumerate(days, start=1):
+            row_cells = table.rows[row_idx].cells
+            row_cells[0].text = d.name
+            row_cells[0].paragraphs[0].runs[0].font.bold = True
+            row_cells[0].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            for col_idx, loc in enumerate(locations, start=1):
+                teachers_list = matrix[d.id].get(loc.id, [])
+                cell_text = "\n".join(teachers_list) if teachers_list else "-"
+                row_cells[col_idx].text = cell_text
+                row_cells[col_idx].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in row_cells[col_idx].paragraphs[0].runs:
+                    run.font.size = Pt(9.5)
+
+        # Nöbet Kuralları
+        doc.add_paragraph()
+        p_rules_title = doc.add_paragraph()
+        r_title = p_rules_title.add_run("NÖBETÇİ ÖĞRETMENLERİN GÖREVLERİ")
+        r_title.bold = True
+        r_title.font.size = Pt(10)
+
+        for rule in school.duty_rules.split("\n"):
+            if rule.strip():
+                p_rule = doc.add_paragraph(rule.strip())
+                p_rule.paragraph_format.space_after = Pt(2)
+                p_rule.paragraph_format.line_spacing = 1.15
+                if p_rule.runs:
+                    p_rule.runs[0].font.size = Pt(8.5)
+
+        # İmza (Müdürün üstüne günün tarihi eklenir)
+        p_sign = doc.add_paragraph()
+        p_sign.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        r_sign = p_sign.add_run(f"\n{today_str}\n{school.principal_name}\nMüdür")
+        r_sign.bold = True
+        r_sign.font.size = Pt(10)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.save(output_path)
+        logger.info(f"Word çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+    # 3. PDF (.pdf)
+    def export_pdf(self, week_start: str, output_path: Path) -> Path:
+        _register_pdf_fonts()
+        data = self._prepare_table_data(week_start)
+        school = data["school"]
+        days = data["days"]
+        locations = data["locations"]
+        matrix = data["matrix"]
+        date_range_str = data["date_range_str"]
+        today_str = data["today_str"]
+
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=landscape(A4),
+            rightMargin=30,
+            leftMargin=30,
+            topMargin=25,
+            bottomMargin=25
+        )
+
+        styles = getSampleStyleSheet()
+        font_family = "CustomArial" if _FONT_REGISTERED else "Helvetica"
+        font_bold = "CustomArial-Bold" if _FONT_REGISTERED else "Helvetica-Bold"
+
+        title_style = ParagraphStyle(
+            name="PdfTitle",
+            fontName=font_bold,
+            fontSize=11,
+            alignment=1, # Center
+            leading=14
+        )
+        subtitle_style = ParagraphStyle(
+            name="PdfSubTitle",
+            fontName=font_bold,
+            fontSize=12,
+            alignment=1,
+            leading=15
+        )
+        date_style = ParagraphStyle(
+            name="PdfDateRange",
+            fontName=font_bold,
+            fontSize=9.5,
+            alignment=1,
+            textColor=colors.HexColor("#2F5597"),
+            leading=13
+        )
+        cell_style = ParagraphStyle(
+            name="PdfCell",
+            fontName=font_family,
+            fontSize=8.5,
+            alignment=1,
+            leading=10
+        )
+        hdr_cell_style = ParagraphStyle(
+            name="PdfHdrCell",
+            fontName=font_bold,
+            fontSize=9,
+            alignment=1,
+            leading=11
+        )
+        rules_style = ParagraphStyle(
+            name="PdfRules",
+            fontName=font_family,
+            fontSize=7.5,
+            leading=9.5
+        )
+        rules_title_style = ParagraphStyle(
+            name="PdfRulesTitle",
+            fontName=font_bold,
+            fontSize=8,
+            leading=10
+        )
+        sign_style = ParagraphStyle(
+            name="PdfSign",
+            fontName=font_bold,
+            fontSize=9,
+            alignment=2, # Right
+            leading=12
+        )
+
+        elements = []
+
+        elements.append(Paragraph(f"T.C.<br/>{school.district.upper()} KAYMAKAMLIĞI<br/>{school.name} Müdürlüğü", title_style))
+        elements.append(Spacer(1, 4))
+        elements.append(Paragraph(f"HAFTALIK NÖBET ÇİZELGESİ ({school.academic_year})", subtitle_style))
+        elements.append(Spacer(1, 2))
+        # En üste tarih aralığı
+        elements.append(Paragraph(f"Tarih Aralığı: {date_range_str}", date_style))
+        elements.append(Spacer(1, 6))
+
+        # Tablo
+        table_data = []
+        # Başlık satırı
+        header_row = [Paragraph("<b>Nöbet Yerleri -></b>", hdr_cell_style)]
+        for loc in locations:
+            header_row.append(Paragraph(f"<b>{loc.name}</b>", hdr_cell_style))
+        table_data.append(header_row)
+
+        for d in days:
+            row = [Paragraph(f"<b>{d.name}</b>", hdr_cell_style)]
+            for loc in locations:
+                t_list = matrix[d.id].get(loc.id, [])
+                cell_text = "<br/>".join(t_list) if t_list else "-"
+                row.append(Paragraph(cell_text, cell_style))
+            table_data.append(row)
+
+        # Tablo stil ve genişlikleri
+        col_w = 780 / (len(locations) + 1)
+        col_widths = [col_w] * (len(locations) + 1)
+        pdf_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        pdf_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#EAECEE")),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#7F8C8D")),
+            ('BOX', (0, 0), (-1, -1), 1, colors.HexColor("#2C3E50")),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(pdf_table)
+        elements.append(Spacer(1, 6))
+
+        # Kurallar
+        elements.append(Paragraph("<b>NÖBETÇİ ÖĞRETMENLERİN GÖREVLERİ</b>", rules_title_style))
+        elements.append(Spacer(1, 2))
+        for r_line in school.duty_rules.split("\n"):
+            if r_line.strip():
+                elements.append(Paragraph(r_line.strip(), rules_style))
+
+        elements.append(Spacer(1, 4))
+        # Müdürün üstüne günün tarihi
+        elements.append(Paragraph(f"{today_str}<br/>{school.principal_name}<br/>Müdür", sign_style))
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.build(elements)
+        logger.info(f"PDF çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+    # 4. HTML (.html)
+    def export_html(self, week_start: str, output_path: Path) -> Path:
+        data = self._prepare_table_data(week_start)
+        school = data["school"]
+        days = data["days"]
+        locations = data["locations"]
+        matrix = data["matrix"]
+        date_range_str = data["date_range_str"]
+        today_str = data["today_str"]
+
+        html_rows = []
+        for d in days:
+            cells_html = [f"<td class='day-col'><b>{d.name}</b></td>"]
+            for loc in locations:
+                t_list = matrix[d.id].get(loc.id, [])
+                t_str = "<br>".join(t_list) if t_list else "-"
+                cells_html.append(f"<td>{t_str}</td>")
+            html_rows.append(f"<tr>{''.join(cells_html)}</tr>")
+
+        hdr_cells = "".join([f"<th>{loc.name}</th>" for loc in locations])
+        rules_html = "".join([f"<li>{r.strip()}</li>" for r in school.duty_rules.split("\n") if r.strip()])
+
+        html_content = f"""<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Haftalık Nöbet Çizelgesi - {school.name}</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            color: #333;
+        }}
+        .header {{
+            text-align: center;
+            margin-bottom: 15px;
+        }}
+        .header h3, .header h2 {{
+            margin: 3px 0;
+        }}
+        .date-range {{
+            font-size: 14px;
+            color: #2F5597;
+            font-weight: bold;
+            margin-top: 5px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+        }}
+        th, td {{
+            border: 1px solid #444;
+            padding: 8px 6px;
+            text-align: center;
+            font-size: 13px;
+        }}
+        th {{
+            background-color: #2F5597;
+            color: white;
+            font-weight: bold;
+        }}
+        .day-col {{
+            background-color: #D9E1F2;
+            font-weight: bold;
+            width: 120px;
+        }}
+        .rules {{
+            font-size: 11px;
+            line-height: 1.4;
+            margin-top: 10px;
+        }}
+        .signature {{
+            float: right;
+            text-align: center;
+            margin-top: 20px;
+            font-weight: bold;
+            font-size: 13px;
+            line-height: 1.4;
+        }}
+        .signature .date {{
+            font-weight: normal;
+            margin-bottom: 4px;
+        }}
+        @media print {{
+            body {{ margin: 0; }}
+            @page {{ size: landscape; margin: 10mm; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h3>T.C.</h3>
+        <h3>{school.district.upper()} KAYMAKAMLIĞI</h3>
+        <h2>{school.name} Müdürlüğü</h2>
+        <h3>HAFTALIK NÖBET ÇİZELGESİ ({school.academic_year})</h3>
+        <div class="date-range">Tarih Aralığı: {date_range_str}</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Nöbet Yerleri -></th>
+                {hdr_cells}
+            </tr>
+        </thead>
+        <tbody>
+            {''.join(html_rows)}
+        </tbody>
+    </table>
+
+    <div class="rules">
+        <h4>NÖBETÇİ ÖĞRETMENLERİN GÖREVLERİ</h4>
+        <ol style="padding-left: 20px;">
+            {rules_html}
+        </ol>
+    </div>
+
+    <div class="signature">
+        <div class="date">{today_str}</div>
+        <div>{school.principal_name}</div>
+        <div>Müdür</div>
+    </div>
+</body>
+</html>
+"""
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        logger.info(f"HTML çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+    # 5. CSV (.csv)
+    def export_csv(self, week_start: str, output_path: Path) -> Path:
+        data = self._prepare_table_data(week_start)
+        school = data["school"]
+        days = data["days"]
+        locations = data["locations"]
+        matrix = data["matrix"]
+        date_range_str = data["date_range_str"]
+        today_str = data["today_str"]
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f, delimiter=";")
+            # Başlık satırları
+            writer.writerow(["T.C.", f"{school.district.upper()} KAYMAKAMLIĞI"])
+            writer.writerow([school.name, "Müdürlüğü"])
+            writer.writerow(["HAFTALIK NÖBET ÇİZELGESİ", school.academic_year])
+            writer.writerow(["Tarih Aralığı:", date_range_str])
+            writer.writerow([])
+
+            # Tablo başlığı
+            header = ["Gün"] + [loc.name for loc in locations]
+            writer.writerow(header)
+
+            for d in days:
+                row = [d.name]
+                for loc in locations:
+                    t_list = matrix[d.id].get(loc.id, [])
+                    row.append(", ".join(t_list) if t_list else "")
+                writer.writerow(row)
+
+            writer.writerow([])
+            writer.writerow(["NÖBETÇİ ÖĞRETMENLERİN GÖREVLERİ"])
+            for r in school.duty_rules.split("\n"):
+                if r.strip():
+                    writer.writerow([r.strip()])
+
+            writer.writerow([])
+            writer.writerow(["", "", "", today_str])
+            writer.writerow(["", "", "", school.principal_name])
+            writer.writerow(["", "", "", "Müdür"])
+
+        logger.info(f"CSV çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+    # 6. PERSONEL DEVAM TAKİP EXCEL (.xlsx)
+    def export_attendance_excel(self, records: List[AttendanceRecord], output_path: Path, title: str = "PERSONEL DEVAM-DEVAMSIZLIK TAKİP ÇİZELGESİ") -> Path:
+        school = self.db.get_school_info()
+        today_str = datetime.date.today().strftime("%d.%m.%Y")
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Devam Takip"
+
+        header_font = Font(name="Calibri", size=13, bold=True, color="1F497D")
+        sub_font = Font(name="Calibri", size=10, bold=True)
+        tbl_hdr_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        tbl_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+        cell_font = Font(name="Calibri", size=9.5)
+        bold_cell_font = Font(name="Calibri", size=9.5, bold=True)
+
+        status_colors = {
+            "Raporlu": PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid"),
+            "İzinli": PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid"),
+            "Sevkli": PatternFill(start_color="E0F2FE", end_color="E0F2FE", fill_type="solid"),
+            "Görevli": PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid"),
+            "Mazeretli": PatternFill(start_color="F3E8FF", end_color="F3E8FF", fill_type="solid"),
+        }
+
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+
+        col_count = 8
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=col_count)
+        ws.cell(row=1, column=1, value="T.C.").alignment = Alignment(horizontal="center")
+        ws.cell(row=1, column=1).font = sub_font
+
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=col_count)
+        ws.cell(row=2, column=1, value=f"{school.district.upper()} KAYMAKAMLIĞI / İLÇE MİLLÎ EĞİTİM MÜDÜRLÜĞÜ").alignment = Alignment(horizontal="center")
+        ws.cell(row=2, column=1).font = sub_font
+
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=col_count)
+        ws.cell(row=3, column=1, value=f"{school.name} Müdürlüğü").alignment = Alignment(horizontal="center")
+        ws.cell(row=3, column=1).font = header_font
+
+        ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=col_count)
+        ws.cell(row=4, column=1, value=title).alignment = Alignment(horizontal="center")
+        ws.cell(row=4, column=1).font = Font(name="Calibri", size=11, bold=True, color="2563EB")
+
+        headers = ["Sıra No", "Tarih", "Öğretmen Adı Soyadı", "Branşı", "Devamsızlık Nedeni", "Ders Saatleri", "Girmediği Şubeler / Dersler", "Açıklama"]
+        hdr_row = 6
+        for col_idx, h_text in enumerate(headers, start=1):
+            c = ws.cell(row=hdr_row, column=col_idx, value=h_text)
+            c.font = tbl_hdr_font
+            c.fill = tbl_fill
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+
+        curr_row = hdr_row + 1
+        for idx, r in enumerate(records, start=1):
+            c_no = ws.cell(row=curr_row, column=1, value=idx)
+            c_no.alignment = Alignment(horizontal="center")
+            c_no.font = cell_font
+            c_no.border = thin_border
+
+            try:
+                d_obj = datetime.date.fromisoformat(r.date_str)
+                d_formatted = d_obj.strftime("%d.%m.%Y")
+            except Exception:
+                d_formatted = r.date_str
+
+            c_date = ws.cell(row=curr_row, column=2, value=d_formatted)
+            c_date.alignment = Alignment(horizontal="center")
+            c_date.font = cell_font
+            c_date.border = thin_border
+
+            c_name = ws.cell(row=curr_row, column=3, value=r.teacher_name)
+            c_name.alignment = Alignment(horizontal="left")
+            c_name.font = bold_cell_font
+            c_name.border = thin_border
+
+            c_branch = ws.cell(row=curr_row, column=4, value=r.branch)
+            c_branch.alignment = Alignment(horizontal="center")
+            c_branch.font = cell_font
+            c_branch.border = thin_border
+
+            c_status = ws.cell(row=curr_row, column=5, value=r.status)
+            c_status.alignment = Alignment(horizontal="center")
+            c_status.font = bold_cell_font
+            c_status.border = thin_border
+            if r.status in status_colors:
+                c_status.fill = status_colors[r.status]
+
+            c_periods = ws.cell(row=curr_row, column=6, value=r.periods_missed)
+            c_periods.alignment = Alignment(horizontal="center")
+            c_periods.font = cell_font
+            c_periods.border = thin_border
+
+            c_lessons = ws.cell(row=curr_row, column=7, value=r.lessons_missed or "-")
+            c_lessons.alignment = Alignment(horizontal="left")
+            c_lessons.font = cell_font
+            c_lessons.border = thin_border
+
+            c_notes = ws.cell(row=curr_row, column=8, value=r.notes)
+            c_notes.alignment = Alignment(horizontal="left")
+            c_notes.font = cell_font
+            c_notes.border = thin_border
+
+            curr_row += 1
+
+        # İmza Satırı
+        curr_row += 2
+        ws.cell(row=curr_row, column=7, value=today_str).alignment = Alignment(horizontal="center")
+        ws.cell(row=curr_row, column=7).font = sub_font
+        ws.cell(row=curr_row + 1, column=7, value=school.principal_name).alignment = Alignment(horizontal="center")
+        ws.cell(row=curr_row + 1, column=7).font = header_font
+        ws.cell(row=curr_row + 2, column=7, value="Okul Müdürü").alignment = Alignment(horizontal="center")
+        ws.cell(row=curr_row + 2, column=7).font = sub_font
+
+        # Sütun Genişlikleri
+        widths = [8, 13, 26, 20, 18, 16, 26, 30]
+        for col_idx, width in enumerate(widths, start=1):
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = width
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Personel Devam Takip Excel çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+    # 7. PERSONEL DEVAM TAKİP PDF (.pdf)
+    def export_attendance_pdf(self, records: List[AttendanceRecord], output_path: Path, title: str = "PERSONEL DEVAM TAKİP ÇİZELGESİ") -> Path:
+        _register_pdf_fonts()
+        school = self.db.get_school_info()
+        today_str = datetime.date.today().strftime("%d.%m.%Y")
+
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=A4,
+            rightMargin=24,
+            leftMargin=24,
+            topMargin=25,
+            bottomMargin=25
+        )
+
+        font_family = "CustomArial" if _FONT_REGISTERED else "Helvetica"
+        font_bold = "CustomArial-Bold" if _FONT_REGISTERED else "Helvetica-Bold"
+
+        title_style = ParagraphStyle(
+            name="AttPdfTitle",
+            fontName=font_bold,
+            fontSize=11,
+            alignment=1,
+            leading=14
+        )
+        subtitle_style = ParagraphStyle(
+            name="AttPdfSubTitle",
+            fontName=font_bold,
+            fontSize=12,
+            alignment=1,
+            textColor=colors.HexColor("#1E3A8A"),
+            leading=15
+        )
+        hdr_cell_style = ParagraphStyle(
+            name="AttHdrCell",
+            fontName=font_bold,
+            fontSize=8,
+            alignment=1,
+            textColor=colors.white,
+            leading=10
+        )
+        cell_style = ParagraphStyle(
+            name="AttCell",
+            fontName=font_family,
+            fontSize=7.5,
+            alignment=1,
+            leading=9.5
+        )
+        cell_bold_style = ParagraphStyle(
+            name="AttCellBold",
+            fontName=font_bold,
+            fontSize=7.5,
+            alignment=1,
+            leading=9.5
+        )
+        cell_left_style = ParagraphStyle(
+            name="AttCellLeft",
+            fontName=font_family,
+            fontSize=7.5,
+            alignment=0,
+            leading=9.5
+        )
+        sign_style = ParagraphStyle(
+            name="AttSign",
+            fontName=font_bold,
+            fontSize=8.5,
+            alignment=1,
+            leading=11
+        )
+
+        story = []
+        story.append(Paragraph("T.C.", title_style))
+        story.append(Paragraph(f"{school.district.upper()} KAYMAKAMLIĞI / İLÇE MİLLÎ EĞİTİM MÜDÜRLÜĞÜ", title_style))
+        story.append(Paragraph(f"{school.name} Müdürlüğü", subtitle_style))
+        story.append(Paragraph(title, title_style))
+        story.append(Spacer(1, 10))
+
+        headers = ["No", "Tarih", "Öğretmen Adı Soyadı", "Branşı", "Durumu", "Ders Saatleri", "Girmediği Şubeler", "Açıklama"]
+        table_data = [[Paragraph(h, hdr_cell_style) for h in headers]]
+
+        for idx, r in enumerate(records, start=1):
+            try:
+                d_obj = datetime.date.fromisoformat(r.date_str)
+                d_formatted = d_obj.strftime("%d.%m.%Y")
+            except Exception:
+                d_formatted = r.date_str
+
+            row = [
+                Paragraph(str(idx), cell_style),
+                Paragraph(d_formatted, cell_style),
+                Paragraph(r.teacher_name, cell_bold_style),
+                Paragraph(r.branch, cell_style),
+                Paragraph(r.status, cell_bold_style),
+                Paragraph(r.periods_missed, cell_style),
+                Paragraph(r.lessons_missed or "-", cell_left_style),
+                Paragraph(r.notes, cell_left_style)
+            ]
+            table_data.append(row)
+
+        col_widths = [20, 52, 98, 70, 52, 60, 95, 100]
+        tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+        t_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]
+
+        for i in range(1, len(table_data)):
+            if i % 2 == 0:
+                t_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor("#F8FAFC")))
+
+        tbl.setStyle(TableStyle(t_style))
+        story.append(tbl)
+        story.append(Spacer(1, 20))
+
+        # İmza Bloğu (Müdür Yardımcısı & Okul Müdürü)
+        sign_table_data = [
+            [Paragraph(f"{today_str}<br/>Düzenleyen<br/>Müdür Yardımcısı", sign_style),
+             Paragraph(f"{today_str}<br/>{school.principal_name}<br/>Okul Müdürü", sign_style)]
+        ]
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.build(story)
+        logger.info(f"Personel Devam Takip PDF çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+    # =========================================================================
+    # DERS PROGRAMI ÇIKTILARI (TIMETABLE EXPORTS)
+    # =========================================================================
+
+    def _get_timetable_days(self) -> List[str]:
+        return ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
+
+    # 8. ÖĞRETMEN HAFTALIK DERS PROGRAMI PDF (.pdf)
+    def export_teacher_timetable_pdf(self, output_path: Path, teacher_id: Optional[str] = None) -> Path:
+        _register_pdf_fonts()
+        school = self.db.get_school_info()
+        today_str = datetime.date.today().strftime("%d.%m.%Y")
+        days = self._get_timetable_days()
+
+        teachers_list: List[Teacher] = []
+        if teacher_id:
+            t = self.db.get_teacher(teacher_id)
+            if t:
+                teachers_list.append(t)
+        else:
+            teachers_list = self.db.get_teachers(active_only=True)
+
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=A4,
+            rightMargin=25,
+            leftMargin=25,
+            topMargin=25,
+            bottomMargin=25
+        )
+
+        font_family = "CustomArial" if _FONT_REGISTERED else "Helvetica"
+        font_bold = "CustomArial-Bold" if _FONT_REGISTERED else "Helvetica-Bold"
+
+        title_style = ParagraphStyle("TTPdfTitle", fontName=font_bold, fontSize=11, alignment=1, leading=14)
+        subtitle_style = ParagraphStyle("TTPdfSubTitle", fontName=font_bold, fontSize=11.5, alignment=1, textColor=colors.HexColor("#1E3A8A"), leading=14)
+        doc_title_style = ParagraphStyle("TTDocTitle", fontName=font_bold, fontSize=11, alignment=1, textColor=colors.HexColor("#2563EB"), leading=14)
+        info_style = ParagraphStyle("TTInfo", fontName=font_bold, fontSize=9.5, alignment=0, leading=12)
+        info_right_style = ParagraphStyle("TTInfoRight", fontName=font_bold, fontSize=9.5, alignment=2, leading=12)
+        hdr_style = ParagraphStyle("TTHdr", fontName=font_bold, fontSize=8, alignment=1, textColor=colors.white, leading=10)
+        day_hdr_style = ParagraphStyle("TTDayHdr", fontName=font_bold, fontSize=8.5, alignment=1, textColor=colors.HexColor("#0F172A"), leading=10)
+        cell_class_style = ParagraphStyle("TTCellClass", fontName=font_bold, fontSize=8.5, alignment=1, textColor=colors.HexColor("#1E3A8A"), leading=10)
+        cell_subj_style = ParagraphStyle("TTCellSubj", fontName=font_family, fontSize=7, alignment=1, textColor=colors.HexColor("#475569"), leading=9)
+        free_style = ParagraphStyle("TTCellFree", fontName=font_family, fontSize=7.5, alignment=1, textColor=colors.HexColor("#94A3B8"), leading=9)
+        sign_style = ParagraphStyle("TTSign", fontName=font_bold, fontSize=9, alignment=1, leading=12)
+
+        story = []
+
+        for idx, t in enumerate(teachers_list):
+            if idx > 0:
+                story.append(PageBreak())
+
+            lessons = self.db.get_teacher_lessons(t.id)
+            # Map (day_name, period) -> TeacherLesson
+            l_map: Dict[Tuple[str, int], TeacherLesson] = {(l.day_name, l.period): l for l in lessons}
+            total_active_hours = sum(1 for l in lessons if not l.is_free and (l.class_name or l.subject_code))
+
+            # Header
+            story.append(Paragraph("T.C.", title_style))
+            story.append(Paragraph(f"{school.district.upper()} KAYMAKAMLIĞI", title_style))
+            story.append(Paragraph(f"{school.name} Müdürlüğü", subtitle_style))
+            story.append(Spacer(1, 2))
+            story.append(Paragraph(f"ÖĞRETMEN HAFTALIK DERS PROGRAMI ({school.academic_year})", doc_title_style))
+            story.append(Spacer(1, 6))
+
+            # Öğretmen Bilgi Satırı
+            info_data = [
+                [Paragraph(f"<b>Öğretmen:</b> {t.name} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Branş:</b> {t.branch or '-'}", info_style),
+                 Paragraph(f"<b>Toplam Ders:</b> {total_active_hours} Saat &nbsp;&nbsp;|&nbsp;&nbsp; <b>Tarih:</b> {today_str}", info_right_style)]
+            ]
+            t_info = Table(info_data, colWidths=[360, 185])
+            t_info.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t_info)
+            story.append(Spacer(1, 4))
+
+            # Tablo: Günler (Sütunlar) x Saatler (Satırlar)
+            col_widths = [75] + [94] * 5
+            headers = [Paragraph("Ders Saati", hdr_style)] + [Paragraph(d, hdr_style) for d in days]
+            table_data = [headers]
+
+            for p in range(1, 8):
+                time_range = PERIOD_TIMES.get(p, "")
+                row = [Paragraph(f"<b>{p}. Ders</b><br/><font size=6.5 color='#64748B'>{time_range}</font>", day_hdr_style)]
+                for d in days:
+                    item = l_map.get((d, p))
+                    if item and not item.is_free and (item.class_name or item.subject_code):
+                        c_text = item.class_name
+                        s_text = item.subject_code
+                        cell_p = [
+                            Paragraph(c_text, cell_class_style),
+                            Paragraph(s_text, cell_subj_style)
+                        ]
+                    else:
+                        cell_p = [Paragraph("—", free_style)]
+                    row.append(cell_p)
+                table_data.append(row)
+
+            tbl = Table(table_data, colWidths=col_widths)
+            tbl_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]
+            for r in range(1, 8):
+                # Birinci sütun zemin rengi
+                tbl_style.append(('BACKGROUND', (0, r), (0, r), colors.HexColor("#F1F5F9")))
+                if r % 2 == 0:
+                    tbl_style.append(('BACKGROUND', (1, r), (-1, r), colors.HexColor("#F8FAFC")))
+            tbl.setStyle(TableStyle(tbl_style))
+            story.append(tbl)
+            story.append(Spacer(1, 14))
+
+            # Bilgilendirme ve İmza Bloğu
+            notes_p = Paragraph(
+                "<font size=7 color='#64748B'>Yukarıdaki ders programı ders saatleri çerçevesinde uygulanacaktır. İlgili öğretmen programa uymakla yükümlüdür.</font>",
+                ParagraphStyle("TTNote", fontName=font_family, fontSize=7, leading=9)
+            )
+            story.append(notes_p)
+            story.append(Spacer(1, 14))
+
+            sign_data = [
+                [Paragraph("Teslim Alan<br/>İlgili Öğretmen", sign_style),
+                 Paragraph(f"{today_str}<br/>{school.principal_name}<br/>Okul Müdürü", sign_style)]
+            ]
+            sign_tbl = Table(sign_data, colWidths=[270, 275])
+            sign_tbl.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            story.append(sign_tbl)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.build(story)
+        logger.info(f"Öğretmen ders programı PDF oluşturuldu: {output_path}")
+        return output_path
+
+    # 9. ÖĞRETMEN HAFTALIK DERS PROGRAMI EXCEL (.xlsx)
+    def export_teacher_timetable_excel(self, output_path: Path, teacher_id: Optional[str] = None) -> Path:
+        school = self.db.get_school_info()
+        days = self._get_timetable_days()
+
+        teachers_list: List[Teacher] = []
+        if teacher_id:
+            t = self.db.get_teacher(teacher_id)
+            if t:
+                teachers_list.append(t)
+        else:
+            teachers_list = self.db.get_teachers(active_only=True)
+
+        wb = openpyxl.Workbook()
+        ws_summary = wb.active
+        ws_summary.title = "Öğretmenler Ders Yükü"
+
+        # Stiller
+        hdr_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+        hdr_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        sub_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+        sub_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        gray_fill = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+        zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+        cell_font = Font(name="Calibri", size=9.5)
+        bold_font = Font(name="Calibri", size=9.5, bold=True)
+        title_font = Font(name="Calibri", size=12, bold=True, color="1E3A8A")
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+        align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        # 1. Özet Sayfası
+        ws_summary.merge_cells("A1:E1")
+        ws_summary["A1"] = f"{school.name} - ÖĞRETMEN HAFTALIK DERS YÜKÜ LİSTESİ ({school.academic_year})"
+        ws_summary["A1"].font = title_font
+        ws_summary["A1"].alignment = align_center
+
+        sum_headers = ["Sıra", "Öğretmen Adı Soyadı", "Branşı", "Haftalık Ders Saati", "Boş Saat"]
+        ws_summary.append([])
+        ws_summary.append(sum_headers)
+        for col_i in range(1, 6):
+            cell = ws_summary.cell(row=3, column=col_i)
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = align_center
+            cell.border = thin_border
+
+        for idx, t in enumerate(teachers_list, start=1):
+            lessons = self.db.get_teacher_lessons(t.id)
+            active_h = sum(1 for l in lessons if not l.is_free and (l.class_name or l.subject_code))
+            free_h = 35 - active_h
+            r_idx = idx + 3
+            row_vals = [idx, t.name, t.branch or "-", active_h, free_h]
+            ws_summary.append(row_vals)
+            for col_i in range(1, 6):
+                cell = ws_summary.cell(row=r_idx, column=col_i)
+                cell.font = bold_font if col_i in (2, 4) else cell_font
+                cell.border = thin_border
+                cell.alignment = align_center if col_i in (1, 4, 5) else Alignment(horizontal="left", vertical="center")
+                if idx % 2 == 0:
+                    cell.fill = zebra_fill
+
+        ws_summary.column_dimensions["A"].width = 8
+        ws_summary.column_dimensions["B"].width = 28
+        ws_summary.column_dimensions["C"].width = 24
+        ws_summary.column_dimensions["D"].width = 18
+        ws_summary.column_dimensions["E"].width = 14
+
+        # 2. Her Öğretmen İçin Detay Sayfası / Bloklar
+        # Eğer tek bir öğretmen ise doğrudan onun sayfası veya tüm öğretmenlerin sayfaları
+        for t in teachers_list[:35]:  # Excel limit
+            safe_title = "".join(c for c in t.name if c.isalnum() or c in (" ", "_"))[:28].strip()
+            ws_t = wb.create_sheet(title=safe_title or f"Öğretmen_{t.id[:6]}")
+
+            ws_t.merge_cells("A1:F1")
+            ws_t["A1"] = f"{school.name} - ÖĞRETMEN HAFTALIK DERS PROGRAMI"
+            ws_t["A1"].font = title_font
+            ws_t["A1"].alignment = align_center
+
+            ws_t.merge_cells("A2:F2")
+            ws_t["A2"] = f"Öğretmen: {t.name}  |  Branş: {t.branch or '-'}  |  Eğitim Yılı: {school.academic_year}"
+            ws_t["A2"].font = bold_font
+            ws_t["A2"].alignment = align_center
+
+            ws_t.append([])
+            hdr_row = ["Ders Saati"] + days
+            ws_t.append(hdr_row)
+            for c_i in range(1, 7):
+                cell = ws_t.cell(row=4, column=c_i)
+                cell.fill = sub_fill
+                cell.font = sub_font
+                cell.alignment = align_center
+                cell.border = thin_border
+
+            lessons = self.db.get_teacher_lessons(t.id)
+            l_map = {(l.day_name, l.period): l for l in lessons}
+
+            for p in range(1, 8):
+                time_str = PERIOD_TIMES.get(p, "")
+                row = [f"{p}. Ders\n({time_str})"]
+                for d in days:
+                    item = l_map.get((d, p))
+                    if item and not item.is_free and (item.class_name or item.subject_code):
+                        row.append(f"{item.class_name}\n{item.subject_code}")
+                    else:
+                        row.append("—")
+                ws_t.append(row)
+                r_num = p + 4
+                for c_i in range(1, 7):
+                    cell = ws_t.cell(row=r_num, column=c_i)
+                    cell.border = thin_border
+                    cell.alignment = align_center
+                    if c_i == 1:
+                        cell.fill = gray_fill
+                        cell.font = bold_font
+                    else:
+                        cell.font = bold_font if cell.value != "—" else cell_font
+                        if p % 2 == 0:
+                            cell.fill = zebra_fill
+
+            ws_t.column_dimensions["A"].width = 16
+            for col_letter in ["B", "C", "D", "E", "F"]:
+                ws_t.column_dimensions[col_letter].width = 18
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Öğretmen ders programı Excel oluşturuldu: {output_path}")
+        return output_path
+
+    # 10. SINIF / ŞUBE HAFTALIK DERS PROGRAMI PDF (.pdf)
+    def export_class_timetable_pdf(self, output_path: Path, class_name: Optional[str] = None) -> Path:
+        _register_pdf_fonts()
+        school = self.db.get_school_info()
+        today_str = datetime.date.today().strftime("%d.%m.%Y")
+        days = self._get_timetable_days()
+
+        classes_list: List[str] = []
+        if class_name:
+            classes_list.append(class_name)
+        else:
+            classes_list = self.db.get_distinct_classes()
+
+        if not classes_list:
+            classes_list = ["5-A", "6-A", "7-A", "8-A"]
+
+        teachers_map = {t.id: t.name for t in self.db.get_teachers()}
+
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=A4,
+            rightMargin=25,
+            leftMargin=25,
+            topMargin=25,
+            bottomMargin=25
+        )
+
+        font_family = "CustomArial" if _FONT_REGISTERED else "Helvetica"
+        font_bold = "CustomArial-Bold" if _FONT_REGISTERED else "Helvetica-Bold"
+
+        title_style = ParagraphStyle("ClsPdfTitle", fontName=font_bold, fontSize=11, alignment=1, leading=14)
+        subtitle_style = ParagraphStyle("ClsPdfSubTitle", fontName=font_bold, fontSize=11.5, alignment=1, textColor=colors.HexColor("#1E3A8A"), leading=14)
+        doc_title_style = ParagraphStyle("ClsDocTitle", fontName=font_bold, fontSize=11.5, alignment=1, textColor=colors.HexColor("#0D9488"), leading=14)
+        info_style = ParagraphStyle("ClsInfo", fontName=font_bold, fontSize=10, alignment=0, leading=12)
+        info_right_style = ParagraphStyle("ClsInfoRight", fontName=font_bold, fontSize=9.5, alignment=2, leading=12)
+        hdr_style = ParagraphStyle("ClsHdr", fontName=font_bold, fontSize=8.5, alignment=1, textColor=colors.white, leading=10)
+        day_hdr_style = ParagraphStyle("ClsDayHdr", fontName=font_bold, fontSize=8.5, alignment=1, textColor=colors.HexColor("#0F172A"), leading=10)
+        cell_subj_style = ParagraphStyle("ClsCellSubj", fontName=font_bold, fontSize=8, alignment=1, textColor=colors.HexColor("#0F172A"), leading=10)
+        cell_t_style = ParagraphStyle("ClsCellT", fontName=font_family, fontSize=7, alignment=1, textColor=colors.HexColor("#475569"), leading=9)
+        sign_style = ParagraphStyle("ClsSign", fontName=font_bold, fontSize=9, alignment=1, leading=12)
+
+        story = []
+
+        for idx, c_name in enumerate(classes_list):
+            if idx > 0:
+                story.append(PageBreak())
+
+            lessons = self.db.get_class_lessons(c_name)
+            l_map: Dict[Tuple[str, int], TeacherLesson] = {(l.day_name, l.period): l for l in lessons}
+
+            # Header
+            story.append(Paragraph("T.C.", title_style))
+            story.append(Paragraph(f"{school.district.upper()} KAYMAKAMLIĞI", title_style))
+            story.append(Paragraph(f"{school.name} Müdürlüğü", subtitle_style))
+            story.append(Spacer(1, 2))
+            story.append(Paragraph(f"SINIF / ŞUBE HAFTALIK DERS PROGRAMI ({school.academic_year})", doc_title_style))
+            story.append(Spacer(1, 6))
+
+            info_data = [
+                [Paragraph(f"<b>Sınıf / Şube:</b> {c_name}", info_style),
+                 Paragraph(f"<b>Düzenleme Tarihi:</b> {today_str}", info_right_style)]
+            ]
+            t_info = Table(info_data, colWidths=[360, 185])
+            t_info.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t_info)
+            story.append(Spacer(1, 4))
+
+            col_widths = [75] + [94] * 5
+            headers = [Paragraph("Ders Saati", hdr_style)] + [Paragraph(d, hdr_style) for d in days]
+            table_data = [headers]
+
+            for p in range(1, 8):
+                time_range = PERIOD_TIMES.get(p, "")
+                row = [Paragraph(f"<b>{p}. Ders</b><br/><font size=6.5 color='#64748B'>{time_range}</font>", day_hdr_style)]
+                for d in days:
+                    item = l_map.get((d, p))
+                    if item and (item.subject_code or item.class_name):
+                        t_name = teachers_map.get(item.teacher_id, "")
+                        cell_p = [
+                            Paragraph(item.subject_code or "-", cell_subj_style),
+                            Paragraph(t_name, cell_t_style)
+                        ]
+                    else:
+                        cell_p = [Paragraph("—", ParagraphStyle("Emp", fontName=font_family, fontSize=8, alignment=1, textColor=colors.HexColor("#94A3B8")))]
+                    row.append(cell_p)
+                table_data.append(row)
+
+            tbl = Table(table_data, colWidths=col_widths)
+            tbl_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0D9488")),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]
+            for r in range(1, 8):
+                tbl_style.append(('BACKGROUND', (0, r), (0, r), colors.HexColor("#F0FDFA")))
+                if r % 2 == 0:
+                    tbl_style.append(('BACKGROUND', (1, r), (-1, r), colors.HexColor("#F8FAFC")))
+            tbl.setStyle(TableStyle(tbl_style))
+            story.append(tbl)
+            story.append(Spacer(1, 20))
+
+            sign_data = [
+                [Paragraph("Sınıf Rehber Öğretmeni", sign_style),
+                 Paragraph(f"{today_str}<br/>{school.principal_name}<br/>Okul Müdürü", sign_style)]
+            ]
+            sign_tbl = Table(sign_data, colWidths=[270, 275])
+            sign_tbl.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ]))
+            story.append(sign_tbl)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.build(story)
+        logger.info(f"Sınıf ders programı PDF oluşturuldu: {output_path}")
+        return output_path
+
+    # 11. SINIF / ŞUBE HAFTALIK DERS PROGRAMI EXCEL (.xlsx)
+    def export_class_timetable_excel(self, output_path: Path, class_name: Optional[str] = None) -> Path:
+        school = self.db.get_school_info()
+        days = self._get_timetable_days()
+
+        classes_list: List[str] = []
+        if class_name:
+            classes_list.append(class_name)
+        else:
+            classes_list = self.db.get_distinct_classes()
+
+        teachers_map = {t.id: t.name for t in self.db.get_teachers()}
+
+        wb = openpyxl.Workbook()
+        ws_first = wb.active
+
+        hdr_fill = PatternFill(start_color="0D9488", end_color="0D9488", fill_type="solid")
+        hdr_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        gray_fill = PatternFill(start_color="F0FDFA", end_color="F0FDFA", fill_type="solid")
+        zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+        cell_font = Font(name="Calibri", size=9.5)
+        bold_font = Font(name="Calibri", size=9.5, bold=True)
+        title_font = Font(name="Calibri", size=12, bold=True, color="0F766E")
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+        align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        for c_idx, c_name in enumerate(classes_list):
+            clean_title = "".join(c for c in c_name if c not in r"/\?*:[ ]")[:30].strip() or f"Sinif_{c_idx+1}"
+            ws = ws_first if c_idx == 0 else wb.create_sheet(title=clean_title)
+            if c_idx == 0:
+                ws.title = clean_title
+
+            ws.merge_cells("A1:F1")
+            ws["A1"] = f"{school.name} - {c_name} SINIFI HAFTALIK DERS PROGRAMI ({school.academic_year})"
+            ws["A1"].font = title_font
+            ws["A1"].alignment = align_center
+
+            ws.append([])
+            ws.append(["Ders Saati"] + days)
+            for c_i in range(1, 7):
+                cell = ws.cell(row=3, column=c_i)
+                cell.fill = hdr_fill
+                cell.font = hdr_font
+                cell.alignment = align_center
+                cell.border = thin_border
+
+            lessons = self.db.get_class_lessons(c_name)
+            l_map = {(l.day_name, l.period): l for l in lessons}
+
+            for p in range(1, 8):
+                time_str = PERIOD_TIMES.get(p, "")
+                row = [f"{p}. Ders\n({time_str})"]
+                for d in days:
+                    item = l_map.get((d, p))
+                    if item and (item.subject_code or item.class_name):
+                        t_name = teachers_map.get(item.teacher_id, "")
+                        row.append(f"{item.subject_code}\n({t_name})")
+                    else:
+                        row.append("—")
+                ws.append(row)
+                r_num = p + 3
+                for c_i in range(1, 7):
+                    cell = ws.cell(row=r_num, column=c_i)
+                    cell.border = thin_border
+                    cell.alignment = align_center
+                    if c_i == 1:
+                        cell.fill = gray_fill
+                        cell.font = bold_font
+                    else:
+                        cell.font = bold_font if cell.value != "—" else cell_font
+                        if p % 2 == 0:
+                            cell.fill = zebra_fill
+
+            ws.column_dimensions["A"].width = 16
+            for col_letter in ["B", "C", "D", "E", "F"]:
+                ws.column_dimensions[col_letter].width = 20
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Sınıf ders programı Excel oluşturuldu: {output_path}")
+        return output_path
+
+    # 12. GENEL ÇARŞAF DERS PROGRAMI EXCEL (.xlsx)
+    def export_master_timetable_excel(self, output_path: Path) -> Path:
+        school = self.db.get_school_info()
+        days = self._get_timetable_days()
+        teachers = self.db.get_teachers(active_only=True)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Genel Çarşaf Ders Programı"
+
+        # Stiller
+        hdr_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+        hdr_font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+        day_fill = PatternFill(start_color="334155", end_color="334155", fill_type="solid")
+        day_font = Font(name="Calibri", size=9.5, bold=True, color="FFFFFF")
+        period_fill = PatternFill(start_color="475569", end_color="475569", fill_type="solid")
+        period_font = Font(name="Calibri", size=8, bold=True, color="FFFFFF")
+        zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+        cell_font = Font(name="Calibri", size=8.5)
+        bold_font = Font(name="Calibri", size=8.5, bold=True)
+        title_font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+        align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        # Başlık
+        total_cols = 3 + (len(days) * 7) + 1  # No, Ad Soyad, Branş, 35 saat, Toplam
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_cols)
+        ws["A1"] = f"{school.name} - GENEL HAFTALIK ÇARŞAF DERS PROGRAMI ({school.academic_year})"
+        ws["A1"].font = title_font
+        ws["A1"].alignment = align_center
+
+        # Satır 2: Gün Başlıkları (Merge edilmiş)
+        ws.merge_cells("A2:A3")
+        ws["A2"] = "No"
+        ws["A2"].fill = hdr_fill
+        ws["A2"].font = hdr_font
+        ws["A2"].alignment = align_center
+        ws["A2"].border = thin_border
+
+        ws.merge_cells("B2:B3")
+        ws["B2"] = "Öğretmen Adı Soyadı"
+        ws["B2"].fill = hdr_fill
+        ws["B2"].font = hdr_font
+        ws["B2"].alignment = align_center
+        ws["B2"].border = thin_border
+
+        ws.merge_cells("C2:C3")
+        ws["C2"] = "Branş"
+        ws["C2"].fill = hdr_fill
+        ws["C2"].font = hdr_font
+        ws["C2"].alignment = align_center
+        ws["C2"].border = thin_border
+
+        col_pointer = 4
+        for d in days:
+            start_c = col_pointer
+            end_c = col_pointer + 6
+            ws.merge_cells(start_row=2, start_column=start_c, end_row=2, end_column=end_c)
+            top_cell = ws.cell(row=2, column=start_c, value=d)
+            top_cell.fill = day_fill
+            top_cell.font = day_font
+            top_cell.alignment = align_center
+            for c_i in range(start_c, end_c + 1):
+                ws.cell(row=2, column=c_i).border = thin_border
+                p_num = c_i - start_c + 1
+                p_cell = ws.cell(row=3, column=c_i, value=f"{p_num}.D")
+                p_cell.fill = period_fill
+                p_cell.font = period_font
+                p_cell.alignment = align_center
+                p_cell.border = thin_border
+            col_pointer += 7
+
+        ws.merge_cells(start_row=2, start_column=col_pointer, end_row=3, end_column=col_pointer)
+        tot_cell = ws.cell(row=2, column=col_pointer, value="Toplam\nDers")
+        tot_cell.fill = hdr_fill
+        tot_cell.font = hdr_font
+        tot_cell.alignment = align_center
+        tot_cell.border = thin_border
+
+        # Öğretmen Satırları
+        for t_idx, t in enumerate(teachers, start=1):
+            curr_row = t_idx + 3
+            lessons = self.db.get_teacher_lessons(t.id)
+            l_map = {(l.day_name, l.period): l for l in lessons}
+            active_h = sum(1 for l in lessons if not l.is_free and (l.class_name or l.subject_code))
+
+            ws.cell(row=curr_row, column=1, value=t_idx).alignment = align_center
+            ws.cell(row=curr_row, column=2, value=t.name).alignment = Alignment(horizontal="left", vertical="center")
+            ws.cell(row=curr_row, column=3, value=t.branch or "-").alignment = Alignment(horizontal="left", vertical="center")
+
+            ws.cell(row=curr_row, column=1).font = cell_font
+            ws.cell(row=curr_row, column=2).font = bold_font
+            ws.cell(row=curr_row, column=3).font = cell_font
+
+            c_pointer = 4
+            for d in days:
+                for p in range(1, 8):
+                    item = l_map.get((d, p))
+                    val_str = ""
+                    if item and not item.is_free and (item.class_name or item.subject_code):
+                        val_str = f"{item.class_name}"
+                        if item.subject_code and len(item.subject_code) <= 5:
+                            val_str += f" {item.subject_code}"
+                    c_cell = ws.cell(row=curr_row, column=c_pointer, value=val_str)
+                    c_cell.font = cell_font
+                    c_cell.alignment = align_center
+                    c_cell.border = thin_border
+                    if t_idx % 2 == 0:
+                        c_cell.fill = zebra_fill
+                    c_pointer += 1
+
+            t_tot_cell = ws.cell(row=curr_row, column=c_pointer, value=active_h)
+            t_tot_cell.font = bold_font
+            t_tot_cell.alignment = align_center
+            t_tot_cell.border = thin_border
+
+            for c_i in range(1, 4):
+                ws.cell(row=curr_row, column=c_i).border = thin_border
+                if t_idx % 2 == 0:
+                    ws.cell(row=curr_row, column=c_i).fill = zebra_fill
+
+        ws.column_dimensions["A"].width = 5
+        ws.column_dimensions["B"].width = 24
+        ws.column_dimensions["C"].width = 20
+        for c_i in range(4, total_cols):
+            ws.column_dimensions[get_column_letter(c_i)].width = 7
+        ws.column_dimensions[get_column_letter(total_cols)].width = 9
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Genel Çarşaf Ders Programı Excel oluşturuldu: {output_path}")
+        return output_path
+
+    # 13. ÖĞRETMEN BOŞ DERS VE NÖBET İKAME UYGUNLUK EXCEL (.xlsx)
+    def export_free_periods_excel(self, output_path: Path) -> Path:
+        school = self.db.get_school_info()
+        days = self._get_timetable_days()
+        teachers = self.db.get_teachers(active_only=True)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Boş Dersler ve Nöbet Uygunluk"
+
+        hdr_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+        hdr_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        zebra_fill = PatternFill(start_color="F0FDF4", end_color="F0FDF4", fill_type="solid")
+        cell_font = Font(name="Calibri", size=9.5)
+        bold_font = Font(name="Calibri", size=9.5, bold=True)
+        title_font = Font(name="Calibri", size=12, bold=True, color="166534")
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+        align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        ws.merge_cells("A1:H1")
+        ws["A1"] = f"{school.name} - ÖĞRETMEN GÜNLÜK BOŞ DERS VE İKAME UYGUNLUK ÇİZELGESİ"
+        ws["A1"].font = title_font
+        ws["A1"].alignment = align_center
+
+        headers = ["No", "Öğretmen Adı Soyadı", "Branşı"] + days
+        ws.append([])
+        ws.append(headers)
+        for c_i in range(1, 9):
+            cell = ws.cell(row=3, column=c_i)
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = align_center
+            cell.border = thin_border
+
+        for idx, t in enumerate(teachers, start=1):
+            lessons = self.db.get_teacher_lessons(t.id)
+            l_map = {(l.day_name, l.period): l for l in lessons}
+
+            row_vals = [idx, t.name, t.branch or "-"]
+            for d in days:
+                free_periods = [p for p in range(1, 8) if l_map.get((d, p)) is None or l_map[(d, p)].is_free or not (l_map[(d, p)].class_name or l_map[(d, p)].subject_code)]
+                if len(free_periods) == 7:
+                    row_vals.append("Tüm Gün Boş 🟢")
+                elif free_periods:
+                    row_vals.append(f"{', '.join(map(str, free_periods))}. Ders")
+                else:
+                    row_vals.append("Dolu 🔴")
+
+            ws.append(row_vals)
+            r_idx = idx + 3
+            for c_i in range(1, 9):
+                cell = ws.cell(row=r_idx, column=c_i)
+                cell.border = thin_border
+                cell.alignment = align_center if c_i not in (2, 3) else Alignment(horizontal="left", vertical="center")
+                cell.font = bold_font if c_i == 2 else cell_font
+                if idx % 2 == 0:
+                    cell.fill = zebra_fill
+
+        ws.column_dimensions["A"].width = 6
+        ws.column_dimensions["B"].width = 26
+        ws.column_dimensions["C"].width = 22
+        for col_l in ["D", "E", "F", "G", "H"]:
+            ws.column_dimensions[col_l].width = 18
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Boş ders çizelgesi Excel oluşturuldu: {output_path}")
+        return output_path
