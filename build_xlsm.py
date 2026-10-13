@@ -205,7 +205,7 @@ Sub SecilenlerleYeniListeSayfasiOlustur()
     
     wsNew.Rows(2).RowHeight = 26
     wsNew.Range("A2:H2").Merge
-    wsNew.Range("A2").Value = "Şehit Kadir Altuntaş Cumhuriyet Ortaokulu Müdürlüğü"
+    wsNew.Range("A2").Value = "Örnek Ortaokulu Müdürlüğü"
     wsNew.Range("A2").Font.Name = "Segoe UI"
     wsNew.Range("A2").Font.Size = 12
     wsNew.Range("A2").Font.Bold = True
@@ -546,68 +546,80 @@ try {{
     $sheetComp.CodeModule.AddFromString($clsLines)
     Write-Host "Added Worksheet_BeforeDoubleClick & Worksheet_Change to $($wsClass.Name)."
     
-    # 3. Add visual buttons
+    # 3. Add visual buttons (Modern Rounded Pill Shapes - msoShapeRoundedRectangle = 5)
     $wsClass.Columns.Item(8).ColumnWidth = 20
     $wsClass.Columns.Item(9).ColumnWidth = 20
     
-    # Shape 1: Yeni Liste Sayfasi Olustur
-    $btn1 = $wsClass.Shapes.AddShape(1, 680, 48, 260, 34)
-    $btn1.TextFrame.Characters().Text = "📁 Seçilenlerle YENİ LİSTE Sayfası Oluştur"
+    # Shape 1: Yeni Liste Sayfasi Olustur (Soft Indigo / Blue Pill)
+    $btn1 = $wsClass.Shapes.AddShape(5, 680, 48, 260, 34)
+    $btn1.Adjustments.Item(1) = 0.25
+    $btn1.Line.Visible = 0
+    $btn1.TextFrame.Characters().Text = "📁 Seçilenlerle YENİ LİSTE Oluştur"
     $btn1.TextFrame.Characters().Font.Name = "Segoe UI"
     $btn1.TextFrame.Characters().Font.Size = 10
     $btn1.TextFrame.Characters().Font.Bold = $true
-    $btn1.TextFrame.Characters().Font.Color = 0xFFFFFF
-    $btn1.Fill.ForeColor.RGB = (93 * 65536 + 54 * 256 + 27)
+    $btn1.TextFrame.Characters().Font.Color = (216 * 65536 + 78 * 256 + 29)
+    $btn1.Fill.ForeColor.RGB = (254 * 65536 + 234 * 256 + 219)
     $btn1.OnAction = "SecilenlerleYeniListeSayfasiOlustur"
     
-    # Shape 2: Secilenleri Ozel Listeye Ekle
-    $btn2 = $wsClass.Shapes.AddShape(1, 680, 88, 260, 32)
+    # Shape 2: Secilenleri Ozel Listeye Ekle (Soft Emerald Pill)
+    $btn2 = $wsClass.Shapes.AddShape(5, 680, 88, 260, 32)
+    $btn2.Adjustments.Item(1) = 0.25
+    $btn2.Line.Visible = 0
     $btn2.TextFrame.Characters().Text = "➕ Seçilenleri Özel Listeye Ekle"
     $btn2.TextFrame.Characters().Font.Name = "Segoe UI"
     $btn2.TextFrame.Characters().Font.Size = 10
     $btn2.TextFrame.Characters().Font.Bold = $true
-    $btn2.TextFrame.Characters().Font.Color = 0xFFFFFF
-    $btn2.Fill.ForeColor.RGB = (65 * 65536 + 124 * 256 + 16)
+    $btn2.TextFrame.Characters().Font.Color = (87 * 65536 + 120 * 256 + 4)
+    $btn2.Fill.ForeColor.RGB = (229 * 65536 + 250 * 256 + 209)
     $btn2.OnAction = "SecilenleriOzelListeyeAktar"
     
-    # Shape 3: Bu Satiri Sec / Kaldir (Alternative to double-click)
-    $btn3a = $wsClass.Shapes.AddShape(1, 680, 126, 260, 26)
+    # Shape 3: Bu Satiri Sec / Kaldir (Soft Sky Pill)
+    $btn3a = $wsClass.Shapes.AddShape(5, 680, 126, 260, 26)
+    $btn3a.Adjustments.Item(1) = 0.25
+    $btn3a.Line.Visible = 0
     $btn3a.TextFrame.Characters().Text = "🎯 Tıkladığın Satırı Seç / Kaldır"
     $btn3a.TextFrame.Characters().Font.Name = "Segoe UI"
     $btn3a.TextFrame.Characters().Font.Size = 9.5
     $btn3a.TextFrame.Characters().Font.Bold = $true
-    $btn3a.TextFrame.Characters().Font.Color = 0xFFFFFF
-    $btn3a.Fill.ForeColor.RGB = (147 * 65536 + 84 * 256 + 32)
+    $btn3a.TextFrame.Characters().Font.Color = (42 * 65536 + 23 * 256 + 15)
+    $btn3a.Fill.ForeColor.RGB = (240 * 65536 + 226 * 256 + 226)
     $btn3a.OnAction = "SatiriSecKaldir"
     
-    # Shape 4: Tumunu Sec
-    $btn3 = $wsClass.Shapes.AddShape(1, 680, 158, 125, 26)
+    # Shape 4: Tumunu Sec (Soft Slate Pill)
+    $btn3 = $wsClass.Shapes.AddShape(5, 680, 158, 125, 26)
+    $btn3.Adjustments.Item(1) = 0.25
+    $btn3.Line.Visible = 0
     $btn3.TextFrame.Characters().Text = "✓ Tümünü Seç"
     $btn3.TextFrame.Characters().Font.Name = "Segoe UI"
     $btn3.TextFrame.Characters().Font.Size = 9.5
     $btn3.TextFrame.Characters().Font.Bold = $true
-    $btn3.TextFrame.Characters().Font.Color = 0xFFFFFF
-    $btn3.Fill.ForeColor.RGB = (147 * 65536 + 84 * 256 + 32)
+    $btn3.TextFrame.Characters().Font.Color = (216 * 65536 + 78 * 256 + 29)
+    $btn3.Fill.ForeColor.RGB = (254 * 65536 + 234 * 256 + 219)
     $btn3.OnAction = "TumSinifiSec"
     
-    # Shape 5: Secimleri Temizle
-    $btn4 = $wsClass.Shapes.AddShape(1, 815, 158, 125, 26)
+    # Shape 5: Secimleri Temizle (Soft Rose Pill)
+    $btn4 = $wsClass.Shapes.AddShape(5, 815, 158, 125, 26)
+    $btn4.Adjustments.Item(1) = 0.25
+    $btn4.Line.Visible = 0
     $btn4.TextFrame.Characters().Text = "✕ Seçimi Kaldır"
     $btn4.TextFrame.Characters().Font.Name = "Segoe UI"
     $btn4.TextFrame.Characters().Font.Size = 9.5
     $btn4.TextFrame.Characters().Font.Bold = $true
-    $btn4.TextFrame.Characters().Font.Color = 0x334155
-    $btn4.Fill.ForeColor.RGB = (240 * 65536 + 232 * 256 + 226)
+    $btn4.TextFrame.Characters().Font.Color = (38 * 65536 + 38 * 256 + 220)
+    $btn4.Fill.ForeColor.RGB = (226 * 65536 + 226 * 256 + 254)
     $btn4.OnAction = "SecimleriTemizle"
     
-    # Shape 6: Ozel Listeye Git
-    $btn5 = $wsClass.Shapes.AddShape(1, 680, 190, 260, 26)
+    # Shape 6: Ozel Listeye Git (Soft Neutral Pill)
+    $btn5 = $wsClass.Shapes.AddShape(5, 680, 190, 260, 26)
+    $btn5.Adjustments.Item(1) = 0.25
+    $btn5.Line.Visible = 0
     $btn5.TextFrame.Characters().Text = "👁️ Özel Listeyi Görüntüle"
     $btn5.TextFrame.Characters().Font.Name = "Segoe UI"
     $btn5.TextFrame.Characters().Font.Size = 9.5
     $btn5.TextFrame.Characters().Font.Bold = $true
-    $btn5.TextFrame.Characters().Font.Color = 0xFFFFFF
-    $btn5.Fill.ForeColor.RGB = (105 * 65536 + 85 * 256 + 71)
+    $btn5.TextFrame.Characters().Font.Color = (42 * 65536 + 23 * 256 + 15)
+    $btn5.Fill.ForeColor.RGB = (240 * 65536 + 226 * 256 + 226)
     $btn5.OnAction = "OzelListeyeGit"
     
     # Instructions Box

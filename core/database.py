@@ -223,7 +223,14 @@ class Database:
 
             for col, col_def in [
                 ("phone", "TEXT DEFAULT ''"),
-                ("shift_group", "TEXT DEFAULT 'Tümü'")
+                ("shift_group", "TEXT DEFAULT 'Tümü'"),
+                ("is_exempt", "INTEGER DEFAULT 0"),
+                ("exemption_reason", "TEXT DEFAULT ''"),
+                ("seniority_years", "INTEGER DEFAULT 0"),
+                ("exemption_requested", "INTEGER DEFAULT 0"),
+                ("preferred_days", "TEXT DEFAULT '[]'"),
+                ("avoided_days", "TEXT DEFAULT '[]'"),
+                ("is_primary_school", "INTEGER DEFAULT 1")
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE teachers ADD COLUMN {col} {col_def};")
@@ -349,6 +356,8 @@ class Database:
             result = []
             for r in rows:
                 unavail = json.loads(r["unavailable_days"]) if r["unavailable_days"] else []
+                pref_days = json.loads(r["preferred_days"]) if "preferred_days" in r.keys() and r["preferred_days"] else []
+                avoid_days = json.loads(r["avoided_days"]) if "avoided_days" in r.keys() and r["avoided_days"] else []
                 result.append(Teacher(
                     id=r["id"],
                     name=r["name"],
@@ -358,7 +367,14 @@ class Database:
                     is_active=bool(r["is_active"]),
                     unavailable_days=unavail,
                     notes=r["notes"] or "",
-                    created_at=r["created_at"] or ""
+                    created_at=r["created_at"] or "",
+                    is_exempt=bool(r["is_exempt"]) if "is_exempt" in r.keys() and r["is_exempt"] is not None else False,
+                    exemption_reason=r["exemption_reason"] if "exemption_reason" in r.keys() and r["exemption_reason"] else "",
+                    seniority_years=int(r["seniority_years"]) if "seniority_years" in r.keys() and r["seniority_years"] is not None else 0,
+                    exemption_requested=bool(r["exemption_requested"]) if "exemption_requested" in r.keys() and r["exemption_requested"] is not None else False,
+                    preferred_days=pref_days,
+                    avoided_days=avoid_days,
+                    is_primary_school=bool(r["is_primary_school"]) if "is_primary_school" in r.keys() and r["is_primary_school"] is not None else True
                 ))
             return result
 
@@ -367,6 +383,8 @@ class Database:
             r = conn.execute("SELECT * FROM teachers WHERE id = ?", (teacher_id,)).fetchone()
             if r:
                 unavail = json.loads(r["unavailable_days"]) if r["unavailable_days"] else []
+                pref_days = json.loads(r["preferred_days"]) if "preferred_days" in r.keys() and r["preferred_days"] else []
+                avoid_days = json.loads(r["avoided_days"]) if "avoided_days" in r.keys() and r["avoided_days"] else []
                 return Teacher(
                     id=r["id"],
                     name=r["name"],
@@ -376,7 +394,14 @@ class Database:
                     is_active=bool(r["is_active"]),
                     unavailable_days=unavail,
                     notes=r["notes"] or "",
-                    created_at=r["created_at"] or ""
+                    created_at=r["created_at"] or "",
+                    is_exempt=bool(r["is_exempt"]) if "is_exempt" in r.keys() and r["is_exempt"] is not None else False,
+                    exemption_reason=r["exemption_reason"] if "exemption_reason" in r.keys() and r["exemption_reason"] else "",
+                    seniority_years=int(r["seniority_years"]) if "seniority_years" in r.keys() and r["seniority_years"] is not None else 0,
+                    exemption_requested=bool(r["exemption_requested"]) if "exemption_requested" in r.keys() and r["exemption_requested"] is not None else False,
+                    preferred_days=pref_days,
+                    avoided_days=avoid_days,
+                    is_primary_school=bool(r["is_primary_school"]) if "is_primary_school" in r.keys() and r["is_primary_school"] is not None else True
                 )
             return None
 
@@ -385,9 +410,12 @@ class Database:
     def save_teacher(self, teacher: Teacher):
         with self.connection() as conn:
             unavail_json = json.dumps(teacher.unavailable_days, ensure_ascii=False)
+            pref_json = json.dumps(teacher.preferred_days, ensure_ascii=False)
+            avoid_json = json.dumps(teacher.avoided_days, ensure_ascii=False)
             conn.execute("""
-            INSERT INTO teachers (id, name, branch, is_active, unavailable_days, notes, created_at, phone, shift_group)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO teachers (id, name, branch, is_active, unavailable_days, notes, created_at, phone, shift_group,
+                                  is_exempt, exemption_reason, seniority_years, exemption_requested, preferred_days, avoided_days, is_primary_school)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name=excluded.name,
                 branch=excluded.branch,
@@ -395,10 +423,21 @@ class Database:
                 unavailable_days=excluded.unavailable_days,
                 notes=excluded.notes,
                 phone=excluded.phone,
-                shift_group=excluded.shift_group;
+                shift_group=excluded.shift_group,
+                is_exempt=excluded.is_exempt,
+                exemption_reason=excluded.exemption_reason,
+                seniority_years=excluded.seniority_years,
+                exemption_requested=excluded.exemption_requested,
+                preferred_days=excluded.preferred_days,
+                avoided_days=excluded.avoided_days,
+                is_primary_school=excluded.is_primary_school;
             """, (teacher.id, teacher.name, teacher.branch, 1 if teacher.is_active else 0,
-                  unavail_json, teacher.notes, teacher.created_at, teacher.phone, teacher.shift_group))
+                  unavail_json, teacher.notes, teacher.created_at, teacher.phone, teacher.shift_group,
+                  1 if teacher.is_exempt else 0, teacher.exemption_reason, teacher.seniority_years,
+                  1 if teacher.exemption_requested else 0, pref_json, avoid_json, 1 if teacher.is_primary_school else 0))
             conn.commit()
+
+    add_teacher = save_teacher
 
     def delete_teacher(self, teacher_id: str):
         with self.connection() as conn:

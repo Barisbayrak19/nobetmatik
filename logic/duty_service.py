@@ -67,6 +67,55 @@ class MoveOrSwapCommand(Command):
             logger.warning("Hedef hücredeki nöbet sabitlenmiştir, takas yapılamaz.")
             return False
 
+        # Çakışma kontrolü (Aynı gün 2. nöbet engeli)
+        days_map = {d.id: d.name for d in self.db.get_days()}
+        src_teacher_obj = self.db.get_teacher_by_id(src_assign.teacher_id)
+        src_teacher_name = src_teacher_obj.name if src_teacher_obj else "Öğretmen"
+
+        # Eğer gün değişiyorsa: kaynak öğretmen hedef günde başka bir nöbette mi?
+        if self.src_day != self.tgt_day:
+            tgt_day_name = days_map.get(self.tgt_day, "bu")
+            src_other_on_tgt_day = [
+                a for a in assignments
+                if a.day_id == self.tgt_day and a.teacher_id == src_assign.teacher_id and not (a.location_id == self.tgt_loc and a.slot_index == self.tgt_slot)
+            ]
+            if src_other_on_tgt_day:
+                self.error_message = f"{src_teacher_name} {tgt_day_name} günü başka bir nöbette görevli olduğu için buraya atanamaz."
+                logger.warning(self.error_message)
+                return False
+
+            # Katı Kural (Seçenek B): Öğretmenin hedef günde hiç dersi yoksa nöbet taşınamaz
+            src_all_lessons = self.db.get_teacher_lessons(src_assign.teacher_id)
+            if src_all_lessons:
+                src_day_lessons = [l for l in src_all_lessons if l.day_name == tgt_day_name and not l.is_free]
+                if not src_day_lessons:
+                    self.error_message = f"{src_teacher_name} {tgt_day_name} günü hiç dersi bulunmadığı için nöbete atanamaz."
+                    logger.warning(self.error_message)
+                    return False
+
+        # Eğer takas yapılıyorsa ve günler farklıysa: hedef öğretmen kaynak günde başka bir nöbette mi?
+        if tgt_assign and tgt_assign.teacher_id and self.src_day != self.tgt_day:
+            tgt_teacher_obj = self.db.get_teacher_by_id(tgt_assign.teacher_id)
+            tgt_teacher_name = tgt_teacher_obj.name if tgt_teacher_obj else "Öğretmen"
+            src_day_name = days_map.get(self.src_day, "bu")
+            tgt_other_on_src_day = [
+                a for a in assignments
+                if a.day_id == self.src_day and a.teacher_id == tgt_assign.teacher_id and not (a.location_id == self.src_loc and a.slot_index == self.src_slot)
+            ]
+            if tgt_other_on_src_day:
+                self.error_message = f"{tgt_teacher_name} {src_day_name} günü başka bir nöbette görevli olduğu için takas yapılamaz."
+                logger.warning(self.error_message)
+                return False
+
+            # Katı Kural (Seçenek B): Takas edilen öğretmenin kaynak günde hiç dersi yoksa takas yapılamaz
+            tgt_all_lessons = self.db.get_teacher_lessons(tgt_assign.teacher_id)
+            if tgt_all_lessons:
+                tgt_day_lessons = [l for l in tgt_all_lessons if l.day_name == src_day_name and not l.is_free]
+                if not tgt_day_lessons:
+                    self.error_message = f"{tgt_teacher_name} {src_day_name} günü hiç dersi bulunmadığı için takas yapılamaz."
+                    logger.warning(self.error_message)
+                    return False
+
         # Aynı hücre mi?
         if (self.src_day == self.tgt_day and 
             self.src_loc == self.tgt_loc and 
@@ -128,6 +177,7 @@ class AssignTeacherCommand(Command):
         self.assignment_id = assignment.id
         self.old_teacher_id = assignment.teacher_id
         self.new_teacher_id = new_teacher_id
+        self.error_message: Optional[str] = None
         self.description = "Öğretmen Atama" if new_teacher_id else "Atama Kaldırma"
 
     def execute(self) -> bool:
@@ -137,6 +187,32 @@ class AssignTeacherCommand(Command):
         if assign.fixed:
             logger.warning("Sabitlenmiş nöbet değiştirilemez.")
             return False
+
+        if self.new_teacher_id:
+            days_map = {d.id: d.name for d in self.db.get_days()}
+            d_name = days_map.get(assign.day_id, "")
+            t_obj = self.db.get_teacher_by_id(self.new_teacher_id)
+            t_name = t_obj.name if t_obj else "Öğretmen"
+
+            # Katı Kural (Seçenek B): O gün hiç dersi yoksa nöbet atanamaz
+            t_all_lessons = self.db.get_teacher_lessons(self.new_teacher_id)
+            if t_all_lessons:
+                t_day_lessons = [l for l in t_all_lessons if l.day_name == d_name and not l.is_free]
+                if not t_day_lessons:
+                    self.error_message = f"{t_name} {d_name} günü hiç dersi bulunmadığı için nöbete atanamaz."
+                    logger.warning(self.error_message)
+                    return False
+
+            assignments = self.db.get_assignments_for_week(assign.week_start)
+            same_day_assigns = [
+                a for a in assignments
+                if a.day_id == assign.day_id and a.teacher_id == self.new_teacher_id and a.id != assign.id
+            ]
+            if same_day_assigns:
+                self.error_message = f"{t_name} {d_name} günü zaten başka bir nöbete atanmıştır."
+                logger.warning(self.error_message)
+                return False
+
         assign.teacher_id = self.new_teacher_id
         self.db.save_assignment(assign)
         return True
@@ -368,6 +444,7 @@ class DutyService:
     def __init__(self, db: Database, undo_manager: Optional[UndoManager] = None):
         self.db = db
         self.undo_manager = undo_manager or UndoManager()
+        self.last_error: Optional[str] = None
 
     def get_grid_matrix(self, week_start: str) -> Dict[str, Any]:
         """
@@ -415,6 +492,7 @@ class DutyService:
         target_loc_id: str,
         target_slot: int
     ) -> bool:
+        self.last_error = None
         cmd = MoveOrSwapCommand(
             self.db,
             week_start,
@@ -425,11 +503,18 @@ class DutyService:
             target_loc_id,
             target_slot
         )
-        return self.undo_manager.execute_command(cmd)
+        success = self.undo_manager.execute_command(cmd)
+        if not success:
+            self.last_error = getattr(cmd, "error_message", None)
+        return success
 
     def assign_teacher(self, assignment: Assignment, teacher_id: Optional[str]) -> bool:
+        self.last_error = None
         cmd = AssignTeacherCommand(self.db, assignment, teacher_id)
-        return self.undo_manager.execute_command(cmd)
+        success = self.undo_manager.execute_command(cmd)
+        if not success:
+            self.last_error = getattr(cmd, "error_message", None)
+        return success
 
     def toggle_fixed(self, assignment_id: str) -> bool:
         cmd = ToggleFixedCommand(self.db, assignment_id)

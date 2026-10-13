@@ -1,6 +1,7 @@
 """
-İlk Kurulum Sihirbazı ve Veri Doğrulama Ekranı
-Gerçek okul verilerini önceden doldurur, özetler ve kullanıcı onayıyla veritabanına aktarır.
+İlk Kurulum Sihirbazı (Setup Wizard)
+Her okulun ve kullanıcının kendi kurumuna göre sıfırdan temiz kurulum yapmasını sağlar.
+İsteğe bağlı olarak sistemi hemen incelemek isteyenler için demo verisi yükleme seçeneği sunar.
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -9,10 +10,8 @@ from core.models import SchoolInfo, Day, Location, Teacher, Assignment
 from core.database import Database
 from data.reference_data import (
     REFERENCE_SCHOOL, REFERENCE_DAYS, REFERENCE_LOCATIONS,
-    REFERENCE_TEACHERS, REFERENCE_DUTY_TABLE, NAME_ALIASES
+    REFERENCE_TEACHERS, REFERENCE_DUTY_TABLE
 )
-from logic.matching_service import MatchingService
-from logic.substitution_service import SubstitutionService
 from core.logger import logger
 from ui.theme import (
     COLOR_BG, COLOR_CARD, COLOR_PRIMARY, COLOR_SUCCESS,
@@ -25,37 +24,24 @@ class WizardView(ttk.Frame):
         self.db = db
         self.on_complete = on_complete
 
-        # Sihirbaz Form Verileri
-        self.school_name_var = tk.StringVar(value=REFERENCE_SCHOOL["name"])
-        self.district_var = tk.StringVar(value=REFERENCE_SCHOOL["district"])
-        self.city_var = tk.StringVar(value=REFERENCE_SCHOOL["city"])
-        self.year_var = tk.StringVar(value=REFERENCE_SCHOOL["academic_year"])
-        self.principal_var = tk.StringVar(value=REFERENCE_SCHOOL["principal_name"])
+        # Form Değişkenleri (Temiz başlangıç için boş varsayılanlar)
+        self.school_name_var = tk.StringVar(value="")
+        self.district_var = tk.StringVar(value="")
+        self.city_var = tk.StringVar(value="")
+        self.year_var = tk.StringVar(value="2026-2027")
+        self.principal_var = tk.StringVar(value="")
+        self.school_level_var = tk.StringVar(value="Ortaokul")
+        self.education_type_var = tk.StringVar(value="Normal (Tekli)")
+        self.daily_periods_var = tk.IntVar(value=7)
 
-        # Eşleştirme ve Çelişki Verileri
-        self.detected_conflicts: List[Dict[str, Any]] = []
-        self._analyze_reference_data()
+        # Kurulum Modu: 0 = Temiz Kurulum (Varsayılan), 1 = Örnek Demo Veriler
+        self.setup_mode_var = tk.IntVar(value=0)
 
         self._build_ui()
 
-    def _analyze_reference_data(self):
-        """
-        Belgedeki kısaltmalar veya farklı görünen isimleri analiz eder.
-        """
-        teacher_names = [t["name"] for t in REFERENCE_TEACHERS]
-        for alias, real_name in NAME_ALIASES.items():
-            if alias != real_name:
-                matches = MatchingService.find_best_matches(alias, teacher_names, threshold=0.7)
-                self.detected_conflicts.append({
-                    "raw": alias,
-                    "candidate": real_name,
-                    "score": matches[0][1] if matches else 0.85,
-                    "decision": real_name # Varsayılan olarak aday
-                })
-
     def _build_ui(self):
         # Üst Başlık Banner
-        header_frame = tk.Frame(self, bg="#1E293B", height=80)
+        header_frame = tk.Frame(self, bg="#1E293B", height=85)
         header_frame.pack(fill="x", side="top")
 
         lbl_top = tk.Label(
@@ -69,12 +55,12 @@ class WizardView(ttk.Frame):
 
         lbl_sub = tk.Label(
             header_frame,
-            text="Resmi okul nöbet belgelerinden çıkarılan gerçek veriler önceden yüklenmiştir.",
+            text="Hoş geldiniz! Okulunuzun nöbet ve ders takip sistemini kurmak için lütfen bilgileri giriniz.",
             font=(FONT_FAMILY, 9),
             fg="#94A3B8",
             bg="#1E293B"
         )
-        lbl_sub.pack(pady=(0, 10))
+        lbl_sub.pack(pady=(0, 12))
 
         # Ana İçerik Konteyneri (İki sütunlu kartlar)
         content_frame = ttk.Frame(self, padding=20)
@@ -87,97 +73,146 @@ class WizardView(ttk.Frame):
             font=(FONT_FAMILY, 10, "bold"),
             bg=COLOR_CARD,
             fg=COLOR_PRIMARY,
-            padx=15,
-            pady=15,
+            padx=16,
+            pady=16,
             relief="solid",
             bd=1
         )
         left_card.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
+        # Alanlar
         fields = [
-            ("Okul Adı:", self.school_name_var),
-            ("İlçe:", self.district_var),
-            ("İl:", self.city_var),
-            ("Eğitim Öğretim Yılı:", self.year_var),
-            ("Okul Müdürü:", self.principal_var),
+            ("Okul Adı:", self.school_name_var, "Örn: Atatürk Ortaokulu"),
+            ("İlçe:", self.district_var, "Örn: Çankaya"),
+            ("İl:", self.city_var, "Örn: Ankara"),
+            ("Eğitim Öğretim Yılı:", self.year_var, "2026-2027"),
+            ("Okul Müdürü:", self.principal_var, "Örn: Ad Soyad"),
         ]
 
-        for i, (label_text, var) in enumerate(fields):
+        for i, (label_text, var, hint) in enumerate(fields):
             lbl = tk.Label(left_card, text=label_text, font=(FONT_FAMILY, 9, "bold"), bg=COLOR_CARD, anchor="w")
-            lbl.grid(row=i*2, column=0, sticky="w", pady=(8, 2))
+            lbl.grid(row=i*2, column=0, sticky="w", pady=(4, 2))
             entry = ttk.Entry(left_card, textvariable=var, font=(FONT_FAMILY, 10))
-            entry.grid(row=i*2 + 1, column=0, sticky="ew", pady=(0, 5))
+            entry.grid(row=i*2 + 1, column=0, sticky="ew", pady=(0, 4))
+
+        # Ek Kurum Ayarları
+        row_offset = len(fields) * 2
+
+        lbl_level = tk.Label(left_card, text="Okul Kademesi:", font=(FONT_FAMILY, 9, "bold"), bg=COLOR_CARD, anchor="w")
+        lbl_level.grid(row=row_offset, column=0, sticky="w", pady=(4, 2))
+        cmb_level = ttk.Combobox(
+            left_card,
+            textvariable=self.school_level_var,
+            values=["İlkokul", "Ortaokul", "İmam Hatip Ortaokulu", "Anadolu Lisesi", "Fen Lisesi", "Mesleki ve Teknik Anadolu Lisesi", "Diğer"],
+            state="readonly",
+            font=(FONT_FAMILY, 9)
+        )
+        cmb_level.grid(row=row_offset + 1, column=0, sticky="ew", pady=(0, 4))
+
+        lbl_edu = tk.Label(left_card, text="Eğitim Şekli:", font=(FONT_FAMILY, 9, "bold"), bg=COLOR_CARD, anchor="w")
+        lbl_edu.grid(row=row_offset + 2, column=0, sticky="w", pady=(4, 2))
+        cmb_edu = ttk.Combobox(
+            left_card,
+            textvariable=self.education_type_var,
+            values=["Normal (Tekli)", "İkili Eğitim (Sabahçı/Öğlenci)"],
+            state="readonly",
+            font=(FONT_FAMILY, 9)
+        )
+        cmb_edu.grid(row=row_offset + 3, column=0, sticky="ew", pady=(0, 4))
+
+        lbl_period = tk.Label(left_card, text="Günlük Ders Saati Sayısı:", font=(FONT_FAMILY, 9, "bold"), bg=COLOR_CARD, anchor="w")
+        lbl_period.grid(row=row_offset + 4, column=0, sticky="w", pady=(4, 2))
+        cmb_period = ttk.Combobox(
+            left_card,
+            textvariable=self.daily_periods_var,
+            values=[6, 7, 8],
+            state="readonly",
+            font=(FONT_FAMILY, 9)
+        )
+        cmb_period.grid(row=row_offset + 5, column=0, sticky="ew", pady=(0, 4))
+
         left_card.columnconfigure(0, weight=1)
 
-        # Sağ Kart: Çıkarılan Verilerin Özeti ve Doğrulama
+        # Sağ Kart: Başlangıç Yapılandırması ve Seçenekler
         right_card = tk.LabelFrame(
             content_frame,
-            text=" 📋 Çıkarılan Veri Özeti (VERİLERİ KONTROL ET) ",
+            text=" ⚙️ Başlangıç Yapılandırması ve Kurulum Seçenekleri ",
             font=(FONT_FAMILY, 10, "bold"),
             bg=COLOR_CARD,
             fg=COLOR_PRIMARY,
-            padx=15,
-            pady=15,
+            padx=16,
+            pady=16,
             relief="solid",
             bd=1
         )
         right_card.pack(side="right", fill="both", expand=True, padx=(10, 0))
 
-        active_count = sum(1 for t in REFERENCE_TEACHERS if t.get("is_active", True))
-        passive_count = len(REFERENCE_TEACHERS) - active_count
-        stats = [
-            ("Öğretmen Sayısı:", f"{len(REFERENCE_TEACHERS)} Öğretmen ({active_count} Aktif Nöbetçi, {passive_count} Muaf/Pasif)"),
-            ("Nöbet Yeri Sayısı:", f"{len(REFERENCE_LOCATIONS)} Nöbet Yeri (1. Kat, 2. Kat, 3. Kat, Bahçe 1, Bahçe 2, Zemin Kat)"),
-            ("Haftalık Gün Sayısı:", f"{len(REFERENCE_DAYS)} Gün (Pazartesi - Cuma)"),
-            ("Mevcut Atama Sayısı:", "30 Haftalık Gerçek Nöbet Görevi"),
-            ("Ders Programları:", "35 Öğretmen (Haftalık 7 Saatlik Müfredat ve Boş Dersler)"),
-            ("Nöbet Kuralları:", "7 Maddelik Resmi MEB Nöbetçi Öğretmen Görevleri")
+        # Bilgilendirme ve Standart Tanımlar
+        configs = [
+            ("Nöbet Günleri:", "Pazartesi - Cuma (5 Gün)"),
+            ("Standart Nöbet Alanları:", "Bahçe, Zemin Kat, 1. Kat, 2. Kat (İstediğiniz zaman artırabilirsiniz)"),
+            ("Nöbet Mevzuatı:", "MEB Nöbetçi Öğretmen Görev ve Sorumlulukları (Resmi 7 Madde)")
         ]
-
-        for i, (k, v) in enumerate(stats):
+        for k, v in configs:
             f = tk.Frame(right_card, bg=COLOR_CARD)
             f.pack(fill="x", pady=4)
-            lbl_k = tk.Label(f, text=k, font=(FONT_FAMILY, 9, "bold"), bg=COLOR_CARD, fg=COLOR_TEXT_MAIN, width=18, anchor="w")
-            lbl_k.pack(side="left")
-            lbl_v = tk.Label(f, text=v, font=(FONT_FAMILY, 9), bg=COLOR_CARD, fg="#2563EB", anchor="w")
-            lbl_v.pack(side="left", fill="x", expand=True)
+            tk.Label(f, text=k, font=(FONT_FAMILY, 9, "bold"), bg=COLOR_CARD, fg=COLOR_TEXT_MAIN, width=22, anchor="w").pack(side="left")
+            tk.Label(f, text=v, font=(FONT_FAMILY, 9), bg=COLOR_CARD, fg="#2563EB", anchor="w").pack(side="left", fill="x", expand=True)
 
-        # Çelişki / Eşleştirme Bilgisi
         sep = ttk.Separator(right_card, orient="horizontal")
-        sep.pack(fill="x", pady=10)
+        sep.pack(fill="x", pady=12)
 
-        lbl_alias_title = tk.Label(
+        tk.Label(
             right_card,
-            text=f"🔍 Eşleştirilen İsim Kısaltmaları ({len(self.detected_conflicts)} Adet):",
+            text="Başlangıç Veri Seçimi:",
             font=(FONT_FAMILY, 9, "bold"),
             bg=COLOR_CARD,
             fg=COLOR_TEXT_MAIN,
             anchor="w"
-        )
-        lbl_alias_title.pack(fill="x")
+        ).pack(fill="x", pady=(0, 6))
 
-        # Treeview veya Listbox ile kısaltmalar
-        tree_frame = ttk.Frame(right_card)
-        tree_frame.pack(fill="both", expand=True, pady=5)
-
-        tree = ttk.Treeview(tree_frame, columns=("raw", "matched"), show="headings", height=5)
-        tree.heading("raw", text="Belgedeki Gösterim")
-        tree.heading("matched", text="Eşleşen Gerçek Öğretmen")
-        tree.column("raw", width=130)
-        tree.column("matched", width=220)
-
-        for c in self.detected_conflicts[:6]:
-            tree.insert("", "end", values=(c["raw"], c["candidate"]))
-        tree.pack(side="left", fill="both", expand=True)
-
-        lbl_hint = tk.Label(
+        # Radyo Butonları: Temiz vs Demo
+        rb_clean = tk.Radiobutton(
             right_card,
-            text="* İsimler ve atamalar tam Türkçe karakter uyumuyla SQLite veritabanına aktarılacaktır.",
-            font=(FONT_FAMILY, 8, "italic"),
+            text="✔ Temiz Kurulum (Önerilen)\nSistemi sıfırdan başlat. Öğretmenlerimi ve ders programımı daha sonra Excel veya e-Okul'dan yükleyeceğim.",
+            variable=self.setup_mode_var,
+            value=0,
+            font=(FONT_FAMILY, 9),
             bg=COLOR_CARD,
-            fg=COLOR_TEXT_MUTED
+            fg="#047857",
+            activebackground=COLOR_CARD,
+            justify="left",
+            anchor="w"
         )
-        lbl_hint.pack(fill="x", pady=(5, 0))
+        rb_clean.pack(fill="x", pady=4)
+
+        rb_demo = tk.Radiobutton(
+            right_card,
+            text="🧪 Örnek (Demo) Verilerle Başla\nSistemi hızlıca incelemek için örnek (fictional) öğretmenler ve nöbet şablonu oluştur.",
+            variable=self.setup_mode_var,
+            value=1,
+            font=(FONT_FAMILY, 9),
+            bg=COLOR_CARD,
+            fg="#475569",
+            activebackground=COLOR_CARD,
+            justify="left",
+            anchor="w"
+        )
+        rb_demo.pack(fill="x", pady=4)
+
+        # İpucu Kutusu
+        tip_frame = tk.Frame(right_card, bg="#F0FDF4", bd=1, relief="solid")
+        tip_frame.pack(fill="x", pady=(15, 0), ipady=6, ipadx=8)
+
+        tk.Label(
+            tip_frame,
+            text="💡 İpucu: Kurulum tamamlandıktan sonra ana ekrandaki 'İçe Aktar' menüsünü kullanarak okulunuzun e-Okul haftalık ders programını ve öğretmen listesini tek tıkla yükleyebilirsiniz.",
+            font=(FONT_FAMILY, 8, "italic"),
+            bg="#F0FDF4",
+            fg="#15803D",
+            wraplength=440,
+            justify="left"
+        ).pack(fill="x")
 
         # Alt Buton Alanı
         bottom_frame = tk.Frame(self, bg=COLOR_BG, height=60)
@@ -185,7 +220,7 @@ class WizardView(ttk.Frame):
 
         btn_finish = ttk.Button(
             bottom_frame,
-            text="✔ Kurulumu Tamamla ve Verileri Kaydet",
+            text="✔ Kurulumu Tamamla ve Sistemi Başlat",
             style="Success.TButton",
             command=self._complete_setup
         )
@@ -193,29 +228,41 @@ class WizardView(ttk.Frame):
 
     def _complete_setup(self):
         """
-        Gerçek verileri veritabanına aktarır ve ana ekrana geçer.
+        Kullanıcı tercihlerine göre okul bilgilerini ve başlangıç kayıtlarını veritabanına işler.
         """
         try:
+            school_name = self.school_name_var.get().strip() or "Okul Adı Belirtilmedi"
+            district = self.district_var.get().strip()
+            city = self.city_var.get().strip()
+            academic_year = self.year_var.get().strip() or "2026-2027"
+            principal = self.principal_var.get().strip()
+            level = self.school_level_var.get()
+            edu_type = self.education_type_var.get()
+            periods = self.daily_periods_var.get()
+
             # 1. Okul Bilgisi
             school = SchoolInfo(
-                name=self.school_name_var.get().strip(),
-                city=self.city_var.get().strip(),
-                district=self.district_var.get().strip(),
-                academic_year=self.year_var.get().strip(),
-                principal_name=self.principal_var.get().strip(),
+                name=school_name,
+                city=city,
+                district=district,
+                academic_year=academic_year,
+                principal_name=principal,
+                school_level=level,
+                education_type=edu_type,
+                daily_periods=periods,
                 duty_rules=REFERENCE_SCHOOL["duty_rules"],
                 installed=True
             )
             self.db.save_school_info(school)
 
-            # 2. Günler
+            # 2. Günler (Pazartesi - Cuma)
             day_objects: Dict[str, Day] = {}
             for d_data in REFERENCE_DAYS:
                 d = Day(name=d_data["name"], order_num=d_data["order_num"])
                 self.db.save_day(d)
                 day_objects[d.name] = d
 
-            # 3. Nöbet Yerleri
+            # 3. Nöbet Yerleri (Temel Standart Alanlar)
             loc_objects: Dict[str, Location] = {}
             for loc_data in REFERENCE_LOCATIONS:
                 loc = Location(
@@ -226,49 +273,54 @@ class WizardView(ttk.Frame):
                 self.db.save_location(loc)
                 loc_objects[loc.name] = loc
 
-            # 4. Öğretmenler
-            teacher_objects: Dict[str, Teacher] = {}
-            for t_data in REFERENCE_TEACHERS:
-                t = Teacher(
-                    name=t_data["name"],
-                    branch=t_data["branch"],
-                    is_active=t_data.get("is_active", True),
-                    notes=t_data["notes"]
-                )
-                self.db.save_teacher(t)
-                teacher_objects[t.name] = t
+            # 4. Öğretmenler ve Atamalar (Sadece Demo Modu Seçildiyse)
+            if self.setup_mode_var.get() == 1:
+                # Demo Verileri Yükle
+                teacher_objects: Dict[str, Teacher] = {}
+                for t_data in REFERENCE_TEACHERS:
+                    t = Teacher(
+                        name=t_data["name"],
+                        branch=t_data["branch"],
+                        is_active=t_data.get("is_active", True),
+                        notes=t_data.get("notes", "")
+                    )
+                    self.db.save_teacher(t)
+                    teacher_objects[t.name] = t
 
-            # 5. Atamalar (Referans Haftası: 2026-09-28)
-            week_start = "2026-09-28"
-            for day_name, loc_assignments in REFERENCE_DUTY_TABLE.items():
-                day_obj = day_objects.get(day_name)
-                if not day_obj:
-                    continue
-                for loc_name, teacher_names in loc_assignments.items():
-                    loc_obj = loc_objects.get(loc_name)
-                    if not loc_obj:
+                week_start = "2026-09-28"
+                for day_name, loc_assignments in REFERENCE_DUTY_TABLE.items():
+                    day_obj = day_objects.get(day_name)
+                    if not day_obj:
                         continue
-                    for slot_idx, t_name in enumerate(teacher_names):
-                        # İsmi öğretmen objesiyle eşle
-                        teacher_obj = teacher_objects.get(t_name)
-                        assign = Assignment(
-                            week_start=week_start,
-                            day_id=day_obj.id,
-                            location_id=loc_obj.id,
-                            slot_index=slot_idx,
-                            teacher_id=teacher_obj.id if teacher_obj else None,
-                            fixed=False
-                        )
-                        self.db.save_assignment(assign)
+                    for loc_name, teacher_names in loc_assignments.items():
+                        loc_obj = loc_objects.get(loc_name)
+                        if not loc_obj:
+                            continue
+                        for slot_idx, t_name in enumerate(teacher_names):
+                            teacher_obj = teacher_objects.get(t_name)
+                            assign = Assignment(
+                                week_start=week_start,
+                                day_id=day_obj.id,
+                                location_id=loc_obj.id,
+                                slot_index=slot_idx,
+                                teacher_id=teacher_obj.id if teacher_obj else None,
+                                fixed=False
+                            )
+                            self.db.save_assignment(assign)
 
-            # 6. Öğretmen Ders Programları (35 Öğretmen, 5 Gün, 7 Saat)
-            sub_service = SubstitutionService(self.db)
-            sub_service.import_timetables_from_json()
+                logger.info("Demo verileri ile kurulum tamamlandı.")
+                messagebox.showinfo("Kurulum Tamamlandı", f"{school_name} için örnek verilerle kurulum tamamlandı!\nAna yönetim paneline yönlendiriliyorsunuz.")
+            else:
+                # Temiz Kurulum (Öğretmenler boş, kullanıcı kendi okulunu kuracak)
+                logger.info("Temiz veritabanı ile kurulum tamamlandı.")
+                messagebox.showinfo(
+                    "Kurulum Tamamlandı",
+                    f"{school_name} için sistem başarıyla kuruldu!\n\n"
+                    "Öğretmenlerinizi ve ders programınızı 'İçe Aktar' menüsünden Excel veya e-Okul dosyasıyla yükleyebilirsiniz."
+                )
 
-            logger.info("İlk kurulum başarıyla veritabanına aktarıldı.")
-            messagebox.showinfo("Kurulum Tamamlandı", "Gerçek okul nöbet verileri başarıyla sisteme aktarıldı!")
             self.on_complete()
 
         except Exception as e:
-            logger.error(f"İlk kurulum sırasında hata: {e}", exc_info=True)
+            logger.error(f"Kurulum sırasında hata: {e}", exc_info=True)
             messagebox.showerror("Hata", f"Kurulum sırasında bir hata oluştu:\n{e}")

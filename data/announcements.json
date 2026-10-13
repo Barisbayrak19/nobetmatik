@@ -1,0 +1,28 @@
+{
+  "announcements": [
+    {
+      "id": "ann_20261008_welcome",
+      "title": "NöbetMatik v2.0 Kurumsal Sürüm Yayında! 🛡️",
+      "date": "08.10.2026",
+      "badge": "YENİ SÜRÜM",
+      "badge_color": "#2563EB",
+      "summary": "e-Okul & aSc tam entegrasyonu, adil nöbet dağıtım algoritması ve esnek içe aktarma sihirbazı kullanıma hazır.",
+      "content": "Değerli İdarecilerimiz ve Meslektaşlarımız,\n\nNöbetMatik v2.0 sürümü ile okul nöbet planlamanızı dakikalar içinde, yönetmeliklere tam uyumlu ve adil şekilde tamamlayabilirsiniz.\n\n🌟 Öne Çıkan Yenilikler:\n• 📥 Granüler İçe Aktarım Sihirbazı: e-Okul PDF ve aSc dosyalarından istediğiniz öğretmenleri ve dersleri seçerek aktarabilirsiniz.\n• ⚡ Adil Dağıtım Motoru: Öğretmenlerin boş günlerini, ders yoğunluklarını ve kıdemlerini gözeterek dengeli görevlendirme yapar.\n• 🔒 2. Nöbet Kontrolü: İsteğe bağlı 2. nöbet kuralı ile yetersizlik durumunda adil dağılım sağlanır.\n• 🌐 Yerel Ağ Paylaşımı (LAN): Aynı okuldaki birden fazla idareci eşzamanlı çalışabilir.\n\n💬 Görüş, öneri veya karşılaştığınız durumları 'Geri Bildirim' penceresinden bize iletebilirsiniz.",
+      "important": false,
+      "link_text": "GitHub Proje Sayfası",
+      "link_url": "https://github.com/Barisbayrak19/nobetmatik"
+    },
+    {
+      "id": "ann_20261008_tips",
+      "title": "💡 Pratik İpucu: Nöbet Dağıtım İlkeleri",
+      "date": "08.10.2026",
+      "badge": "İPUCU",
+      "badge_color": "#059669",
+      "summary": "Nöbet dağıtım ekranında sol paneldeki ilkeleri kullanarak dağıtım stratejinizi okulunuza göre özelleştirin.",
+      "content": "Nöbet dağıtımı yaparken 'Otomatik Dağıtım' ekranındaki ilkeler panelinden:\n\n1. 'Tüm Müsait Öğretmenlere Nöbet Ver': O gün tüm ders saatleri dolu olsa bile öğretmene nöbet atanmasını sağlar.\n2. 'Yetersiz Kalırsa 2. Nöbet Günü Ver': İşaretlenmediği takdirde kimseye 2. nöbet günü verilmez (katı sınır: 1).\n3. 'Kıdemli Öğretmenlere Öncelik Ver': MEB yönetmeliği gereği kıdemli öğretmenlerin tercihlerini önceler.\n\nİhtiyacınıza göre bu seçenekleri işaretleyip '⚡ Dağıtımı Hesapla' butonuna basmanız yeterlidir.",
+      "important": false,
+      "link_text": "",
+      "link_url": ""
+    }
+  ]
+}

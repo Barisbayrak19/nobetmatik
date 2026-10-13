@@ -41,32 +41,27 @@ def _make_ssl_context(unverified: bool = False) -> ssl.SSLContext:
         return ctx
 
     try:
-        ctx = ssl.create_default_context()
-        if sys.platform.startswith("win"):
-            for store in ("ROOT", "CA"):
-                try:
-                    for cert_bytes, _, _ in ssl.enum_certificates(store):
-                        if cert_bytes:
-                            ctx.load_verify_locations(cadata=cert_bytes)
-                except Exception:
-                    pass
-        return ctx
+        return ssl.create_default_context()
     except Exception:
         return ssl._create_unverified_context()
 
 def _urlopen_with_fallback(req: urllib.request.Request, timeout: int = 10):
     """
-    Önce Windows kök sertifikalarıyla doğrulamalı dener;
-    MEB/Kurumsal proxy SSL denetimi kaynaklı doğrulama hatasında otomatik fallback yapar.
+    Önce standart doğrulamalı SSL dener;
+    MEB/Kurumsal proxy SSL denetimi veya handshake hatasında otomatik esnek SSL fallback yapar.
     """
     try:
         ctx = _make_ssl_context(unverified=False)
         return urllib.request.urlopen(req, timeout=timeout, context=ctx)
-    except urllib.error.URLError as e:
+    except Exception as e:
+        err_str = str(e)
         is_ssl_err = (
-            isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError)
-            or "CERTIFICATE_VERIFY_FAILED" in str(e)
-            or "Authority Key Identifier" in str(e)
+            isinstance(getattr(e, "reason", None), ssl.SSLError)
+            or isinstance(e, ssl.SSLError)
+            or "CERTIFICATE_VERIFY_FAILED" in err_str
+            or "Authority Key Identifier" in err_str
+            or "_ssl.c" in err_str
+            or "SSL" in err_str
         )
         if is_ssl_err:
             logger.info("SSL sertifika uyuşmazlığı tespit edildi (MEB/Kurumsal ağ). Güvenli esnek bağlantı ile deneniyor...")

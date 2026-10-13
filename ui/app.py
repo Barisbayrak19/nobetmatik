@@ -16,7 +16,6 @@ from core.config import APP_NAME, APP_VERSION, EXPORTS_DIR, ICON_PATH, DEFAULT_G
 from logic.duty_service import DutyService
 from logic.backup_service import BackupService
 from logic.export_service import ExportService
-from logic.update_service import UpdateService
 from core.logger import logger
 
 from ui.theme import (
@@ -31,17 +30,77 @@ from ui.schedule_grid import TURKISH_MONTHS
 from logic.substitution_service import PERIOD_TIMES
 from ui.wizard_view import WizardView
 from ui.schedule_grid import ScheduleGrid
-from ui.teacher_management import TeacherManagementDialog
-from ui.location_management import LocationManagementDialog
-from ui.distribution_dialog import DistributionDialog
-from ui.import_dialog import ImportDialog
-from ui.backup_dialog import BackupDialog
-from ui.settings_dialog import SettingsDialog
+from ui.teacher_management import TeacherManagementView, TeacherManagementDialog
+from ui.location_management import LocationManagementView, LocationManagementDialog
+from ui.distribution_dialog import DistributionView, DistributionDialog
+from ui.import_dialog import ImportView, ImportDialog
+from ui.backup_dialog import BackupView, BackupDialog
+from ui.settings_dialog import SettingsView, SettingsDialog
+from ui.reports_view import ReportsView
 from ui.shift_dialog import ShiftDialog
 from ui.substitution_dialog import SubstitutionDialog
 from ui.attendance_dialog import AttendanceDialog
 from ui.timetable_export_dialog import TimetableExportDialog
-from ui.update_dialog import UpdateDialog
+
+class SimpleTooltip:
+    """Kompakt ve şık düğme ipucu (Tooltip) yöneticisi."""
+    def __init__(self, widget: tk.Widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        self._after_id = None
+        self.widget.bind("<Enter>", self._on_enter, add="+")
+        self.widget.bind("<Leave>", self._on_leave, add="+")
+        self.widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _on_enter(self, event=None):
+        self._cancel()
+        self._after_id = self.widget.after(300, self._show)
+
+    def _on_leave(self, event=None):
+        self._cancel()
+        self._hide()
+
+    def _cancel(self):
+        if self._after_id:
+            try:
+                self.widget.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def _show(self):
+        if self.tip:
+            return
+        try:
+            x = self.widget.winfo_rootx() + 4
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 4
+            self.tip = tw = tk.Toplevel(self.widget)
+            tw.wm_overrideredirect(True)
+            tw.wm_geometry(f"+{x}+{y}")
+            tw.attributes("-topmost", True)
+            lbl = tk.Label(
+                tw,
+                text=self.text,
+                font=(FONT_FAMILY, 8),
+                bg="#0F172A",
+                fg="#F8FAFC",
+                padx=6,
+                pady=3,
+                relief="flat",
+                bd=0
+            )
+            lbl.pack()
+        except Exception:
+            pass
+
+    def _hide(self, event=None):
+        if self.tip:
+            try:
+                self.tip.destroy()
+            except Exception:
+                pass
+            self.tip = None
 
 class MainApp(ctk.CTk):
     def __init__(self):
@@ -49,7 +108,7 @@ class MainApp(ctk.CTk):
         setup_customtkinter()
         self.title(f"{APP_NAME} v{APP_VERSION}")
         self.geometry("1280x800")
-        self.minsize(1024, 680)
+        self.minsize(1180, 720)
 
         if ICON_PATH.exists():
             try:
@@ -64,12 +123,12 @@ class MainApp(ctk.CTk):
         self.backup_service = BackupService()
         self.export_service = ExportService(self.db)
 
-        # Hafta Yönetimi (Pazartesi bazlı)
-        # Referans nöbet haftası: 28 Eylül 2026
-        self.current_week_start = datetime.date(2026, 9, 28)
+        # Hafta Yönetimi (Pazartesi bazlı - Güncel Takvim Haftası)
+        today = datetime.date.today()
+        self.current_week_start = today - datetime.timedelta(days=today.weekday())
         self.has_unsaved_changes = False
 
-        setup_styles(self)
+        setup_styles(self, self.db)
 
         # Klavye Kısayolları
         self.bind("<Control-z>", lambda e: self.do_undo())
@@ -102,17 +161,27 @@ class MainApp(ctk.CTk):
         self.main_container.pack(side="left", fill="both", expand=True)
 
         self._build_top_header()
-        self._build_kpi_cards()
-        self._build_action_bar()
-        self._build_workspace()
-        self._build_footer()
+
+        # SPA Ana İçerik Alanı
+        self.content_container = ctk.CTkFrame(self.main_container, fg_color="transparent", corner_radius=0)
+        self.content_container.pack(fill="both", expand=True)
+
+        # 1. Haftalık Nöbet Sayfası (Kalıcı - State ASLA kaybolmaz)
+        self.page_weekly = ctk.CTkFrame(self.content_container, fg_color="transparent", corner_radius=0)
+        self._build_footer(self.page_weekly)
+        self._build_kpi_cards(self.page_weekly)
+        self._build_action_bar(self.page_weekly)
+        self._build_workspace(self.page_weekly)
+
+        # Sayfa Görünümleri Sözlüğü (Lazy Cache)
+        self.page_views = {"weekly": self.page_weekly}
+        self.current_page_key = "weekly"
+        self.current_page_frame = self.page_weekly
+        self.page_weekly.pack(fill="both", expand=True)
 
         self.undo_manager.register_callback(self.update_undo_redo_ui)
         self.update_header_info()
-
-        # Açılışta otomatik güncelleme denetimi (arka planda sessiz)
-        if self.db.get_setting("auto_check_updates", "1") == "1":
-            self.after(3500, lambda: self.check_for_updates(silent=True))
+        self.after(600, self._check_announcements_background)
 
     def get_current_week_str(self) -> str:
         return self.current_week_start.isoformat()
@@ -136,7 +205,7 @@ class MainApp(ctk.CTk):
         lbl_logo = ctk.CTkLabel(
             brand_frame,
             text="🛡️ NöbetMatik",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=17, weight="bold"),
             text_color="#38BDF8"
         )
         lbl_logo.pack(anchor="w")
@@ -144,215 +213,512 @@ class MainApp(ctk.CTk):
         self.lbl_sidebar_school = ctk.CTkLabel(
             brand_frame,
             text=school.name if school.name else "Okul Yönetim Sistemi",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            text_color="#F8FAFC",
-            wraplength=185,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color="#FFFFFF",
+            wraplength=188,
             justify="left"
         )
         self.lbl_sidebar_school.pack(anchor="w", pady=(4, 0))
 
         self.lbl_sidebar_year = ctk.CTkLabel(
             brand_frame,
-            text=f"{school.academic_year} Eğitim Yılı",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#94A3B8"
+            text=f"🎓 {school.academic_year or '2026-2027'} Eğitim Yılı",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color="#38BDF8",
+            fg_color="#1E293B",
+            corner_radius=6,
+            padx=8,
+            pady=3
         )
-        self.lbl_sidebar_year.pack(anchor="w", pady=(1, 0))
+        self.lbl_sidebar_year.pack(anchor="w", pady=(5, 3))
 
         self.lbl_sidebar_principal = ctk.CTkLabel(
             brand_frame,
             text=f"Müdür: {school.principal_name}" if school.principal_name else "Müdürlük",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#94A3B8",
-            wraplength=185,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#CBD5E1",
+            wraplength=188,
             justify="left"
         )
         self.lbl_sidebar_principal.pack(anchor="w", pady=(1, 0))
 
         # İnce ayırıcı çizgi
         div1 = ctk.CTkFrame(self.sidebar_frame, fg_color="#1E293B", height=1)
-        div1.pack(fill="x", padx=12, pady=(10, 12))
+        div1.pack(fill="x", padx=12, pady=(10, 10))
 
-        # Menü Başlığı
-        lbl_menu_title = ctk.CTkLabel(
+        # 1. ANA MENÜ Başlığı
+        lbl_main_title = ctk.CTkLabel(
             self.sidebar_frame,
             text="ANA MENÜ",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
-            text_color="#64748B"
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color="#94A3B8"
         )
-        lbl_menu_title.pack(anchor="w", padx=16, pady=(0, 4))
+        lbl_main_title.pack(anchor="w", padx=16, pady=(0, 4))
 
-        # Menü Butonları
         self.sidebar_buttons = {}
-        nav_items = [
-            ("weekly", "📅 Haftalık Nöbet", None, True),
-            ("teachers", "👥 Öğretmenler", self.open_teachers, False),
-            ("locations", "📍 Nöbet Yerleri", self.open_locations, False),
-            ("distribute", "⚡ Otomatik Dağıtım", self.open_auto_distribution, False),
-            ("import", "📥 İçe Aktarma", self.open_import, False),
-            ("reports", "📊 Raporlar", self.open_reports_menu, False),
-            ("settings", "⚙️ Ayarlar", self.open_settings, False),
+        self.sidebar_indicators = {}
+
+        main_nav_items = [
+            ("weekly", "📅  Haftalık Nöbet"),
+            ("teachers", "👥  Öğretmenler"),
+            ("locations", "📍  Nöbet Yerleri"),
+            ("distribute", "⚡  Otomatik Dağıtım"),
+            ("import", "📥  İçe Aktarma"),
+            ("reports", "📊  Raporlar"),
         ]
 
-        for key, text, cmd, is_active in nav_items:
-            btn = ctk.CTkButton(
-                self.sidebar_frame,
-                text=text,
-                height=32,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold" if is_active else "normal"),
-                anchor="w",
-                fg_color="#2563EB" if is_active else "transparent",
-                hover_color="#1D4ED8" if is_active else "#1E293B",
-                text_color="#FFFFFF" if is_active else "#E2E8F0",
-                corner_radius=6,
-                command=cmd
-            )
-            btn.pack(fill="x", padx=10, pady=2)
-            self.sidebar_buttons[key] = btn
+        def _create_sidebar_pill(key: str, text: str, is_active: bool = False):
+            row = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent", height=36)
+            row.pack(fill="x", padx=8, pady=2)
+            row.pack_propagate(False)
 
-        # Alt Alan (Yedekleme, Güncelle ve Sürüm)
+            ind = ctk.CTkFrame(
+                row,
+                width=4,
+                height=20,
+                corner_radius=2,
+                fg_color="#38BDF8" if is_active else "transparent"
+            )
+            ind.pack(side="left", padx=(2, 4), pady=8)
+
+            btn = ctk.CTkButton(
+                row,
+                text=text,
+                height=34,
+                font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if is_active else "normal"),
+                anchor="w",
+                fg_color="#1E293B" if is_active else "transparent",
+                hover_color="#1E293B",
+                text_color="#38BDF8" if is_active else "#F8FAFC",
+                corner_radius=12,
+                border_width=0,
+                command=lambda k=key: self.switch_page(k)
+            )
+            btn.pack(side="left", fill="both", expand=True)
+            self.sidebar_buttons[key] = btn
+            self.sidebar_indicators[key] = ind
+
+        for key, text in main_nav_items:
+            _create_sidebar_pill(key, text, is_active=(key == "weekly"))
+
+        # İnce ayırıcı çizgi
+        div2 = ctk.CTkFrame(self.sidebar_frame, fg_color="#1E293B", height=1)
+        div2.pack(fill="x", padx=12, pady=(12, 10))
+
+        # 2. SİSTEM Menü Başlığı
+        lbl_sys_title = ctk.CTkLabel(
+            self.sidebar_frame,
+            text="SİSTEM",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color="#94A3B8"
+        )
+        lbl_sys_title.pack(anchor="w", padx=16, pady=(0, 4))
+
+        system_nav_items = [
+            ("backup", "💾  Veri Yedekleme"),
+            ("settings", "⚙️  Ayarlar"),
+            ("announcements", "🔔  Duyurular"),
+            ("feedback", "💬  Geri Bildirim"),
+        ]
+
+        for key, text in system_nav_items:
+            _create_sidebar_pill(key, text, is_active=False)
+
+        # Alt Alan (Sadece Sürüm Bilgisi)
         bottom_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
         bottom_frame.pack(side="bottom", fill="x", padx=10, pady=12)
 
-        div2 = ctk.CTkFrame(bottom_frame, fg_color="#1E293B", height=1)
-        div2.pack(fill="x", pady=(0, 8))
-
-        btn_backup = ctk.CTkButton(
-            bottom_frame,
-            text="💾 Veri Yedekleme",
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10),
-            anchor="w",
-            fg_color="transparent",
-            hover_color="#1E293B",
-            text_color="#94A3B8",
-            corner_radius=5,
-            command=self.open_backup
-        )
-        btn_backup.pack(fill="x", pady=1)
-
-        btn_update = ctk.CTkButton(
-            bottom_frame,
-            text="🔄 Güncellemeler",
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10),
-            anchor="w",
-            fg_color="transparent",
-            hover_color="#1E293B",
-            text_color="#94A3B8",
-            corner_radius=5,
-            command=lambda: self.check_for_updates(silent=False)
-        )
-        btn_update.pack(fill="x", pady=1)
+        div3 = ctk.CTkFrame(bottom_frame, fg_color="#1E293B", height=1)
+        div3.pack(fill="x", pady=(0, 8))
 
         lbl_ver = ctk.CTkLabel(
             bottom_frame,
             text=f"v{APP_VERSION} (Kararlı)",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#475569"
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#94A3B8"
         )
-        lbl_ver.pack(anchor="w", padx=6, pady=(6, 0))
+        lbl_ver.pack(anchor="w", padx=6, pady=(2, 0))
 
-    # --- 2. ÜST BİLGİ & HAFTA NAVİGASYONU ---
+    def _update_sidebar_active(self, active_key: str):
+        for key, btn in self.sidebar_buttons.items():
+            is_active = (key == active_key)
+            btn.configure(
+                fg_color="#1E293B" if is_active else "transparent",
+                hover_color="#1E293B",
+                text_color="#38BDF8" if is_active else "#F8FAFC",
+                font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if is_active else "normal")
+            )
+            if hasattr(self, "sidebar_indicators") and key in self.sidebar_indicators:
+                self.sidebar_indicators[key].configure(
+                    fg_color="#38BDF8" if is_active else "transparent"
+                )
+
+    def switch_page(self, key: str):
+        if key == "announcements":
+            self.open_announcements_dialog()
+            return
+        if key == "feedback":
+            self.open_feedback_dialog()
+            return
+
+        if hasattr(self, "current_page_key") and key == self.current_page_key and key != "weekly":
+            return
+
+        if key in ("teachers", "locations", "settings") and self.db.is_password_protected():
+            title_map = {
+                "teachers": "Öğretmen Yönetimi",
+                "locations": "Nöbet Yerleri Yönetimi",
+                "settings": "Sistem Ayarları"
+            }
+            self.require_admin_password(
+                lambda: self._do_switch_page(key),
+                title_map.get(key, "Yönetici Doğrulaması")
+            )
+            return
+
+        self._do_switch_page(key)
+
+    def _do_switch_page(self, key: str):
+        if hasattr(self, "current_page_frame") and self.current_page_frame:
+            self.current_page_frame.pack_forget()
+
+        target_frame = self._get_or_create_page(key)
+        target_frame.pack(fill="both", expand=True)
+        self.current_page_frame = target_frame
+        self.current_page_key = key
+
+        self._update_sidebar_active(key)
+        self._update_header_for_page(key)
+
+    def _get_or_create_page(self, key: str):
+        if key in self.page_views:
+            view = self.page_views[key]
+            if key == "weekly":
+                self.schedule_grid.refresh()
+                self.update_header_info()
+            elif key == "teachers":
+                view.load_teachers()
+            elif key == "locations":
+                view.load_locations()
+            elif key == "distribute":
+                view.calculate_preview()
+            elif key == "backup":
+                view.load_backups()
+            return view
+
+        if key == "teachers":
+            view = TeacherManagementView(
+                self.content_container,
+                db=self.db,
+                on_data_changed=self.on_teachers_data_changed
+            )
+        elif key == "locations":
+            view = LocationManagementView(
+                self.content_container,
+                db=self.db,
+                on_data_changed=self.on_locations_data_changed
+            )
+        elif key == "distribute":
+            view = DistributionView(
+                self.content_container,
+                db=self.db,
+                get_week_start=self.get_current_week_str,
+                on_applied=self.on_distribution_applied,
+                on_cancel=lambda: self.switch_page("weekly")
+            )
+        elif key == "import":
+            view = ImportView(
+                self.content_container,
+                db=self.db,
+                on_imported=self.on_import_data_changed,
+                on_finish=lambda: self.switch_page("weekly")
+            )
+        elif key == "reports":
+            view = ReportsView(
+                self.content_container,
+                db=self.db,
+                get_current_week=self.get_current_week_str,
+                open_print_preview_callback=self.open_print_preview,
+                open_attendance_callback=self.open_attendance_dialog
+            )
+        elif key == "backup":
+            view = BackupView(
+                self.content_container,
+                backup_service=self.backup_service,
+                on_restore_complete=self.on_backup_restored,
+                on_finish=lambda: self.switch_page("weekly")
+            )
+        elif key == "settings":
+            view = SettingsView(
+                self.content_container,
+                db=self.db,
+                on_saved=self._on_settings_saved,
+                on_finish=lambda: self.switch_page("weekly")
+            )
+        else:
+            view = self.page_weekly
+
+        self.page_views[key] = view
+        return view
+
+    def _update_header_for_page(self, key: str):
+        headers = {
+            "weekly": ("", "", True),
+            "teachers": ("ÖĞRETMEN YÖNETİMİ", "Öğretmen Listesi, Branşlar ve Müsaitlik Durumları", False),
+            "locations": ("NÖBET YERLERİ YÖNETİMİ", "Nöbet Bölgeleri, Kapasiteler ve Sıralama", False),
+            "distribute": ("OTOMATİK NÖBET DAĞITIMI", "Akıllı Dağıtım Algoritması ve Adalet Analizi", True),
+            "import": ("İÇE AKTARMA MERKEZİ", "e-Okul, Excel, CSV ve Ders Programı Aktarımı", False),
+            "reports": ("RAPORLAR", "Resmi belgeler, çizelgeler ve okul çıktılarını tek yerden yönetin.", False),
+            "backup": ("VERİ YEDEKLEME VE GERİ YÜKLEME", "Sistem Veritabanı Yedekleri ve Geri Yükleme", False),
+            "settings": ("SİSTEM VE OKUL AYARLARI", "Okul Bilgileri, Zaman Çizelgesi ve Güvenlik Parametreleri", False),
+        }
+        title, subtitle, show_week_nav = headers.get(key, ("", "", True))
+        if hasattr(self, "lbl_title"):
+            self.lbl_title.configure(text=title)
+        if hasattr(self, "lbl_header_school"):
+            self.lbl_header_school.configure(text=subtitle)
+
+        if hasattr(self, "left_header_box"):
+            if title or subtitle:
+                self.left_header_box.pack(side="left", padx=(16, 8), pady=8)
+            else:
+                self.left_header_box.pack_forget()
+
+        if hasattr(self, "nav_card"):
+            if show_week_nav:
+                if key == "weekly":
+                    self.nav_card.pack(side="left", padx=(16, 8), pady=10)
+                else:
+                    self.nav_card.pack(side="right", padx=(0, 8), pady=10)
+            else:
+                self.nav_card.pack_forget()
+
+        if hasattr(self, "action_bar_frame"):
+            if key == "weekly":
+                self.action_bar_frame.pack(side="right", padx=(0, 8), pady=10)
+            else:
+                self.action_bar_frame.pack_forget()
+
+    def on_teachers_data_changed(self):
+        self.schedule_grid.refresh()
+        self.update_header_info()
+
+    def on_locations_data_changed(self):
+        self.schedule_grid.build_grid()
+        self.schedule_grid.refresh()
+        self.update_header_info()
+
+    def on_distribution_applied(self):
+        self.schedule_grid.refresh()
+        self.on_duty_data_changed()
+        self.switch_page("weekly")
+
+    def on_import_data_changed(self):
+        self.schedule_grid.build_grid()
+        self.schedule_grid.refresh()
+        self.update_header_info()
+
+    def on_backup_restored(self):
+        self.schedule_grid.build_grid()
+        self.schedule_grid.refresh()
+        self.update_header_info()
+
+    # --- 2. BİRLEŞTİRİLMİŞ TEK ÜST BAR (BAŞLIK + İKON DOCK + HAFTA NAVİGASYONU) ---
     def _build_top_header(self):
-        self.top_header_frame = ctk.CTkFrame(self.main_container, fg_color="#FFFFFF", corner_radius=0, height=58, border_width=1, border_color="#E2E8F0")
+        self.top_header_frame = ctk.CTkFrame(
+            self.main_container,
+            fg_color="#FFFFFF",
+            corner_radius=0,
+            height=58,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
         self.top_header_frame.pack(fill="x", side="top")
 
-        left_box = ctk.CTkFrame(self.top_header_frame, fg_color="transparent")
-        left_box.pack(side="left", padx=16, pady=8)
+        self.left_header_box = ctk.CTkFrame(self.top_header_frame, fg_color="transparent")
 
-        lbl_title = ctk.CTkLabel(
-            left_box,
-            text="HAFTALIK NÖBET YÖNETİMİ",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+        self.lbl_title = ctk.CTkLabel(
+            self.left_header_box,
+            text="",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
             text_color="#0F172A"
         )
-        lbl_title.pack(anchor="w")
+        self.lbl_title.pack(anchor="w")
 
         self.lbl_header_school = ctk.CTkLabel(
-            left_box,
+            self.left_header_box,
             text="",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#64748B"
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            text_color="#475569"
         )
         self.lbl_header_school.pack(anchor="w")
 
-        # Üst Sağ Hafta Gezinme Kartı
-        nav_card = ctk.CTkFrame(self.top_header_frame, fg_color="#F8FAFC", corner_radius=6, border_width=1, border_color="#E2E8F0")
-        nav_card.pack(side="right", padx=16, pady=8)
+        # Üst Sağ Hızlı İkon Kapsülü (Duyurular & Geri Bildirim - Minimal İkon Barı)
+        self.header_actions_box = ctk.CTkFrame(
+            self.top_header_frame,
+            fg_color="#F1F5F9",
+            corner_radius=10,
+            border_width=0
+        )
+        self.header_actions_box.pack(side="right", padx=(0, 12), pady=10)
+
+        self.btn_feedback = ctk.CTkButton(
+            self.header_actions_box,
+            text="💬",
+            width=30,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14),
+            fg_color="transparent",
+            hover_color="#E2E8F0",
+            text_color="#334155",
+            border_width=0,
+            corner_radius=8,
+            command=self.open_feedback_dialog
+        )
+        self.btn_feedback.pack(side="right", padx=(1, 3), pady=3)
+        SimpleTooltip(self.btn_feedback, "Geri Bildirim Gönder")
+
+        self.btn_announcements = ctk.CTkButton(
+            self.header_actions_box,
+            text="🔔",
+            width=30,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14),
+            fg_color="transparent",
+            hover_color="#E2E8F0",
+            text_color="#334155",
+            border_width=0,
+            corner_radius=8,
+            command=self.open_announcements_dialog
+        )
+        self.btn_announcements.pack(side="right", padx=(3, 1), pady=3)
+        SimpleTooltip(self.btn_announcements, "Sistem Duyuruları")
+
+        # Üst Sol Hafta Gezinme ve Geçmiş Kapsülü (Modern Yekpare Entegre Segmented Pill)
+        self.nav_card = ctk.CTkFrame(
+            self.top_header_frame,
+            fg_color="#F1F5F9",
+            corner_radius=10,
+            border_width=0
+        )
+        self.nav_card.pack(side="left", padx=(16, 8), pady=10)
+
+        # Geri / İleri Al (Tarih ve çalışma geçmişiyle birleşik)
+        self.btn_undo = ctk.CTkButton(
+            self.nav_card,
+            text="↶",
+            width=28,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            fg_color="transparent",
+            hover_color="#FFFFFF",
+            text_color="#0F172A",
+            text_color_disabled="#94A3B8",
+            border_width=0,
+            corner_radius=8,
+            state="disabled",
+            command=self.do_undo
+        )
+        self.btn_undo.pack(side="left", padx=(3, 1), pady=3)
+        SimpleTooltip(self.btn_undo, "Geri Al (Ctrl+Z)")
+
+        self.btn_redo = ctk.CTkButton(
+            self.nav_card,
+            text="↷",
+            width=28,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            fg_color="transparent",
+            hover_color="#FFFFFF",
+            text_color="#0F172A",
+            text_color_disabled="#94A3B8",
+            border_width=0,
+            corner_radius=8,
+            state="disabled",
+            command=self.do_redo
+        )
+        self.btn_redo.pack(side="left", padx=(1, 2), pady=3)
+        SimpleTooltip(self.btn_redo, "İleri Al (Ctrl+Y)")
+
+        div_history = ctk.CTkFrame(self.nav_card, fg_color="#CBD5E1", width=1, height=18)
+        div_history.pack(side="left", padx=3, pady=6)
 
         btn_prev = ctk.CTkButton(
-            nav_card,
-            text="← Önceki Hafta",
-            width=92,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
+            self.nav_card,
+            text="‹",
+            width=28,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+            fg_color="transparent",
+            hover_color="#E2E8F0",
             text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
+            border_width=0,
+            corner_radius=8,
             command=self.prev_week
         )
-        btn_prev.pack(side="left", padx=(3, 2), pady=3)
+        btn_prev.pack(side="left", padx=(2, 1), pady=3)
+        SimpleTooltip(btn_prev, "Önceki Hafta")
 
         self.lbl_week_range = ctk.CTkLabel(
-            nav_card,
+            self.nav_card,
             text="",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             text_color="#0F172A",
-            fg_color="#EFF6FF",
-            corner_radius=5,
-            padx=12,
-            pady=3
+            fg_color="#FFFFFF",
+            corner_radius=7,
+            padx=10,
+            pady=4
         )
-        self.lbl_week_range.pack(side="left", padx=3, pady=3)
+        self.lbl_week_range.pack(side="left", padx=2, pady=3)
 
         btn_next = ctk.CTkButton(
-            nav_card,
-            text="Sonraki Hafta →",
-            width=92,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
+            self.nav_card,
+            text="›",
+            width=28,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+            fg_color="transparent",
+            hover_color="#E2E8F0",
             text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
+            border_width=0,
+            corner_radius=8,
             command=self.next_week
         )
-        btn_next.pack(side="left", padx=2, pady=3)
+        btn_next.pack(side="left", padx=(1, 2), pady=3)
+        SimpleTooltip(btn_next, "Sonraki Hafta")
 
         btn_today = ctk.CTkButton(
-            nav_card,
+            self.nav_card,
             text="Bugün",
-            width=50,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#0F172A",
-            hover_color="#1E293B",
-            text_color="#FFFFFF",
-            corner_radius=5,
+            width=52,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            fg_color="#DBEAFE",
+            hover_color="#BFDBFE",
+            text_color="#1D4ED8",
+            border_width=0,
+            corner_radius=8,
             command=self.current_week
         )
-        btn_today.pack(side="left", padx=(3, 3), pady=3)
+        btn_today.pack(side="left", padx=(2, 3), pady=3)
+        SimpleTooltip(btn_today, "Bu Haftaya Dön")
 
     # --- 3. İSTATİSTİK (KPI) KARTLARI ---
-    def _build_kpi_cards(self):
-        self.kpi_cards_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
-        self.kpi_cards_frame.pack(fill="x", padx=16, pady=(10, 6))
+    def _build_kpi_cards(self, parent=None):
+        target = parent if parent is not None else self.main_container
+        self.kpi_cards_frame = ctk.CTkFrame(target, fg_color="transparent")
+        self.kpi_cards_frame.pack(fill="x", padx=16, pady=(6, 6))
 
         for i in range(5):
             self.kpi_cards_frame.columnconfigure(i, weight=1, uniform="kpi")
 
         self.kpi_widgets = {}
+        self.kpi_card_frames = {}
 
         card_defs = [
             ("teachers", "Aktif Öğretmen", "#0F172A", "0"),
             ("filled", "Dolu Nöbet", "#2563EB", "0 / 0"),
-            ("missing", "Eksik Nöbet", "#DC2626", "0"),
+            ("missing", "Eksik Nöbet", "#059669", "0"),
             ("fixed", "Sabit Görev", "#D97706", "0"),
             ("rate", "Dağılım Oranı", "#059669", "%0"),
         ]
@@ -363,225 +729,174 @@ class MainApp(ctk.CTk):
                 fg_color="#FFFFFF",
                 corner_radius=8,
                 border_width=1,
-                border_color="#E2E8F0"
+                border_color="#E2E8F0",
+                height=62
             )
             card.grid(row=0, column=idx, padx=4, pady=0, sticky="nsew")
+            card.pack_propagate(False)
 
             lbl_val = ctk.CTkLabel(
                 card,
                 text=def_val,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+                font=ctk.CTkFont(family=FONT_FAMILY, size=20, weight="bold"),
                 text_color=val_color
             )
-            lbl_val.pack(anchor="w", padx=12, pady=(8, 1))
+            lbl_val.pack(anchor="w", padx=12, pady=(4, 0))
 
             lbl_sub = ctk.CTkLabel(
                 card,
                 text=title,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-                text_color="#64748B"
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+                text_color="#334155"
             )
-            lbl_sub.pack(anchor="w", padx=12, pady=(0, 8))
+            lbl_sub.pack(anchor="w", padx=12, pady=(0, 4))
 
             self.kpi_widgets[key] = (lbl_val, lbl_sub)
+            self.kpi_card_frames[key] = card
 
-    # --- 4. AKSİYON BUTONLARI ÇUBUĞU ---
-    def _build_action_bar(self):
-        self.action_bar_frame = ctk.CTkFrame(self.main_container, fg_color="#FFFFFF", corner_radius=8, border_width=1, border_color="#E2E8F0")
-        self.action_bar_frame.pack(fill="x", padx=16, pady=(2, 8))
-
-        left_box = ctk.CTkFrame(self.action_bar_frame, fg_color="transparent")
-        left_box.pack(side="left", padx=8, pady=6)
-
-        # Geri / İleri Al
-        self.btn_undo = ctk.CTkButton(
-            left_box,
-            text="↶ Geri",
-            width=50,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#F8FAFC",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            state="disabled",
-            command=self.do_undo
+    # --- 4. ÜST BAŞLIKLA BİRLEŞTİRİLMİŞ ULTRA-MİNİMALİST İKON & PASTEL KAPSÜL DOCK ---
+    def _build_action_bar(self, parent=None):
+        # Operasyonel Aksiyon Kapsülü (Dağıtım, İkame, Baskı, İşlemler, Kaydet)
+        self.action_bar_frame = ctk.CTkFrame(
+            self.top_header_frame,
+            fg_color="#F1F5F9",
+            corner_radius=10,
+            border_width=0
         )
-        self.btn_undo.pack(side="left", padx=(0, 2))
+        self.action_bar_frame.pack(side="right", padx=(0, 8), pady=10)
 
-        self.btn_redo = ctk.CTkButton(
-            left_box,
-            text="↷ İleri",
-            width=50,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#F8FAFC",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            state="disabled",
-            command=self.do_redo
-        )
-        self.btn_redo.pack(side="left", padx=(0, 6))
-
-        # ⚡ Otomatik Dağıt (Öne Çıkan Modern Mavi Buton)
-        btn_distribute = ctk.CTkButton(
-            left_box,
-            text="⚡ Otomatik Dağıt",
-            width=125,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#2563EB",
-            hover_color="#1D4ED8",
-            text_color="#FFFFFF",
-            corner_radius=6,
+        # 1. ⚡ Dağıt (Pastel / Soft-Tinted Mavi Hap Buton)
+        self.btn_distribute = ctk.CTkButton(
+            self.action_bar_frame,
+            text="⚡ Dağıt",
+            width=76,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#DBEAFE",
+            hover_color="#BFDBFE",
+            text_color="#1D4ED8",
+            border_width=0,
+            corner_radius=8,
             command=self.open_auto_distribution
         )
-        btn_distribute.pack(side="left", padx=(0, 5))
+        self.btn_distribute.pack(side="left", padx=2, pady=3)
+        SimpleTooltip(self.btn_distribute, "Otomatik Nöbet Dağıtım Sihirbazı")
 
-        # ↔ Nöbet Kaydır Grubu
-        f_shift = ctk.CTkFrame(left_box, fg_color="transparent")
-        f_shift.pack(side="left", padx=(0, 5))
-
-        btn_shift = ctk.CTkButton(
-            f_shift,
-            text="↔ Nöbet Kaydır",
-            width=105,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
+        # 3. ↔ Nöbet Kaydır (Ultra-Minimalist İkon + Tooltip)
+        self.btn_shift = ctk.CTkButton(
+            self.action_bar_frame,
+            text="↔",
+            width=32,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            fg_color="transparent",
+            hover_color="#FFFFFF",
             text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            command=self.quick_shift
-        )
-        btn_shift.pack(side="left")
-
-        btn_shift_opt = ctk.CTkButton(
-            f_shift,
-            text="▾",
-            width=20,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
+            border_width=0,
+            corner_radius=8,
             command=self.open_shift_dialog
         )
-        btn_shift_opt.pack(side="left", padx=(2, 0))
+        self.btn_shift.pack(side="left", padx=1, pady=3)
+        SimpleTooltip(self.btn_shift, "Nöbet Rotasyonu ve Hafta Kaydırma")
 
-        # ＋ Boş Ders Doldurma
-        btn_sub = ctk.CTkButton(
-            left_box,
-            text="＋ Boş Ders Doldurma",
-            width=135,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
+        # 4. 👥 Boş Ders (Ultra-Minimalist İkon + Tooltip)
+        self.btn_substitution = ctk.CTkButton(
+            self.action_bar_frame,
+            text="👥",
+            width=32,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14),
+            fg_color="transparent",
+            hover_color="#FFFFFF",
             text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
+            border_width=0,
+            corner_radius=8,
             command=self.open_substitution_dialog
         )
-        btn_sub.pack(side="left", padx=(0, 5))
+        self.btn_substitution.pack(side="left", padx=1, pady=3)
+        SimpleTooltip(self.btn_substitution, "Boş Ders Doldurma (İkame Görevlendirme)")
 
-        # 📅 Sonraki Haftaya Aktar Grubu
-        f_carry = ctk.CTkFrame(left_box, fg_color="transparent")
-        f_carry.pack(side="left", padx=(0, 5))
-
-        btn_carry = ctk.CTkButton(
-            f_carry,
-            text="📅 Sonraki Haftaya Aktar",
-            width=145,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            command=self.quick_copy_next_same
-        )
-        btn_carry.pack(side="left")
-
-        btn_carry_opt = ctk.CTkButton(
-            f_carry,
-            text="▾",
-            width=20,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            command=self.open_copy_menu
-        )
-        btn_carry_opt.pack(side="left", padx=(2, 0))
-
-        # 🖨️ Çıktılar Butonu
-        self.btn_export = ctk.CTkButton(
-            left_box,
-            text="🖨️ Çıktılar ▾",
-            width=90,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            command=self.open_export_menu
-        )
-        self.btn_export.pack(side="left", padx=(0, 5))
-
-        # ⋯ Daha Fazla Butonu
-        self.btn_more = ctk.CTkButton(
-            left_box,
-            text="⋯ Daha Fazla ▾",
-            width=100,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#FFFFFF",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            command=self.open_more_menu
-        )
-        self.btn_more.pack(side="left", padx=(0, 5))
-
-        # Sağ Taraf: Değişiklikleri Kaydet
-        btn_save = ctk.CTkButton(
+        # 5. 🖨️ Baskı Önizleme (Ultra-Minimalist İkon + Tooltip)
+        self.btn_quick_print = ctk.CTkButton(
             self.action_bar_frame,
-            text="💾 Değişiklikleri Kaydet",
-            width=150,
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#059669",
-            hover_color="#047857",
-            text_color="#FFFFFF",
-            corner_radius=6,
+            text="🖨️",
+            width=32,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14),
+            fg_color="transparent",
+            hover_color="#FFFFFF",
+            text_color="#0F172A",
+            border_width=0,
+            corner_radius=8,
+            command=self.open_print_preview
+        )
+        self.btn_quick_print.pack(side="left", padx=1, pady=3)
+        SimpleTooltip(self.btn_quick_print, "Baskı Önizleme ve Yazdır")
+
+        # 6. ••• Tüm İşlemler Popover (İkon + Ok Düğmesi)
+        self.btn_actions = ctk.CTkButton(
+            self.action_bar_frame,
+            text="••• ▾",
+            width=50,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#FFFFFF",
+            hover_color="#E2E8F0",
+            text_color="#0F172A",
+            border_width=0,
+            corner_radius=8,
+            command=self.open_unified_actions_menu
+        )
+        self.btn_actions.pack(side="left", padx=2, pady=3)
+        SimpleTooltip(self.btn_actions, "Hafta Aktarma, Çıktılar ve Tüm İşlemler")
+        self.btn_week_ops = self.btn_actions
+        self.btn_export = self.btn_actions
+        self.btn_more = self.btn_actions
+
+        div_b = ctk.CTkFrame(self.action_bar_frame, fg_color="#CBD5E1", width=1, height=18)
+        div_b.pack(side="left", padx=3, pady=6)
+
+        # 7. ✓ Kaydet (Pastel / Soft-Tinted Zümrüt Yeşili Hap Buton)
+        self.btn_save = ctk.CTkButton(
+            self.action_bar_frame,
+            text="✓ Kaydet",
+            width=88,
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#D1FAE5",
+            hover_color="#A7F3D0",
+            text_color="#047857",
+            border_width=0,
+            corner_radius=8,
             command=self.save_changes
         )
-        btn_save.pack(side="right", padx=8, pady=6)
+        self.btn_save.pack(side="left", padx=(2, 3), pady=3)
+        SimpleTooltip(self.btn_save, "Değişiklikleri Kaydet (Ctrl+S)")
 
-        # Çıktılar ve Menüler Yapılandırması
+        # Geriye dönük uyumluluk için tk.Menu referansları
+        self.week_ops_menu = tk.Menu(self, tearoff=0)
+        self.week_ops_menu.add_command(
+            label="📅 Sonraki Haftaya Aktar (Birebir Aynı Nöbetler)",
+            command=self.quick_copy_next_same
+        )
+        self.week_ops_menu.add_command(
+            label="🔄 Sonraki Haftaya Aktar (1 Gün Kaydırarak)",
+            command=lambda: self._copy_next_with_mode("shift_day")
+        )
+        self.week_ops_menu.add_command(
+            label="📍 Sonraki Haftaya Aktar (Nöbet Yerlerini Kaydırarak)",
+            command=lambda: self._copy_next_with_mode("shift_loc")
+        )
+        self.week_ops_menu.add_separator()
+        self.week_ops_menu.add_command(
+            label="↔ Hızlı Nöbet Kaydır...",
+            command=self.quick_shift
+        )
+        self.week_ops_menu.add_command(
+            label="⚙️ Tüm Rotasyon ve Kaydırma Ayarları...",
+            command=self.open_shift_dialog
+        )
+
         self.export_menu = tk.Menu(self, tearoff=0)
         self.export_menu.add_command(label="🖨️ Baskı Önizleme ve Yazdırma Penceresi...", command=self.open_print_preview)
         self.export_menu.add_separator()
@@ -590,6 +905,9 @@ class MainApp(ctk.CTk):
         self.export_menu.add_command(label="📝 Word Belgesi Olarak Kaydet (.docx)", command=self.export_word)
         self.export_menu.add_command(label="🌐 Yazdırılabilir HTML Sayfası (.html)", command=self.export_html)
         self.export_menu.add_command(label="📑 CSV Listesi Olarak Kaydet (.csv)", command=self.export_csv)
+        self.export_menu.add_separator()
+        self.export_menu.add_command(label="📚 Ders Programı Rapor Merkezi...", command=lambda: self.switch_page("reports"))
+        self.export_menu.add_command(label="📅 Personel Devam Takip Çizelgeleri...", command=self.open_attendance_dialog)
 
         self.tt_menu = tk.Menu(self, tearoff=0)
         self.tt_menu.add_command(label="📚 Ders Programı Çıktı ve Rapor Merkezi...", command=self.open_timetable_exports)
@@ -605,24 +923,111 @@ class MainApp(ctk.CTk):
 
         self.more_menu = tk.Menu(self, tearoff=0)
         self.more_menu.add_command(label="📅 Personel Devam Takip Modülü", command=self.open_attendance_dialog)
-        self.more_menu.add_command(label="📚 Ders Programı Rapor Merkezi", command=self.open_timetable_exports)
+        self.more_menu.add_command(label="📚 Ders Programı Rapor Merkezi", command=lambda: self.switch_page("reports"))
         self.more_menu.add_separator()
         self.more_menu.add_command(label="🔄 Nöbet Rotasyon ve Kaydırma Ayarları...", command=self.open_shift_dialog)
-        self.more_menu.add_command(label="💾 Sistem Veritabanı Yedekleme...", command=self.open_backup)
-        self.more_menu.add_separator()
-        self.more_menu.add_command(label="🔄 Güncellemeleri Denetle...", command=lambda: self.check_for_updates(silent=False))
+        self.more_menu.add_command(label="💾 Sistem Veritabanı Yedekleme...", command=lambda: self.switch_page("backup"))
 
         self.reports_menu = tk.Menu(self, tearoff=0)
         self.reports_menu.add_command(label="🖨️ Nöbet Çizelgesi Önizleme & Yazdır", command=self.open_print_preview)
         self.reports_menu.add_command(label="📄 Nöbet Çizelgesi PDF Kaydet", command=self.export_pdf)
         self.reports_menu.add_command(label="📊 Nöbet Çizelgesi Excel Kaydet", command=self.export_excel)
         self.reports_menu.add_separator()
-        self.reports_menu.add_command(label="📚 Ders Programı Çıktı ve Rapor Merkezi...", command=self.open_timetable_exports)
+        self.reports_menu.add_command(label="📚 Ders Programı Çıktı ve Rapor Merkezi...", command=lambda: self.switch_page("reports"))
         self.reports_menu.add_command(label="📅 Personel Devam Takip Çizelgeleri...", command=self.open_attendance_dialog)
 
+    def open_unified_actions_menu(self):
+        """Klasik Windows menüsü yerine yuvarlatılmış, kategorili Modern CustomTkinter Popover Menüsü açar."""
+        if hasattr(self, "_actions_popover") and self._actions_popover is not None:
+            try:
+                if self._actions_popover.winfo_exists():
+                    self._actions_popover.destroy()
+                    self._actions_popover = None
+                    return
+            except Exception:
+                self._actions_popover = None
+
+        pop = tk.Toplevel(self)
+        pop.wm_overrideredirect(True)
+        pop.attributes("-topmost", True)
+        pop.configure(bg="#CBD5E1")
+        self._actions_popover = pop
+
+        x = self.btn_actions.winfo_rootx()
+        y = self.btn_actions.winfo_rooty() + self.btn_actions.winfo_height() + 4
+        pop.wm_geometry(f"310x415+{x}+{y}")
+
+        card = ctk.CTkFrame(
+            pop,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#CBD5E1"
+        )
+        card.pack(fill="both", expand=True)
+
+        def _run_and_close(cmd):
+            try:
+                if pop.winfo_exists():
+                    pop.destroy()
+            except Exception:
+                pass
+            self._actions_popover = None
+            self.after(20, cmd)
+
+        def _add_section_header(title_txt):
+            lbl = ctk.CTkLabel(
+                card,
+                text=title_txt,
+                font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+                text_color="#475569"
+            )
+            lbl.pack(anchor="w", padx=12, pady=(8, 2))
+
+        def _add_menu_btn(label_txt, cmd, accent=False):
+            btn = ctk.CTkButton(
+                card,
+                text=label_txt,
+                height=30,
+                anchor="w",
+                font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if accent else "normal"),
+                fg_color="#EFF6FF" if accent else "transparent",
+                hover_color="#DBEAFE" if accent else "#F1F5F9",
+                text_color="#1D4ED8" if accent else "#0F172A",
+                border_width=0,
+                corner_radius=6,
+                command=lambda: _run_and_close(cmd)
+            )
+            btn.pack(fill="x", padx=6, pady=1)
+
+        def _add_sep():
+            sep = ctk.CTkFrame(card, fg_color="#E2E8F0", height=1)
+            sep.pack(fill="x", padx=10, pady=4)
+
+        _add_section_header("SONRAKİ HAFTAYA AKTARIM")
+        _add_menu_btn("📋  Aynısını Sonraki Haftaya Aktar", self.quick_copy_next_same, accent=True)
+        _add_menu_btn("🔄  1 Gün Kaydırarak Aktar (Pzt ➔ Sal)", lambda: self._copy_next_with_mode("shift_day"))
+        _add_menu_btn("📍  Nöbet Yerlerini Kaydırarak Aktar", lambda: self._copy_next_with_mode("shift_loc"))
+        _add_menu_btn("⚡  Son Ayarla Hızlı Kaydır", self.quick_shift)
+
+        _add_sep()
+        _add_section_header("BELGE & ÇIKTI MERKEZİ")
+        _add_menu_btn("📄  Nöbet Çizelgesi PDF İndir (.pdf)", self.export_pdf)
+        _add_menu_btn("📊  Nöbet Çizelgesi Excel İndir (.xlsx)", self.export_excel)
+        _add_menu_btn("📝  Nöbet Çizelgesi Word İndir (.docx)", self.export_word)
+        _add_menu_btn("📚  Ders Programı Çıktıları (El Programı)", self.open_timetable_exports)
+        _add_menu_btn("📅  Personel Devam Takip Çizelgesi", self.open_attendance_dialog)
+
+        _add_sep()
+        _add_menu_btn("🔤  Görünüm & Yazı Tipi Ayarları...", lambda: self.open_settings("font"))
+
+        pop.bind("<FocusOut>", lambda e: pop.destroy() if pop.winfo_exists() else None)
+        pop.focus_force()
+
     # --- 5. ÇALIŞMA ALANI (GRID + SAĞ DETAY PANELİ) ---
-    def _build_workspace(self):
-        self.workspace_frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+    def _build_workspace(self, parent=None):
+        target = parent if parent is not None else self.main_container
+        self.workspace_frame = ctk.CTkFrame(target, fg_color="transparent")
         self.workspace_frame.pack(fill="both", expand=True, padx=16, pady=(0, 6))
 
         # Tablo Izgara Alanı
@@ -639,309 +1044,23 @@ class MainApp(ctk.CTk):
         )
         self.schedule_grid.pack(fill="both", expand=True)
 
-        # Sağ Detay Paneli (Varsayılan olarak kapalıdır, hücre seçilince sağdan açılır)
-        self.detail_panel = ctk.CTkFrame(
-            self.workspace_frame,
-            width=320,
-            fg_color="#FFFFFF",
-            corner_radius=8,
-            border_width=1,
-            border_color="#CBD5E1"
-        )
-        self.detail_panel.pack_propagate(False)
+        # Sağ panel tamamen kaldırıldı; çizelge tüm ekran genişliğini kullanır.
+        self.detail_panel = None
         self.is_detail_open = False
 
     def on_cell_selected(self, cell):
-        """Çizelgede bir hücre seçildiğinde sağ detay panelini açar ve doldurur."""
-        self.show_detail_panel(cell)
+        pass
 
     def close_detail_panel(self):
-        """Sağ detay panelini kapatır ve çizelgeyi tam genişliğe genişletir."""
-        if self.is_detail_open:
-            self.detail_panel.pack_forget()
-            self.is_detail_open = False
-        if hasattr(self, "schedule_grid"):
-            self.schedule_grid.deselect_cell()
+        pass
 
     def show_detail_panel(self, cell):
-        """Seçilen nöbet hücresinin detaylarını modern kartlarla gösterir."""
-        if not self.is_detail_open:
-            self.detail_panel.pack(side="right", fill="y", padx=(8, 0))
-            self.is_detail_open = True
-
-        for w in self.detail_panel.winfo_children():
-            w.destroy()
-
-        # Başlık ve Kapat Butonu (✕)
-        hdr = ctk.CTkFrame(self.detail_panel, fg_color="transparent")
-        hdr.pack(fill="x", padx=12, pady=(12, 6))
-
-        lbl_hdr = ctk.CTkLabel(
-            hdr,
-            text="Nöbet Detayı",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
-            text_color="#0F172A"
-        )
-        lbl_hdr.pack(side="left")
-
-        btn_close = ctk.CTkButton(
-            hdr,
-            text="✕",
-            width=26,
-            height=26,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            fg_color="transparent",
-            hover_color="#F1F5F9",
-            text_color="#64748B",
-            corner_radius=4,
-            command=self.close_detail_panel
-        )
-        btn_close.pack(side="right")
-
-        # Kaydırılabilir Detay Alanı
-        scroll = ctk.CTkScrollableFrame(self.detail_panel, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=6, pady=(0, 6))
-
-        # 1. Öğretmen Bilgi Kartı
-        teacher_card = ctk.CTkFrame(scroll, fg_color="#F8FAFC", corner_radius=6, border_width=1, border_color="#E2E8F0")
-        teacher_card.pack(fill="x", padx=4, pady=(4, 6))
-
-        if cell.teacher:
-            name_str = cell.teacher.name
-            branch_str = f"◉ {cell.teacher.branch}" if cell.teacher.branch else "◉ Branş Belirtilmemiş"
-        else:
-            name_str = "[BOŞ GÖREV SLOTU]"
-            branch_str = "Atanmış öğretmen bulunmuyor"
-
-        lbl_tname = ctk.CTkLabel(
-            teacher_card,
-            text=name_str,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
-            text_color="#0F172A",
-            wraplength=270,
-            justify="left"
-        )
-        lbl_tname.pack(anchor="w", padx=10, pady=(8, 2))
-
-        lbl_tbranch = ctk.CTkLabel(
-            teacher_card,
-            text=branch_str,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#64748B"
-        )
-        lbl_tbranch.pack(anchor="w", padx=10, pady=(0, 8))
-
-        # 2. Görev Yeri & Tarih Bilgisi
-        info_card = ctk.CTkFrame(scroll, fg_color="#FFFFFF", corner_radius=6, border_width=1, border_color="#E2E8F0")
-        info_card.pack(fill="x", padx=4, pady=4)
-
-        try:
-            week_dt = datetime.date.fromisoformat(self.get_current_week_str())
-            day_names_list = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
-            day_idx = day_names_list.index(cell.day.name) if cell.day.name in day_names_list else 0
-            cell_dt = week_dt + datetime.timedelta(days=day_idx)
-            m_name = TURKISH_MONTHS[cell_dt.month] if 1 <= cell_dt.month <= 12 else ""
-            date_str = f"{cell.day.name}, {cell_dt.day} {m_name} {cell_dt.year}"
-        except Exception:
-            date_str = cell.day.name
-
-        lbl_date = ctk.CTkLabel(
-            info_card,
-            text=f"📅 {date_str}",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            text_color="#0F172A"
-        )
-        lbl_date.pack(anchor="w", padx=10, pady=(8, 2))
-
-        lbl_loc = ctk.CTkLabel(
-            info_card,
-            text=f"📍 {cell.location.name} (Slot {cell.slot_index + 1})",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#334155"
-        )
-        lbl_loc.pack(anchor="w", padx=10, pady=(0, 4))
-
-        if cell.assignment.fixed:
-            status_text = "🔒 Sabit Nöbet (Kilitli)"
-            status_color = "#B45309"
-        elif cell.teacher:
-            status_text = "🟢 Normal Nöbet Ataması"
-            status_color = "#15803D"
-        else:
-            status_text = "🔴 Boş / Eksik Nöbet"
-            status_color = "#DC2626"
-
-        lbl_status_tag = ctk.CTkLabel(
-            info_card,
-            text=status_text,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
-            text_color=status_color
-        )
-        lbl_status_tag.pack(anchor="w", padx=10, pady=(0, 8))
-
-        # 3. Boş Dersler Bölümü
-        lbl_sec1 = ctk.CTkLabel(
-            scroll,
-            text="BOŞ DERSLER",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
-            text_color="#64748B"
-        )
-        lbl_sec1.pack(anchor="w", padx=6, pady=(8, 2))
-
-        free_card = ctk.CTkFrame(scroll, fg_color="#FFFFFF", corner_radius=6, border_width=1, border_color="#E2E8F0")
-        free_card.pack(fill="x", padx=4, pady=2)
-
-        if cell.teacher:
-            free_periods = self.schedule_grid.get_teacher_free_periods(cell.teacher.id, cell.day.name)
-            if free_periods:
-                for p in free_periods:
-                    t_str = PERIOD_TIMES.get(p, "")
-                    time_info = f" ({t_str})" if t_str else ""
-                    p_lbl = ctk.CTkLabel(
-                        free_card,
-                        text=f"🟢 {p}. Ders{time_info}",
-                        font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
-                        text_color="#15803D"
-                    )
-                    p_lbl.pack(anchor="w", padx=10, pady=2)
-            else:
-                lbl_nofree = ctk.CTkLabel(
-                    free_card,
-                    text="Bu gün nöbet saatlerinde boş dersi yok.",
-                    font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-                    text_color="#64748B"
-                )
-                lbl_nofree.pack(anchor="w", padx=10, pady=6)
-        else:
-            lbl_nofree = ctk.CTkLabel(
-                free_card,
-                text="Slot boş.",
-                font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-                text_color="#64748B"
-            )
-            lbl_nofree.pack(anchor="w", padx=10, pady=6)
-
-        # 4. Hızlı İşlem Butonları
-        lbl_sec2 = ctk.CTkLabel(
-            scroll,
-            text="HIZLI İŞLEMLER",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
-            text_color="#64748B"
-        )
-        lbl_sec2.pack(anchor="w", padx=6, pady=(10, 2))
-
-        actions_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        actions_frame.pack(fill="x", padx=4, pady=2)
-
-        btn_pick = ctk.CTkButton(
-            actions_frame,
-            text="👤 Öğretmeni Değiştir / Ata",
-            height=28,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-            fg_color="#F8FAFC",
-            hover_color="#F1F5F9",
-            text_color="#0F172A",
-            border_width=1,
-            border_color="#CBD5E1",
-            corner_radius=5,
-            command=lambda: [self.schedule_grid.open_teacher_picker(cell), self.show_detail_panel(cell)]
-        )
-        btn_pick.pack(fill="x", pady=2)
-
-        if cell.teacher:
-            btn_move = ctk.CTkButton(
-                actions_frame,
-                text="↔ Nöbeti Kaydır...",
-                height=28,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-                fg_color="#F8FAFC",
-                hover_color="#F1F5F9",
-                text_color="#0F172A",
-                border_width=1,
-                border_color="#CBD5E1",
-                corner_radius=5,
-                command=lambda: [self.schedule_grid.open_move_dialog(cell), self.show_detail_panel(cell)]
-            )
-            btn_move.pack(fill="x", pady=2)
-
-            btn_swap = ctk.CTkButton(
-                actions_frame,
-                text="🔄 Başkasıyla Takas Et...",
-                height=28,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-                fg_color="#F8FAFC",
-                hover_color="#F1F5F9",
-                text_color="#0F172A",
-                border_width=1,
-                border_color="#CBD5E1",
-                corner_radius=5,
-                command=lambda: [self.schedule_grid.open_swap_dialog(cell), self.show_detail_panel(cell)]
-            )
-            btn_swap.pack(fill="x", pady=2)
-
-            lock_text = "🔓 Nöbet Kilidini Aç" if cell.assignment.fixed else "🔒 Sabit Nöbet Yap"
-            btn_lock = ctk.CTkButton(
-                actions_frame,
-                text=lock_text,
-                height=28,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-                fg_color="#FEF3C7" if cell.assignment.fixed else "#F8FAFC",
-                hover_color="#FDE68A",
-                text_color="#B45309" if cell.assignment.fixed else "#0F172A",
-                border_width=1,
-                border_color="#F59E0B" if cell.assignment.fixed else "#CBD5E1",
-                corner_radius=5,
-                command=lambda: [self.schedule_grid.toggle_cell_fixed(cell), self.show_detail_panel(cell)]
-            )
-            btn_lock.pack(fill="x", pady=2)
-
-            btn_clear = ctk.CTkButton(
-                actions_frame,
-                text="❌ Nöbeti Sil",
-                height=28,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
-                fg_color="#FEE2E2",
-                hover_color="#FECACA",
-                text_color="#DC2626",
-                border_width=1,
-                border_color="#FCA5A5",
-                corner_radius=5,
-                command=lambda: [self.schedule_grid.clear_cell(cell), self.show_detail_panel(cell)]
-            )
-            btn_clear.pack(fill="x", pady=2)
-
-        # 5. Öğretmen Bilgisi Özeti
-        if cell.teacher:
-            lbl_sec3 = ctk.CTkLabel(
-                scroll,
-                text="ÖĞRETMEN BİLGİSİ",
-                font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
-                text_color="#64748B"
-            )
-            lbl_sec3.pack(anchor="w", padx=6, pady=(10, 2))
-
-            stat_card = ctk.CTkFrame(scroll, fg_color="#FFFFFF", corner_radius=6, border_width=1, border_color="#E2E8F0")
-            stat_card.pack(fill="x", padx=4, pady=(2, 8))
-
-            all_week_assigns = self.db.get_assignments_for_week(self.get_current_week_str())
-            t_duty_count = sum(1 for a in all_week_assigns if a.teacher_id == cell.teacher.id)
-            t_lessons = self.db.get_teacher_lessons(cell.teacher.id)
-            total_lessons = sum(1 for l in t_lessons if not l.is_free)
-
-            stats_rows = [
-                ("Branş:", cell.teacher.branch or "Genel"),
-                ("Toplam Nöbet:", f"{t_duty_count} gün"),
-                ("Haftalık Ders:", f"{total_lessons} saat"),
-            ]
-            for label_t, val_t in stats_rows:
-                r_fr = ctk.CTkFrame(stat_card, fg_color="transparent")
-                r_fr.pack(fill="x", padx=10, pady=2)
-                ctk.CTkLabel(r_fr, text=label_t, font=ctk.CTkFont(family=FONT_FAMILY, size=9), text_color="#64748B").pack(side="left")
-                ctk.CTkLabel(r_fr, text=val_t, font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"), text_color="#0F172A").pack(side="right")
+        pass
 
     # --- 6. ALT BİLGİ / DURUM ÇUBUĞU / LEGEND ---
-    def _build_footer(self):
-        self.footer_frame = ctk.CTkFrame(self.main_container, fg_color="#FFFFFF", height=30, corner_radius=0, border_width=1, border_color="#E2E8F0")
+    def _build_footer(self, parent=None):
+        target = parent if parent is not None else self.main_container
+        self.footer_frame = ctk.CTkFrame(target, fg_color="#FFFFFF", height=32, corner_radius=0, border_width=1, border_color="#E2E8F0")
         self.footer_frame.pack(fill="x", side="bottom")
 
         # Sol Gösterge (Legend)
@@ -949,8 +1068,8 @@ class MainApp(ctk.CTk):
         legend_box.pack(side="left", padx=12, pady=3)
 
         badges = [
-            ("🟢 Uygun / Boş Ders", "#15803D"),
-            ("🟠 Sabit Görev", "#B45309"),
+            ("⚪ Normal Görev", "#334155"),
+            ("🔒 Sabit Görev", "#D97706"),
             ("🔴 Eksik Nöbet", "#DC2626"),
             ("🔵 Seçili Hücre", "#2563EB"),
         ]
@@ -958,7 +1077,7 @@ class MainApp(ctk.CTk):
             lbl = ctk.CTkLabel(
                 legend_box,
                 text=txt,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
                 text_color=color
             )
             lbl.pack(side="left", padx=(0, 10))
@@ -967,8 +1086,8 @@ class MainApp(ctk.CTk):
         self.lbl_status = ctk.CTkLabel(
             self.footer_frame,
             text="Hazır. Öğretmenleri sürükleyerek veya tıklayarak detayını inceleyebilirsiniz.",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#64748B"
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#334155"
         )
         self.lbl_status.pack(side="left", padx=8)
 
@@ -976,10 +1095,18 @@ class MainApp(ctk.CTk):
         self.lbl_last_save = ctk.CTkLabel(
             self.footer_frame,
             text=f"Son kayıt: Bugün {datetime.datetime.now().strftime('%H:%M')}",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=9),
-            text_color="#94A3B8"
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#475569"
         )
         self.lbl_last_save.pack(side="right", padx=12)
+
+    def open_week_ops_menu(self):
+        try:
+            x = self.btn_week_ops.winfo_rootx()
+            y = self.btn_week_ops.winfo_rooty() + self.btn_week_ops.winfo_height()
+            self.week_ops_menu.tk_popup(x, y)
+        finally:
+            self.week_ops_menu.grab_release()
 
     def open_export_menu(self):
         try:
@@ -1006,25 +1133,19 @@ class MainApp(ctk.CTk):
             self.more_menu.grab_release()
 
     def open_reports_menu(self):
-        try:
-            btn = self.sidebar_buttons.get("reports")
-            if btn:
-                x = btn.winfo_rootx() + btn.winfo_width()
-                y = btn.winfo_rooty()
-            else:
-                x = self.winfo_pointerx()
-                y = self.winfo_pointery()
-            self.reports_menu.tk_popup(x, y)
-        finally:
-            self.reports_menu.grab_release()
+        self.switch_page("reports")
 
     def update_header_info(self):
         school = self.db.get_school_info()
-        self.lbl_header_school.configure(text=f"{school.name} • {school.academic_year} Eğitim Öğretim Yılı")
+        short_name = (school.name[:34] + "…") if school.name and len(school.name) > 35 else (school.name or "Okul Nöbet Sistemi")
+        if hasattr(self, "current_page_key") and self.current_page_key != "weekly":
+            self.lbl_header_school.configure(text=f"{short_name} • {school.academic_year}")
+        else:
+            self.lbl_header_school.configure(text="")
         if hasattr(self, "lbl_sidebar_school"):
             self.lbl_sidebar_school.configure(text=school.name if school.name else "Okul Yönetim Sistemi")
         if hasattr(self, "lbl_sidebar_year"):
-            self.lbl_sidebar_year.configure(text=f"{school.academic_year} Eğitim Yılı")
+            self.lbl_sidebar_year.configure(text=f"🎓 {school.academic_year or '2026-2027'} Eğitim Yılı")
         if hasattr(self, "lbl_sidebar_principal"):
             self.lbl_sidebar_principal.configure(text=f"Müdür: {school.principal_name}" if school.principal_name else "Müdürlük")
 
@@ -1058,10 +1179,19 @@ class MainApp(ctk.CTk):
                 self.kpi_widgets["filled"][0].configure(text=f"{filled_count} / {total_slots}")
             if "missing" in self.kpi_widgets:
                 self.kpi_widgets["missing"][0].configure(text=str(missing_count))
+                if hasattr(self, "kpi_card_frames") and "missing" in self.kpi_card_frames:
+                    if missing_count > 0:
+                        self.kpi_card_frames["missing"].configure(fg_color="#FEF2F2", border_color="#FCA5A5")
+                        self.kpi_widgets["missing"][0].configure(text_color="#DC2626")
+                    else:
+                        self.kpi_card_frames["missing"].configure(fg_color="#FFFFFF", border_color="#E2E8F0")
+                        self.kpi_widgets["missing"][0].configure(text_color="#059669")
             if "fixed" in self.kpi_widgets:
                 self.kpi_widgets["fixed"][0].configure(text=str(fixed_count))
             if "rate" in self.kpi_widgets:
                 self.kpi_widgets["rate"][0].configure(text=f"%{rate_pct}")
+                rate_color = "#059669" if rate_pct == 100 else ("#D97706" if rate_pct > 0 else "#64748B")
+                self.kpi_widgets["rate"][0].configure(text_color=rate_color)
 
     def prev_week(self):
         self.current_week_start -= datetime.timedelta(days=7)
@@ -1214,15 +1344,7 @@ class MainApp(ctk.CTk):
         AdminPasswordDialog(self, self.db, on_success=callback, title_text=action_title)
 
     def open_auto_distribution(self):
-        self.require_admin_password(
-            lambda: DistributionDialog(
-                parent=self,
-                db=self.db,
-                week_start=self.get_current_week_str(),
-                on_applied=lambda: [self.schedule_grid.refresh(), self.on_duty_data_changed()]
-            ),
-            "Otomatik Nöbet Dağıtımı"
-        )
+        self.switch_page("distribute")
 
     def quick_shift(self):
         from ui.shift_dialog import execute_shift
@@ -1257,48 +1379,21 @@ class MainApp(ctk.CTk):
         )
 
     def open_teachers(self):
-        self.require_admin_password(
-            lambda: TeacherManagementDialog(
-                parent=self,
-                db=self.db,
-                on_data_changed=lambda: [self.schedule_grid.refresh(), self.update_header_info()]
-            ),
-            "Öğretmen Yönetimi"
-        )
+        self.switch_page("teachers")
 
     def open_locations(self):
-        self.require_admin_password(
-            lambda: LocationManagementDialog(
-                parent=self,
-                db=self.db,
-                on_data_changed=lambda: [self.schedule_grid.refresh(), self.update_header_info()]
-            ),
-            "Nöbet Yerleri Yönetimi"
-        )
+        self.switch_page("locations")
 
     def open_import(self):
-        ImportDialog(
-            parent=self,
-            db=self.db,
-            on_imported=lambda: [self.schedule_grid.refresh(), self.update_header_info()]
-        )
+        self.switch_page("import")
 
     def open_backup(self):
-        BackupDialog(
-            parent=self,
-            backup_service=self.backup_service,
-            on_restore_complete=lambda: [self.schedule_grid.refresh(), self.update_header_info()]
-        )
+        self.switch_page("backup")
 
-    def open_settings(self):
-        self.require_admin_password(
-            lambda: SettingsDialog(
-                parent=self,
-                db=self.db,
-                on_saved=self._on_settings_saved
-            ),
-            "Sistem Ayarları"
-        )
+    def open_settings(self, initial_tab=None):
+        view = self.switch_page("settings")
+        if initial_tab and hasattr(view, "select_tab"):
+            view.select_tab(initial_tab)
 
     def _on_settings_saved(self):
         try:
@@ -1330,32 +1425,54 @@ class MainApp(ctk.CTk):
             except Exception:
                 pass
 
-        # Tüm CustomTkinter butonları ve etiketlerini dinamik güncelle
-        def _recursive_update(w):
+        # Üst Başlıklar
+        if hasattr(self, "lbl_header_title"):
+            try:
+                self.lbl_header_title.configure(font=ctk.CTkFont(family=fam, size=theme.FONT_SIZE_PAGE_TITLE, weight="bold"))
+            except Exception:
+                pass
+        if hasattr(self, "lbl_header_school"):
+            try:
+                self.lbl_header_school.configure(font=ctk.CTkFont(family=fam, size=theme.FONT_SIZE_SECONDARY))
+            except Exception:
+                pass
+
+        # Hafta Gezinme Kartı
+        if hasattr(self, "lbl_week_range"):
+            try:
+                self.lbl_week_range.configure(font=ctk.CTkFont(family=fam, size=ui_sz, weight="bold"))
+            except Exception:
+                pass
+
+        # KPI Kartları (Rakamlar ve alt başlıklar)
+        if hasattr(self, "kpi_widgets"):
+            for val_lbl, sub_lbl in self.kpi_widgets.values():
+                try:
+                    val_lbl.configure(font=ctk.CTkFont(family=fam, size=theme.FONT_SIZE_KPI_VALUE, weight="bold"))
+                    sub_lbl.configure(font=ctk.CTkFont(family=fam, size=theme.FONT_SIZE_SECONDARY, weight="bold"))
+                except Exception:
+                    pass
+
+        # Tüm butonları ve aksiyon elemanlarını dinamik güncelle
+        def _recursive_update_buttons(w):
             try:
                 if isinstance(w, ctk.CTkButton):
                     w.configure(font=ctk.CTkFont(family=fam, size=ui_sz, weight="bold"))
-                elif isinstance(w, ctk.CTkLabel):
-                    old_f = w.cget("font")
-                    weight = "bold" if hasattr(old_f, "cget") and old_f.cget("weight") == "bold" else "normal"
-                    w.configure(font=ctk.CTkFont(family=fam, size=ui_sz, weight=weight))
             except Exception:
                 pass
             for child in w.winfo_children():
-                _recursive_update(child)
+                _recursive_update_buttons(child)
 
         if hasattr(self, "sidebar_frame"):
-            _recursive_update(self.sidebar_frame)
+            _recursive_update_buttons(self.sidebar_frame)
         if hasattr(self, "top_header_frame"):
-            _recursive_update(self.top_header_frame)
-        if hasattr(self, "kpi_cards_frame"):
-            _recursive_update(self.kpi_cards_frame)
+            _recursive_update_buttons(self.top_header_frame)
         if hasattr(self, "action_bar_frame"):
-            _recursive_update(self.action_bar_frame)
+            _recursive_update_buttons(self.action_bar_frame)
         if hasattr(self, "footer_frame"):
-            _recursive_update(self.footer_frame)
+            _recursive_update_buttons(self.footer_frame)
         if hasattr(self, "detail_panel"):
-            _recursive_update(self.detail_panel)
+            _recursive_update_buttons(self.detail_panel)
 
     def open_print_preview(self):
         """Haftalık nöbet çizelgesini Evrensel Baskı ve Önizleme Merkezi'nde açar."""
@@ -1406,33 +1523,13 @@ class MainApp(ctk.CTk):
         )
 
     def open_timetable_exports(self, default_tab: int = 0):
-        TimetableExportDialog(self, self.db, default_tab=default_tab)
-
-    def check_for_updates(self, silent: bool = False):
-        """GitHub Releases üzerinden yeni sürüm denetimi yapar."""
-        repo = self.db.get_setting("github_repo", DEFAULT_GITHUB_REPO)
-        svc = UpdateService(repo)
-
-        def worker():
-            info = svc.check_for_updates()
-            self.after(0, lambda: self._on_update_result(info, svc, silent))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _on_update_result(self, info: dict, svc: UpdateService, silent: bool):
-        if not info.get("success"):
-            if not silent:
-                messagebox.showwarning("Güncelleme Denetimi", f"Güncelleme denetlenemedi:\n{info.get('error')}", parent=self)
-            return
-
-        if info.get("has_update"):
-            UpdateDialog(self, info, svc)
-        elif not silent:
-            messagebox.showinfo(
-                "Yazılım Güncel",
-                f"Tebrikler! En güncel NöbetMatik sürümünü (v{APP_VERSION}) kullanıyorsunuz.",
-                parent=self
-            )
+        try:
+            TimetableExportDialog(self, self.db, default_tab=default_tab)
+        except Exception as e:
+            logger.error(f"TimetableExportDialog hatası: {e}", exc_info=True)
+            v = self.switch_page("reports")
+            if hasattr(v, "switch_tab"):
+                v.switch_tab("timetable")
 
     def quick_export_timetable(self, export_type: str):
         if not self.db.has_timetable_data():
@@ -1590,6 +1687,61 @@ class MainApp(ctk.CTk):
         if path:
             dest = self.export_service.export_csv(week, Path(path))
             messagebox.showinfo("Başarılı", f"CSV dosyası kaydedildi:\n{dest}")
+
+    # --- Geliştirici Duyuruları ve Geri Bildirim ---
+    def open_announcements_dialog(self):
+        from ui.announcement_dialog import AnnouncementDialog
+        dlg = AnnouncementDialog(self, self.db)
+        self.wait_window(dlg)
+        self._update_announcements_badge()
+
+    def open_feedback_dialog(self):
+        from ui.feedback_dialog import FeedbackDialog
+        dlg = FeedbackDialog(self, self.db)
+        self.wait_window(dlg)
+
+    def _check_announcements_background(self):
+        import threading
+        def worker():
+            try:
+                from logic.announcement_service import AnnouncementService
+                announcements = AnnouncementService.fetch_announcements()
+                unread_count = AnnouncementService.get_unread_count(self.db, announcements)
+                self.after(0, lambda: self._apply_announcements_badge(unread_count, announcements))
+            except Exception as e:
+                logger.debug(f"Duyuru arka plan kontrol hatası: {e}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _apply_announcements_badge(self, unread_count: int, announcements: list):
+        if hasattr(self, "btn_announcements") and self.btn_announcements.winfo_exists():
+            if unread_count > 0:
+                self.btn_announcements.configure(
+                    text=f"🔔 {unread_count}",
+                    width=48,
+                    fg_color="#FEF3C7",
+                    hover_color="#FDE68A",
+                    text_color="#B45309",
+                    border_width=0
+                )
+            else:
+                self.btn_announcements.configure(
+                    text="🔔",
+                    width=34,
+                    fg_color="transparent",
+                    hover_color="#E2E8F0",
+                    text_color="#334155",
+                    border_width=0
+                )
+
+    def _update_announcements_badge(self):
+        try:
+            from logic.announcement_service import AnnouncementService
+            announcements = AnnouncementService.fetch_announcements()
+            unread_count = AnnouncementService.get_unread_count(self.db, announcements)
+            self._apply_announcements_badge(unread_count, announcements)
+        except Exception:
+            pass
 
     def on_close(self):
         try:

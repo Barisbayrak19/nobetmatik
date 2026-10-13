@@ -4,6 +4,7 @@ Sürükle-bırak (Drag & Drop), Takas (Swap), Sabitleme ve Sağ Tık Alternatifi
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
+import customtkinter as ctk
 import datetime
 from typing import Dict, Tuple, Optional, Callable, List, Any
 from core.models import Assignment, Teacher, Location, Day, DragState, TeacherLesson
@@ -22,6 +23,45 @@ from ui.theme import (
 
 TURKISH_MONTHS = ["", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
 
+def to_title_case(text: str) -> str:
+    """Türkçe karakterleri gözeterek metni Başlık Düzeni (Title Case) formatına dönüştürür."""
+    if not text:
+        return ""
+    words = text.strip().split()
+    result = []
+    for w in words:
+        if not w:
+            continue
+        first = w[0].replace('i', 'İ').replace('ı', 'I').upper()
+        rest = w[1:].replace('I', 'ı').replace('İ', 'i').lower()
+        result.append(first + rest)
+    return " ".join(result)
+
+def format_branch_display(branch: str) -> str:
+    """Uzun branş isimlerini hücreye sığacak şekilde zarifçe kısaltır."""
+    if not branch:
+        return ""
+    b = branch.strip()
+    known_abbrevs = {
+        "Din Kültürü ve Ahlak Bilgisi": "Din Kült. ve Ahlak Bil.",
+        "İlköğretim Matematik": "İlköğr. Matematik",
+        "Bilişim Teknolojileri": "Bilişim Tek.",
+        "Görsel Sanatlar": "Görsel Sanatlar",
+        "Beden Eğitimi ve Spor": "Beden Eğitimi",
+        "Teknoloji ve Tasarım": "Teknoloji ve Tas.",
+        "Sosyal Bilgiler": "Sosyal Bilgiler",
+        "Fen Bilimleri": "Fen Bilimleri",
+        "Türkçe": "Türkçe",
+        "İngilizce": "İngilizce",
+        "Matematik": "Matematik",
+        "Müzik": "Müzik",
+    }
+    if b in known_abbrevs:
+        return known_abbrevs[b]
+    if len(b) > 22:
+        return b[:20] + "..."
+    return b
+
 def get_location_icon(name: str) -> str:
     """Nöbet yeri adına uygun modern sembol döndürür."""
     lower = name.lower()
@@ -38,70 +78,181 @@ def get_location_icon(name: str) -> str:
     return "📍 "
 
 
-class GridTooltip:
+class TeacherInfoPopover:
     """
-    Hücre üzerine gelindiğinde öğretmenin o günkü 7 saatlik ders programını
-    ve boş ders saatlerini gösteren zengin tooltip penceresi.
+    Öğretmen kartındaki bilgi butonuna (ℹ) veya çift tıklamaya bağlı olarak açılan,
+    kompakt, şık, ekran taşma kontrollü ve gerektiğinde kaydırılabilen bilgi penceresi.
+    Sürükle-bırak sırasında ASLA açılmaz; sürükleme başladığında derhal kapatılır.
     """
-    def __init__(self, widgets: List[tk.Widget], text_func: Callable[[], Optional[str]]):
-        self.widgets = widgets
-        self.text_func = text_func
-        self.tip_window = None
-        self._after_id = None
-        for w in self.widgets:
-            w.bind("<Enter>", self._on_enter, add="+")
-            w.bind("<Leave>", self._on_leave, add="+")
-            w.bind("<ButtonPress>", self.hide_tip, add="+")
+    def __init__(self, cell_widget: "CellWidget"):
+        self.cell = cell_widget
+        self.tip_window: Optional[tk.Toplevel] = None
 
-    def _on_enter(self, event=None):
-        self._cancel()
-        if self.widgets:
-            self._after_id = self.widgets[0].after(180, self.show_tip)
-
-    def _on_leave(self, event=None):
-        self._cancel()
-        if self.widgets:
-            self._after_id = self.widgets[0].after(120, self.hide_tip)
-
-    def _cancel(self):
-        if self._after_id and self.widgets:
-            try:
-                self.widgets[0].after_cancel(self._after_id)
-            except Exception:
-                pass
-            self._after_id = None
-
-    def show_tip(self):
-        if self.tip_window or not self.text_func or not self.widgets:
+    def show(self):
+        if self.tip_window or not self.cell or not self.cell.teacher:
             return
-        text = self.text_func()
-        if not text:
-            return
+
+        ref_w = self.cell
         try:
-            x = self.widgets[0].winfo_rootx() + 20
-            y = self.widgets[0].winfo_rooty() + self.widgets[0].winfo_height() + 4
-            self.tip_window = tw = tk.Toplevel(self.widgets[0])
-            tw.wm_overrideredirect(True)
-            tw.wm_geometry(f"+{x}+{y}")
-            tw.attributes("-topmost", True)
-            frame = tk.Frame(tw, bg="#0F172A", relief="solid", bd=1)
-            frame.pack()
-            lbl = tk.Label(
-                frame,
-                text=text,
-                justify="left",
-                bg="#0F172A",
-                fg="#F8FAFC",
-                font=(FONT_FAMILY, 8),
-                padx=10,
-                pady=7
-            )
-            lbl.pack()
+            rx = ref_w.winfo_rootx()
+            ry = ref_w.winfo_rooty()
+            rw = ref_w.winfo_width()
+            rh = ref_w.winfo_height()
+            sw = ref_w.winfo_screenwidth()
+            sh = ref_w.winfo_screenheight()
         except Exception:
-            pass
+            return
 
-    def hide_tip(self, event=None):
-        self._cancel()
+        pop_w = 270
+        # Mümkünse ilgili hücrenin SAĞINDA aç
+        target_x = rx + rw + 6
+        if target_x + pop_w > sw - 12:
+            # Sağda yer yoksa SOLUNDA aç
+            target_x = rx - pop_w - 6
+            if target_x < 8:
+                target_x = max(8, rx)
+
+        target_y = ry
+        max_pop_h = 240
+        if target_y + max_pop_h > sh - 35:
+            target_y = max(10, sh - max_pop_h - 35)
+
+        self.tip_window = tw = tk.Toplevel(ref_w)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{target_x}+{target_y}")
+        tw.attributes("-topmost", True)
+
+        main_box = tk.Frame(
+            tw,
+            bg="#FFFFFF",
+            highlightbackground="#CBD5E1",
+            highlightthickness=1,
+            relief="flat",
+            bd=0
+        )
+        main_box.pack(fill="both", expand=True)
+
+        t = self.cell.teacher
+        day_name = self.cell.day.name
+        loc_name = self.cell.location.name
+        branch_str = t.branch if t.branch else "Genel"
+
+        # 1. Başlık Alanı (Koyu Lacivert #1E293B, beyaz metin, kapat butonu)
+        header_fr = tk.Frame(main_box, bg="#1E293B", padx=10, pady=6)
+        header_fr.pack(fill="x")
+
+        top_row = tk.Frame(header_fr, bg="#1E293B")
+        top_row.pack(fill="x")
+
+        lbl_tname = tk.Label(
+            top_row,
+            text=f"👤 {to_title_case(t.name)}",
+            font=(FONT_FAMILY, 9, "bold"),
+            fg="#F8FAFC",
+            bg="#1E293B",
+            anchor="w"
+        )
+        lbl_tname.pack(side="left", fill="x", expand=True)
+
+        btn_close = tk.Label(
+            top_row,
+            text="✕",
+            font=(FONT_FAMILY, 9, "bold"),
+            fg="#94A3B8",
+            bg="#1E293B",
+            cursor="hand2"
+        )
+        btn_close.pack(side="right")
+        btn_close.bind("<Button-1>", lambda e: self.hide())
+        btn_close.bind("<Enter>", lambda e: btn_close.configure(fg="#EF4444"))
+        btn_close.bind("<Leave>", lambda e: btn_close.configure(fg="#94A3B8"))
+
+        lbl_sub = tk.Label(
+            header_fr,
+            text=f"◉ {branch_str}  •  📍 {loc_name} ({day_name})",
+            font=(FONT_FAMILY, 8),
+            fg="#94A3B8",
+            bg="#1E293B",
+            anchor="w"
+        )
+        lbl_sub.pack(fill="x", pady=(2, 0))
+
+        # 2. Ders Programı (Uzun listelerde kaydırma destekli)
+        lessons = self.cell.controller.get_teacher_schedule(t.id, day_name)
+        free_count = 0
+
+        list_container = tk.Frame(main_box, bg="#FFFFFF", padx=6, pady=4)
+        list_container.pack(fill="both", expand=True)
+
+        needs_scroll = len(lessons) > 5
+        if needs_scroll:
+            canvas_h = min(120, len(lessons) * 22)
+            l_canvas = tk.Canvas(list_container, bg="#FFFFFF", height=canvas_h, width=pop_w - 24, highlightthickness=0)
+            l_scroll = tk.Scrollbar(list_container, orient="vertical", command=l_canvas.yview, width=8)
+            l_frame = tk.Frame(l_canvas, bg="#FFFFFF")
+            l_canvas.create_window((0, 0), window=l_frame, anchor="nw")
+            l_canvas.configure(yscrollcommand=l_scroll.set)
+            l_frame.bind("<Configure>", lambda e: l_canvas.configure(scrollregion=l_canvas.bbox("all")))
+            l_canvas.pack(side="left", fill="both", expand=True)
+            l_scroll.pack(side="right", fill="y")
+            parent_for_rows = l_frame
+        else:
+            parent_for_rows = list_container
+
+        if lessons:
+            for l in lessons:
+                time_str = PERIOD_TIMES.get(l.period, "")
+                r_item = tk.Frame(parent_for_rows, bg="#FFFFFF")
+                r_item.pack(fill="x", pady=1)
+
+                if l.is_free:
+                    free_count += 1
+                    lbl_row = tk.Label(
+                        r_item,
+                        text=f"  {l.period}. Ders ({time_str}): 🟢 BOŞ DERS",
+                        font=(FONT_FAMILY, 8, "bold"),
+                        fg="#15803D",
+                        bg="#FFFFFF",
+                        anchor="w"
+                    )
+                else:
+                    c_text = f"{l.class_name} ({l.subject_code})" if l.class_name else (l.subject_code or "Ders")
+                    lbl_row = tk.Label(
+                        r_item,
+                        text=f"  {l.period}. Ders ({time_str}): {c_text}",
+                        font=(FONT_FAMILY, 8),
+                        fg="#334155",
+                        bg="#FFFFFF",
+                        anchor="w"
+                    )
+                lbl_row.pack(fill="x")
+        else:
+            lbl_empty = tk.Label(
+                parent_for_rows,
+                text="  Bugün kayıtlı ders programı bulunmuyor.",
+                font=(FONT_FAMILY, 8, "italic"),
+                fg="#64748B",
+                bg="#FFFFFF",
+                pady=4
+            )
+            lbl_empty.pack(fill="x")
+
+        # 3. Alt Özet Çubuğu
+        foot_fr = tk.Frame(main_box, bg="#F8FAFC", padx=10, pady=4, highlightbackground="#E2E8F0", highlightthickness=1)
+        foot_fr.pack(fill="x")
+
+        lock_txt = " • 🔒 Sabit" if self.cell.assignment.fixed else ""
+        lbl_summary = tk.Label(
+            foot_fr,
+            text=f"🟢 Boş Ders: {free_count} Saat{lock_txt}",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg="#15803D" if free_count > 0 else "#64748B",
+            bg="#F8FAFC",
+            anchor="w"
+        )
+        lbl_summary.pack(fill="x")
+
+    def hide(self):
         if self.tip_window:
             try:
                 self.tip_window.destroy()
@@ -109,10 +260,64 @@ class GridTooltip:
                 pass
             self.tip_window = None
 
-class CellWidget(tk.Frame):
+    show_tip = show
+    hide_tip = hide
+
+# Geriye dönük uyumluluk için takma ad
+GridTooltip = TeacherInfoPopover
+
+
+class DragGhostWindow(tk.Toplevel):
+    """
+    Sürükleme sırasında farenin peşinden giden şık, yarı saydam kopya kart (Ghost).
+    """
+    def __init__(self, master: tk.Widget, teacher_name: str, branch: str):
+        super().__init__(master)
+        self.wm_overrideredirect(True)
+        self.attributes("-topmost", True)
+        try:
+            self.attributes("-alpha", 0.88)
+        except Exception:
+            pass
+
+        card = tk.Frame(
+            self,
+            bg="#2563EB",
+            highlightbackground="#1D4ED8",
+            highlightthickness=1,
+            padx=10,
+            pady=6
+        )
+        card.pack()
+
+        lbl_name = tk.Label(
+            card,
+            text=f"👤 {teacher_name}",
+            font=(FONT_FAMILY, 10, "bold"),
+            fg="#FFFFFF",
+            bg="#2563EB"
+        )
+        lbl_name.pack(anchor="w")
+
+        if branch:
+            lbl_branch = tk.Label(
+                card,
+                text=branch,
+                font=(FONT_FAMILY, 8),
+                fg="#DBEAFE",
+                bg="#2563EB"
+            )
+            lbl_branch.pack(anchor="w", pady=(1, 0))
+
+    def move_to(self, x_root: int, y_root: int):
+        self.wm_geometry(f"+{x_root + 12}+{y_root + 12}")
+
+
+class CellWidget(ctk.CTkFrame):
     """
     Çizelgedeki tek bir nöbet slotunu temsil eden kart widget'ı.
-    Modern okul yönetim paneli kart tasarımı: 1px ince sınır, net tipografi ve durum rozetleri.
+    1 px açık gri-mavi (#CBD5E1) kenarlık, ~8 px yuvarlak köşe, dengeli dikey yerleşim.
+    Tıklama, sürükleme ve bilgi penceresi davranışları birbirinden tamamen ayrılmıştır.
     """
     def __init__(
         self,
@@ -131,23 +336,24 @@ class CellWidget(tk.Frame):
         self.slot_index = slot_index
         self.controller = grid_controller
         self.is_selected = False
-        self._drag_started = False
-        self._drag_start_x = 0
-        self._drag_start_y = 0
+        self._is_dragging = False
+        self._press_x_root = 0
+        self._press_y_root = 0
 
         card_bg = self._default_bg()
-        border_col = theme.COLOR_FIXED_BORDER if assignment.fixed else theme.GRID_BORDER_COLOR
+        border_col = self._default_border()
         super().__init__(
             parent,
-            bg=card_bg,
-            relief=theme.GRID_RELIEF,
-            bd=theme.GRID_BORDER_WIDTH,
-            highlightbackground=border_col,
-            highlightthickness=1
+            corner_radius=8,
+            border_width=1,
+            border_color=border_col,
+            fg_color=card_bg
         )
 
         self._build_ui()
         self._bind_events()
+        self.tooltip = TeacherInfoPopover(self)
+        self.popover = self.tooltip
 
     def _default_bg(self) -> str:
         if self.assignment.fixed:
@@ -156,181 +362,222 @@ class CellWidget(tk.Frame):
             return COLOR_CARD
         return COLOR_CELL_EMPTY
 
+    def _default_border(self) -> str:
+        if self.assignment.fixed:
+            return COLOR_FIXED_BORDER
+        elif self.teacher:
+            return theme.GRID_BORDER_COLOR
+        return theme.COLOR_CELL_EMPTY_BORDER
+
+    def configure(self, **kwargs):
+        if "bg" in kwargs:
+            kwargs["fg_color"] = kwargs.pop("bg")
+        if "highlightbackground" in kwargs:
+            kwargs["border_color"] = kwargs.pop("highlightbackground")
+        if "highlightthickness" in kwargs:
+            kwargs["border_width"] = kwargs.pop("highlightthickness")
+        if "relief" in kwargs:
+            kwargs.pop("relief")
+        if "bd" in kwargs:
+            kwargs.pop("bd")
+        super().configure(**kwargs)
+
+    def cget(self, key):
+        if key == "highlightbackground":
+            return self._border_color
+        if key == "highlightthickness":
+            return self._border_width
+        if key == "relief":
+            return "flat"
+        return super().cget(key)
+
     def set_selected(self, selected: bool):
         self.is_selected = selected
         if selected:
             self.configure(
-                bg=theme.COLOR_CELL_SELECTED,
-                highlightbackground=theme.COLOR_CELL_SELECTED_BORDER,
-                highlightcolor=theme.COLOR_CELL_SELECTED_BORDER,
-                highlightthickness=2
+                fg_color=theme.COLOR_CELL_SELECTED,
+                border_color=theme.COLOR_CELL_SELECTED_BORDER,
+                border_width=2
             )
-            if hasattr(self, "lbl_name"):
-                self.lbl_name.configure(bg=theme.COLOR_CELL_SELECTED)
-            if hasattr(self, "lbl_branch"):
-                self.lbl_branch.configure(bg=theme.COLOR_CELL_SELECTED)
         else:
             bg_col = self._default_bg()
-            border_col = theme.COLOR_FIXED_BORDER if self.assignment.fixed else theme.GRID_BORDER_COLOR
+            border_col = self._default_border()
             self.configure(
-                bg=bg_col,
-                highlightbackground=border_col,
-                highlightcolor=border_col,
-                highlightthickness=1
+                fg_color=bg_col,
+                border_color=border_col,
+                border_width=1
             )
-            if hasattr(self, "lbl_name"):
-                self.lbl_name.configure(bg=bg_col)
-            if hasattr(self, "lbl_branch"):
-                self.lbl_branch.configure(bg=bg_col)
 
     def _build_ui(self):
         bg_color = self._default_bg()
-        border_col = theme.COLOR_FIXED_BORDER if self.assignment.fixed else theme.GRID_BORDER_COLOR
-        self.configure(
-            bg=bg_color,
-            relief=theme.GRID_RELIEF,
-            bd=theme.GRID_BORDER_WIDTH,
-            highlightbackground=border_col,
-            highlightthickness=1
-        )
+        border_col = self._default_border()
+        self.configure(fg_color=bg_color, border_color=border_col, border_width=1)
 
-        # Üst Satır (Sabit Nöbet Rozeti)
+        self.btn_info = None
+
         if self.assignment.fixed:
-            top_frame = tk.Frame(self, bg=bg_color)
-            top_frame.pack(fill="x", padx=4, pady=(2, 0))
-            lbl_lock = tk.Label(
-                top_frame,
+            # Üst Küçük Rozet (Sadece Sabit Kilitliyse göster)
+            self.top_bar = ctk.CTkFrame(self, fg_color="transparent", height=18)
+            self.top_bar.pack(fill="x", padx=4, pady=(2, 0))
+            self.lbl_lock = ctk.CTkLabel(
+                self.top_bar,
                 text="🔒 Sabit",
-                font=(theme.FONT_FAMILY, max(7, theme.FONT_SIZE_BASE - 2), "bold"),
-                fg="#B45309",
-                bg="#FEF3C7",
-                padx=4,
-                pady=1
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=11, weight="bold"),
+                text_color="#B45309",
+                fg_color="transparent"
             )
-            lbl_lock.pack(side="right")
+            self.lbl_lock.pack(side="left", padx=2)
 
-        # Öğretmen Adı
+        # Dikey ortalanmış içerik kutusu
+        self.center_box = ctk.CTkFrame(self, fg_color="transparent")
+        self.center_box.pack(expand=True, fill="both", padx=4, pady=(2, 2))
+
         if self.teacher:
-            name_text = self.teacher.name
-            fg_color = COLOR_TEXT_MAIN
-            font_spec = (theme.FONT_FAMILY, theme.FONT_SIZE_BASE, "bold")
-        else:
-            name_text = "+ Boş Slot"
-            fg_color = "#94A3B8"
-            font_spec = (theme.FONT_FAMILY, max(7, theme.FONT_SIZE_BASE - 1), "italic")
-
-        self.lbl_name = tk.Label(
-            self,
-            text=name_text,
-            font=font_spec,
-            fg=fg_color,
-            bg=bg_color,
-            wraplength=125,
-            justify="center",
-            cursor="hand2"
-        )
-        self.lbl_name.pack(expand=True, fill="both", padx=4, pady=(4, 1))
-
-        # Branş Bilgisi
-        if self.teacher and self.teacher.branch:
-            self.lbl_branch = tk.Label(
-                self,
-                text=f"◉ {self.teacher.branch}",
-                font=(theme.FONT_FAMILY, max(7, theme.FONT_SIZE_BASE - 2)),
-                fg=COLOR_TEXT_MUTED,
-                bg=bg_color,
+            # 1. Satır: İsim (Dinamik font boyutu, Title Case, bold, yüksek kontrast #0F172A)
+            name_text = to_title_case(self.teacher.name)
+            self.lbl_name = ctk.CTkLabel(
+                self.center_box,
+                text=name_text,
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_TEACHER, weight=theme.FONT_WEIGHT_TEACHER),
+                text_color="#0F172A",
+                wraplength=135,
+                justify="center",
                 cursor="hand2"
             )
-            self.lbl_branch.pack(fill="x", side="bottom", pady=(0, 2))
+            self.lbl_name.pack(fill="x", pady=(0, 1))
 
-        # Boş Dersler Bilgisi (Nöbet Gününde Boş Olduğu Ders Saatleri - Küçük Şık Yeşil Rozet)
-        if self.teacher:
+            # 2. Satır: Branş Bilgisi (Net okunaklı 12px ve yüksek kontrast #334155)
+            branch_raw = self.teacher.branch if self.teacher.branch else ""
+            branch_disp = format_branch_display(branch_raw)
+            if branch_disp:
+                self.lbl_branch = ctk.CTkLabel(
+                    self.center_box,
+                    text=branch_disp,
+                    font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SECONDARY),
+                    text_color="#334155",
+                    justify="center",
+                    cursor="hand2"
+                )
+                self.lbl_branch.pack(fill="x", pady=(0, 2))
+
+            # 3. Satır: Boş Ders Rozeti (Net 11px bold rozet)
             free_periods = self.controller.get_teacher_free_periods(self.teacher.id, self.day.name)
             if free_periods:
                 free_str = ", ".join(map(str, free_periods))
-                f_badge = tk.Frame(self, bg=theme.COLOR_BADGE_FREE)
-                f_badge.pack(fill="x", side="bottom", padx=4, pady=(1, 3))
-                self.lbl_free = tk.Label(
-                    f_badge,
-                    text=f"🟢 Boş: {free_str}. Ders",
-                    font=(theme.FONT_FAMILY, max(7, theme.FONT_SIZE_BASE - 2), "bold"),
-                    fg=theme.COLOR_BADGE_FREE_TXT,
-                    bg=theme.COLOR_BADGE_FREE,
-                    cursor="hand2",
-                    pady=1
-                )
-                self.lbl_free.pack(fill="x")
+                badge_text = f"🟢 Boş: {free_str}. Ders"
+                badge_bg = "#DCFCE7"
+                badge_fg = "#15803D"
+            else:
+                badge_text = "⚪ Tüm saatler dolu"
+                badge_bg = "#F1F5F9"
+                badge_fg = "#334155"
+
+            self.badge_free = ctk.CTkFrame(self.center_box, fg_color=badge_bg, corner_radius=5)
+            self.badge_free.pack(pady=(0, 2))
+            self.lbl_free = ctk.CTkLabel(
+                self.badge_free,
+                text=badge_text,
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SMALL, weight="bold"),
+                text_color=badge_fg,
+                cursor="hand2"
+            )
+            self.lbl_free.pack(padx=6, pady=1)
+
+        else:
+            # Boş Slot (+ Nöbetçi Ata - Davetkar yumuşak mavi stil)
+            self.lbl_empty = ctk.CTkLabel(
+                self.center_box,
+                text="+ Nöbetçi Ata",
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=max(12, theme.FONT_SIZE_TEACHER - 2), weight="bold"),
+                text_color=theme.COLOR_CELL_EMPTY_TXT,
+                cursor="hand2"
+            )
+            self.lbl_empty.pack(expand=True, pady=10)
 
     def _bind_events(self):
-        widgets = [self, self.lbl_name]
+        widgets_to_bind = [self, self._canvas, self.center_box]
+        if hasattr(self.center_box, "_canvas"):
+            widgets_to_bind.append(self.center_box._canvas)
+        if hasattr(self, "lbl_name"):
+            widgets_to_bind.append(self.lbl_name)
         if hasattr(self, "lbl_branch"):
-            widgets.append(self.lbl_branch)
+            widgets_to_bind.append(self.lbl_branch)
+        if hasattr(self, "badge_free"):
+            widgets_to_bind.append(self.badge_free)
         if hasattr(self, "lbl_free"):
-            widgets.append(self.lbl_free)
+            widgets_to_bind.append(self.lbl_free)
+        if hasattr(self, "lbl_empty"):
+            widgets_to_bind.append(self.lbl_empty)
+        if hasattr(self, "lbl_lock"):
+            widgets_to_bind.append(self.lbl_lock)
 
-        for w in widgets:
+        for w in widgets_to_bind:
             w.bind("<Button-1>", self._on_press)
             w.bind("<B1-Motion>", self._on_motion)
             w.bind("<ButtonRelease-1>", self._on_release)
             w.bind("<Button-3>", self._on_right_click)
             w.bind("<Double-Button-1>", self._on_double_click)
+            w.bind("<Enter>", self._on_hover_enter, add="+")
+            w.bind("<Leave>", self._on_hover_leave, add="+")
 
-        self.tooltip = GridTooltip(widgets, self._get_tooltip_text)
-
-    def _get_tooltip_text(self) -> Optional[str]:
-        if not self.teacher:
-            return None
-        lessons = self.controller.get_teacher_schedule(self.teacher.id, self.day.name)
-        if not lessons:
-            return f"👤 {self.teacher.name} ({self.teacher.branch})\n📍 Nöbet Yeri: {self.location.name} | Gün: {self.day.name}"
-
-        lines = [
-            f"👤 {self.teacher.name} ({self.teacher.branch})",
-            f"📍 Nöbet Yeri: {self.location.name} | Gün: {self.day.name}",
-            "─" * 40
-        ]
-        free_count = 0
-        for l in lessons:
-            time_str = PERIOD_TIMES.get(l.period, "")
-            if l.is_free:
-                lines.append(f"  {l.period}. Ders ({time_str}): [BOŞ DERS] 🟢")
-                free_count += 1
+    def _on_hover_enter(self, event=None):
+        if not self.is_selected and not self.assignment.fixed:
+            if self.teacher:
+                self.configure(fg_color="#F1F5F9", border_color="#CBD5E1")
             else:
-                lines.append(f"  {l.period}. Ders ({time_str}): {l.class_name} ({l.subject_code})")
-        lines.append("─" * 40)
-        lines.append(f"Toplam Boş Ders: {free_count} Saat (İkameye Uygun)")
-        return "\n".join(lines)
+                self.configure(fg_color="#EFF6FF", border_color="#3B82F6")
+
+    def _on_hover_leave(self, event=None):
+        if not self.is_selected:
+            bg_col = self._default_bg()
+            border_col = self._default_border()
+            self.configure(fg_color=bg_col, border_color=border_col)
+
+    def _on_info_clicked(self):
+        self.controller.select_cell(self, trigger_detail=True)
+        self.controller.toggle_info_popover(self)
 
     def _on_press(self, event):
-        self.controller.select_cell(self)
+        self.controller.select_cell(self, trigger_detail=False)
+        self.controller.close_info_popover()
         if not self.teacher or self.assignment.fixed:
             return
-        self._drag_start_x = event.x
-        self._drag_start_y = event.y
-        self._drag_started = False
+        self._press_x_root = getattr(event, "x_root", getattr(event, "x", 0))
+        self._press_y_root = getattr(event, "y_root", getattr(event, "y", 0))
+        self._is_dragging = False
 
     def _on_motion(self, event):
         if not self.teacher or self.assignment.fixed:
             return
-        if not self._drag_started:
-            if abs(event.x - self._drag_start_x) > 4 or abs(event.y - self._drag_start_y) > 4:
-                self._drag_started = True
-                self.controller.start_drag(self)
-        if self._drag_started:
+        x_root = getattr(event, "x_root", getattr(event, "x", 0))
+        y_root = getattr(event, "y_root", getattr(event, "y", 0))
+        if not self._is_dragging:
+            dx = x_root - self._press_x_root
+            dy = y_root - self._press_y_root
+            if (dx * dx + dy * dy) >= 36:  # 6 px hareket eşiği
+                self._is_dragging = True
+                self.controller.close_info_popover()
+                self.controller.start_drag(self, event)
+        if self._is_dragging:
             self.controller.on_drag_motion(event)
 
     def _on_release(self, event):
-        if self._drag_started:
+        if self._is_dragging:
+            self._is_dragging = False
             self.controller.on_drag_release(event)
-        self._drag_started = False
+        # Normal sol tıklamada kart/bilgi balonu AÇILMAZ. Sadece hücre seçili kalır.
 
     def _on_right_click(self, event):
-        self.controller.select_cell(self)
+        self.controller.select_cell(self, trigger_detail=True)
+        self.controller.close_info_popover()
         self.controller.show_context_menu(self, event)
 
     def _on_double_click(self, event):
-        self.controller.select_cell(self)
-        self.controller.open_teacher_picker(self)
+        self.controller.select_cell(self, trigger_detail=True)
+        if self.teacher:
+            self.controller.toggle_info_popover(self)
+        else:
+            self.controller.open_teacher_picker(self)
 
 
 class ScheduleGrid(ttk.Frame):
@@ -355,12 +602,33 @@ class ScheduleGrid(ttk.Frame):
         self.drag_source_cell: Optional[CellWidget] = None
         self.drag_state: Optional[DragState] = None
         self.active_hover_cell: Optional[CellWidget] = None
+        self.active_popover: Optional[TeacherInfoPopover] = None
+        self.drag_ghost: Optional[DragGhostWindow] = None
 
         self._build_container()
         self.refresh()
 
-    def select_cell(self, cell: CellWidget):
-        """Hücre seçildiğinde görsel sınırları günceller ve üst kontrolcüye haber verir."""
+    def close_info_popover(self):
+        """Açık olan öğretmen bilgi penceresini (popover) kapatır."""
+        if self.active_popover:
+            try:
+                self.active_popover.hide()
+            except Exception:
+                pass
+            self.active_popover = None
+
+    def toggle_info_popover(self, cell: CellWidget):
+        """Belirtilen hücre için bilgi penceresini açar veya açıksa kapatır."""
+        if self.active_popover and self.active_popover.cell == cell:
+            self.close_info_popover()
+            return
+        self.close_info_popover()
+        if cell.teacher:
+            self.active_popover = TeacherInfoPopover(cell)
+            self.active_popover.show()
+
+    def select_cell(self, cell: CellWidget, trigger_detail: bool = False):
+        """Hücre seçildiğinde görsel sınırları günceller; sadece istenirse (sağ tık) detay kartını açar."""
         if self.selected_cell and self.selected_cell != cell:
             try:
                 self.selected_cell.set_selected(False)
@@ -368,7 +636,7 @@ class ScheduleGrid(ttk.Frame):
                 pass
         self.selected_cell = cell
         cell.set_selected(True)
-        if self.on_cell_selected:
+        if trigger_detail and self.on_cell_selected:
             self.on_cell_selected(cell)
 
     def deselect_cell(self):
@@ -456,7 +724,7 @@ class ScheduleGrid(ttk.Frame):
         self.scrollbar_y = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.scrollbar_x = ttk.Scrollbar(self, orient="horizontal", command=self.canvas.xview)
         
-        self.table_frame = tk.Frame(self.canvas, bg=COLOR_BORDER_STRONG, bd=1, relief="solid")
+        self.table_frame = tk.Frame(self.canvas, bg=COLOR_BG, bd=0, relief="flat")
         self.table_frame.bind(
             "<Configure>",
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -465,13 +733,13 @@ class ScheduleGrid(ttk.Frame):
         self.canvas_window = self.canvas.create_window((0, 0), window=self.table_frame, anchor="nw")
         self.canvas.configure(xscrollcommand=self.scrollbar_x.set, yscrollcommand=self.scrollbar_y.set)
 
-        self.scrollbar_y.pack(side="right", fill="y")
-        self.scrollbar_x.pack(side="bottom", fill="x")
         self.canvas.pack(side="left", fill="both", expand=True)
 
         self.canvas.bind("<Configure>", self._on_canvas_configure)
         self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
         self.canvas.bind_all("<Shift-MouseWheel>", self._on_shift_mousewheel)
+        self.canvas.bind("<Button-1>", lambda e: self.close_info_popover(), add="+")
+        self.table_frame.bind("<Button-1>", lambda e: self.close_info_popover(), add="+")
 
     def _banner_copy_same(self):
         week_start = self.get_current_week()
@@ -502,9 +770,34 @@ class ScheduleGrid(ttk.Frame):
 
     def _on_canvas_configure(self, event):
         canvas_width = event.width
+        canvas_height = event.height
         req_width = self.table_frame.winfo_reqwidth()
-        new_width = max(canvas_width, req_width)
-        self.canvas.itemconfig(self.canvas_window, width=new_width)
+        req_height = self.table_frame.winfo_reqheight()
+
+        min_width = 800
+        min_height = 320
+
+        # Yatay kaydırma çubuğu kontrolü: sadece pencere çok daraldığında görünsün
+        if canvas_width >= min_width:
+            new_width = canvas_width
+            if self.scrollbar_x.winfo_ismapped():
+                self.scrollbar_x.pack_forget()
+        else:
+            new_width = max(min_width, req_width)
+            if not self.scrollbar_x.winfo_ismapped():
+                self.scrollbar_x.pack(side="bottom", fill="x", before=self.canvas)
+
+        # Dikey kaydırma çubuğu kontrolü: sadece pencere gerçekten küçüldüğünde çıksın
+        if canvas_height >= min_height:
+            new_height = canvas_height
+            if self.scrollbar_y.winfo_ismapped():
+                self.scrollbar_y.pack_forget()
+        else:
+            new_height = max(min_height, req_height)
+            if not self.scrollbar_y.winfo_ismapped():
+                self.scrollbar_y.pack(side="right", fill="y", before=self.canvas)
+
+        self.canvas.itemconfig(self.canvas_window, width=new_width, height=new_height)
 
     def _on_mousewheel(self, event):
         try:
@@ -520,7 +813,17 @@ class ScheduleGrid(ttk.Frame):
         except Exception:
             pass
 
+    _shift_mousewheel = _on_shift_mousewheel
+
     def refresh(self):
+        self.close_info_popover()
+        if self.drag_ghost:
+            try:
+                self.drag_ghost.destroy()
+            except Exception:
+                pass
+            self.drag_ghost = None
+
         # Mevcut çizelgeyi temizle
         for widget in self.table_frame.winfo_children():
             widget.destroy()
@@ -561,25 +864,24 @@ class ScheduleGrid(ttk.Frame):
             lbl.pack(pady=40)
             return
 
-        # Sütun Başlıkları: Günler / Nöbet Yerleri
-        # Sütun Başlıkları: Günler / Nöbet Yerleri
-        lbl_corner = tk.Label(
+        # Sütun Başlıkları: Günler / Nöbet Yerleri (Koyu lacivert #1E293B, ~8px yuvarlak köşe)
+        corner_frame = ctk.CTkFrame(
             self.table_frame,
-            text="📍 Nöbet Yerleri ➔",
-            font=(theme.FONT_FAMILY, max(8, theme.FONT_SIZE_BASE), "bold"),
-            bg="#0F172A",
-            fg="#F8FAFC",
-            relief="solid",
-            bd=theme.GRID_BORDER_WIDTH,
-            highlightbackground=theme.GRID_BORDER_COLOR,
-            highlightthickness=1,
-            padx=8,
-            pady=8
+            corner_radius=8,
+            fg_color="#1E293B",
+            border_width=0
         )
-        lbl_corner.grid(row=0, column=0, sticky="nsew", padx=1, pady=1)
+        lbl_corner = ctk.CTkLabel(
+            corner_frame,
+            text="📍 Nöbet Yerleri",
+            font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        lbl_corner.pack(expand=True, fill="both", padx=6, pady=4)
+        corner_frame.grid(row=0, column=0, sticky="nsew", padx=3, pady=3)
 
         col_idx = 1
-        # Sütun başlıkları (Nöbet Yerleri ve Slotları)
+        # Sütun başlıkları (Nöbet Yerleri ve Slotları - ~8px yuvarlak köşe)
         loc_col_map: Dict[Tuple[str, int], int] = {}
         for loc in locations:
             for slot in range(loc.capacity):
@@ -588,48 +890,54 @@ class ScheduleGrid(ttk.Frame):
                     slot_label += f" ({slot + 1})"
                 icon = get_location_icon(loc.name)
                 
-                lbl_loc = tk.Label(
+                loc_frame = ctk.CTkFrame(
                     self.table_frame,
-                    text=f"{icon}{slot_label}",
-                    font=(theme.FONT_FAMILY, max(8, theme.FONT_SIZE_BASE), "bold"),
-                    bg="#1E293B",
-                    fg="#F8FAFC",
-                    relief="solid",
-                    bd=theme.GRID_BORDER_WIDTH,
-                    highlightbackground=theme.GRID_BORDER_COLOR,
-                    highlightthickness=1,
-                    padx=6,
-                    pady=8,
-                    width=14
+                    corner_radius=8,
+                    fg_color="#1E293B",
+                    border_width=0
                 )
-                lbl_loc.grid(row=0, column=col_idx, sticky="nsew", padx=1, pady=1)
+                lbl_loc = ctk.CTkLabel(
+                    loc_frame,
+                    text=f"{icon}{slot_label}",
+                    font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
+                    text_color="#FFFFFF"
+                )
+                lbl_loc.pack(expand=True, fill="both", padx=6, pady=4)
+                loc_frame.grid(row=0, column=col_idx, sticky="nsew", padx=3, pady=3)
                 loc_col_map[(loc.id, slot)] = col_idx
                 col_idx += 1
 
-        # Satırlar (Günler - 2 Satırlı Gün Adı + Tarih)
+        # Satırlar (Günler - Açık gri-mavi #F1F5F9 zeminli, ~8px yuvarlak köşe)
         for row_idx, d in enumerate(days, start=1):
             day_dt = cur_dt + datetime.timedelta(days=row_idx - 1)
             month_name = TURKISH_MONTHS[day_dt.month] if 1 <= day_dt.month <= 12 else ""
-            day_label_text = f"{d.name.upper()}\n{day_dt.day} {month_name}"
 
-            lbl_day = tk.Label(
+            day_frame = ctk.CTkFrame(
                 self.table_frame,
-                text=day_label_text,
-                font=(theme.FONT_FAMILY, max(8, theme.FONT_SIZE_BASE), "bold"),
-                bg="#F1F5F9",
-                fg="#0F172A",
-                relief="solid",
-                bd=theme.GRID_BORDER_WIDTH,
-                highlightbackground=theme.GRID_BORDER_COLOR,
-                highlightthickness=1,
-                padx=8,
-                pady=6,
-                width=11,
-                justify="center"
+                corner_radius=8,
+                fg_color="#F1F5F9",
+                border_width=1,
+                border_color="#CBD5E1"
             )
-            lbl_day.grid(row=row_idx, column=0, sticky="nsew", padx=1, pady=1)
+            day_center = ctk.CTkFrame(day_frame, fg_color="transparent")
+            day_center.pack(expand=True)
+            lbl_day_name = ctk.CTkLabel(
+                day_center,
+                text=d.name.upper(),
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
+                text_color="#0F172A"
+            )
+            lbl_day_name.pack(side="top", pady=(0, 1))
+            lbl_day_date = ctk.CTkLabel(
+                day_center,
+                text=f"{day_dt.day} {month_name}",
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SECONDARY),
+                text_color="#334155"
+            )
+            lbl_day_date.pack(side="top", pady=0)
+            day_frame.grid(row=row_idx, column=0, sticky="nsew", padx=3, pady=3)
 
-            # Slot Hücreleri
+            # Slot Hücreleri (Hücre arası 6px boşluk: padx=3, pady=3)
             for loc in locations:
                 for slot in range(loc.capacity):
                     col = loc_col_map[(loc.id, slot)]
@@ -645,16 +953,55 @@ class ScheduleGrid(ttk.Frame):
                         slot_index=slot,
                         grid_controller=self
                     )
-                    cell.grid(row=row_idx, column=col, sticky="nsew", padx=1, pady=1)
+                    cell.grid(row=row_idx, column=col, sticky="nsew", padx=3, pady=3)
 
-        # Izgara boyutlandırma ağırlıkları
-        for c in range(col_idx):
-            self.table_frame.columnconfigure(c, weight=1)
-        for r in range(len(days) + 1):
-            self.table_frame.rowconfigure(r, weight=1)
+        # Izgara boyutlandırma ağırlıkları: sütunlar eşit genişlikte dağıtılır, satırlar pencereye göre esner
+        self.table_frame.columnconfigure(0, weight=0, minsize=88)
+        for c in range(1, col_idx):
+            self.table_frame.columnconfigure(c, weight=1, uniform="duty_col")
+        self.table_frame.rowconfigure(0, weight=0, minsize=32)
+        for r in range(1, len(days) + 1):
+            self.table_frame.rowconfigure(r, weight=1, uniform="day_row", minsize=54)
 
     # --- Sürükle ve Bırak (Drag & Drop) Mekanizması ---
-    def start_drag(self, source_cell: CellWidget):
+    def is_valid_drop_target(self, source_cell: CellWidget, target_cell: CellWidget) -> Tuple[bool, str]:
+        """
+        Sürükleme sırasında hedef hücrenin geçerliliğini kontrol eder.
+        Dönüş: (is_valid, reason)
+        """
+        if not source_cell or not target_cell:
+            return False, "Geçersiz hedef"
+        if source_cell == target_cell:
+            return True, "Aynı Hücre"
+        # 1. Kural: Hedef kilitli (sabit) ise bırakılamaz
+        if target_cell.assignment.fixed:
+            return False, "Hedef nöbet kilitlidir (Sabit Görev). Önce kilidi kaldırınız."
+
+        week_start = self.get_current_week()
+        assignments = self.db.get_assignments_for_week(week_start)
+
+        # 2. Kural: Kaynak öğretmen hedef günde zaten başka bir nöbette görevli mi?
+        if source_cell.day.id != target_cell.day.id and source_cell.teacher:
+            same_day_duties = [
+                a for a in assignments
+                if a.day_id == target_cell.day.id and a.teacher_id == source_cell.teacher.id
+            ]
+            if same_day_duties:
+                return False, f"{source_cell.teacher.name} {target_cell.day.name} gününde zaten başka bir nöbette görevlidir (Günde 1 Nöbet kuralı)."
+
+        # 3. Kural: Hedef doluysa (takas), hedef öğretmen kaynak günde başka bir nöbette mi?
+        if target_cell.teacher and source_cell.day.id != target_cell.day.id:
+            tgt_same_day = [
+                a for a in assignments
+                if a.day_id == source_cell.day.id and a.teacher_id == target_cell.teacher.id
+            ]
+            if tgt_same_day:
+                return False, f"{target_cell.teacher.name} {source_cell.day.name} gününde zaten başka bir nöbette görevlidir (Günde 1 Nöbet kuralı)."
+
+        return True, "Geçerli"
+
+    def start_drag(self, source_cell: CellWidget, event=None):
+        self.close_info_popover()
         self.drag_source_cell = source_cell
         self.drag_state = DragState(
             source_assignment_id=source_cell.assignment.id,
@@ -663,64 +1010,91 @@ class ScheduleGrid(ttk.Frame):
             source_location_id=source_cell.location.id,
             source_slot_index=source_cell.slot_index
         )
-        source_cell.configure(bg=COLOR_CELL_DRAG)
+        source_cell.configure(fg_color=COLOR_CELL_DRAG, border_color="#93C5FD", border_width=2)
+
+        # İmleci takip eden yarı saydam ghost rozet
+        if source_cell.teacher:
+            branch_str = source_cell.teacher.branch or ""
+            self.drag_ghost = DragGhostWindow(self, source_cell.teacher.name, branch_str)
+            if event:
+                rx = getattr(event, "x_root", getattr(event, "x", 0))
+                ry = getattr(event, "y_root", getattr(event, "y", 0))
+                self.drag_ghost.move_to(rx, ry)
+
         logger.debug(f"Drag başlatıldı: {source_cell.teacher.name if source_cell.teacher else 'None'}")
 
     def on_drag_motion(self, event):
         if not self.drag_source_cell:
             return
 
+        rx = getattr(event, "x_root", getattr(event, "x", 0))
+        ry = getattr(event, "y_root", getattr(event, "y", 0))
+
+        if self.drag_ghost:
+            self.drag_ghost.move_to(rx, ry)
+
         # İmlecin altındaki widget'ı bul
-        widget_under_cursor = self.winfo_containing(event.x_root, event.y_root)
+        widget_under_cursor = self.winfo_containing(rx, ry)
         target_cell = self._find_cell_parent(widget_under_cursor)
 
         if target_cell != self.active_hover_cell:
             # Önceki hover rengini eski haline getir
             if self.active_hover_cell and self.active_hover_cell != self.drag_source_cell:
-                orig_bg = COLOR_FIXED if self.active_hover_cell.assignment.fixed else (COLOR_CARD if self.active_hover_cell.teacher else COLOR_CELL_EMPTY)
-                self.active_hover_cell.configure(bg=orig_bg)
-            
+                orig_bg = self.active_hover_cell._default_bg()
+                orig_border = self.active_hover_cell._default_border()
+                self.active_hover_cell.configure(fg_color=orig_bg, border_color=orig_border, border_width=1)
+
             self.active_hover_cell = target_cell
             if target_cell and target_cell != self.drag_source_cell:
-                target_cell.configure(bg=COLOR_CELL_HOVER)
+                is_valid, _ = self.is_valid_drop_target(self.drag_source_cell, target_cell)
+                if is_valid:
+                    # Geçerli hedef hücre: mavi kenarlık ve hafif mavi arka plan (#EFF6FF, #2563EB)
+                    target_cell.configure(fg_color="#EFF6FF", border_color="#2563EB", border_width=2)
+                else:
+                    # Geçersiz hedef hücre: kırmızı kenarlık ve hafif kırmızı arka plan (#FEE2E2, #EF4444)
+                    target_cell.configure(fg_color="#FEE2E2", border_color="#EF4444", border_width=2)
 
     def on_drag_release(self, event):
+        if self.drag_ghost:
+            try:
+                self.drag_ghost.destroy()
+            except Exception:
+                pass
+            self.drag_ghost = None
+
         if not self.drag_source_cell:
             return
 
-        widget_under_cursor = self.winfo_containing(event.x_root, event.y_root)
+        rx = getattr(event, "x_root", getattr(event, "x", 0))
+        ry = getattr(event, "y_root", getattr(event, "y", 0))
+        widget_under_cursor = self.winfo_containing(rx, ry)
         target_cell = self._find_cell_parent(widget_under_cursor)
 
         # Görsel vurguları sıfırla
         if self.active_hover_cell:
-            orig_bg = COLOR_FIXED if self.active_hover_cell.assignment.fixed else (COLOR_CARD if self.active_hover_cell.teacher else COLOR_CELL_EMPTY)
-            self.active_hover_cell.configure(bg=orig_bg)
+            orig_bg = self.active_hover_cell._default_bg()
+            orig_border = self.active_hover_cell._default_border()
+            self.active_hover_cell.configure(fg_color=orig_bg, border_color=orig_border, border_width=1)
             self.active_hover_cell = None
 
         source = self.drag_source_cell
         self.drag_source_cell = None
 
-        if not target_cell:
+        if not target_cell or target_cell == source:
             self.refresh()
             return
 
-        # 1. Kural: Aynı hücreye bırakıldıysa NO-OP (hiçbir işlem yapma, hata verme)
-        if (target_cell.day.id == source.day.id and
-            target_cell.location.id == source.location.id and
-            target_cell.slot_index == source.slot_index):
-            self.refresh()
-            return
-
-        # 2. Kural: Hedef kilitli (sabit) ise taşıma/takas yapma
-        if target_cell.assignment.fixed:
+        # 1. Kural: Geçerlilik kontrolü
+        is_valid, reason = self.is_valid_drop_target(source, target_cell)
+        if not is_valid:
             messagebox.showwarning(
-                "Sabit Nöbet",
-                f"{target_cell.day.name} {target_cell.location.name} hücresindeki nöbet kilitlidir. Önce kilidi kaldırınız."
+                "Geçersiz Taşıma",
+                f"Nöbet taşıma işlemi kurallara aykırı olduğu için reddedildi:\n\n{reason}"
             )
             self.refresh()
             return
 
-        # 3. Kural: Dolu hücreye bırakma = TAKAS (SWAP), Boş hücreye bırakma = TAŞIMA
+        # 2. Taşıma / Takas İcrası
         week_start = self.get_current_week()
         success = self.duty_service.move_or_swap(
             week_start=week_start,
@@ -734,6 +1108,10 @@ class ScheduleGrid(ttk.Frame):
 
         if success:
             self.on_data_changed()
+        else:
+            err = getattr(self.duty_service, "last_error", None) or "Nöbet taşıma kural ihlali nedeniyle tamamlanamadı."
+            messagebox.showwarning("Kural İhlali / Çakışma", err)
+
         self.refresh()
 
     def _find_cell_parent(self, widget: Optional[tk.Widget]) -> Optional[CellWidget]:
@@ -749,6 +1127,11 @@ class ScheduleGrid(ttk.Frame):
         menu = tk.Menu(self, tearoff=0)
 
         if cell.teacher:
+            menu.add_command(
+                label=f"📋 '{cell.teacher.name}' Nöbet ve Ders Kartı",
+                command=lambda: self.on_cell_selected(cell) if self.on_cell_selected else None
+            )
+            menu.add_separator()
             menu.add_command(
                 label=f"➡️ '{cell.teacher.name}' Öğretmenini Taşı...",
                 command=lambda: self.open_move_dialog(cell)
@@ -846,7 +1229,10 @@ class ScheduleGrid(ttk.Frame):
                 chosen_name = chosen_text.split(" (")[0]
                 matched_t = next((t for t in teachers if t.name == chosen_name), None)
                 if matched_t:
-                    self.duty_service.assign_teacher(cell.assignment, matched_t.id)
+                    ok = self.duty_service.assign_teacher(cell.assignment, matched_t.id)
+                    if not ok and getattr(self.duty_service, "last_error", None):
+                        messagebox.showwarning("Kural İhlali / Çakışma", self.duty_service.last_error, parent=dialog)
+                        return
 
             dialog.destroy()
             self.on_data_changed()

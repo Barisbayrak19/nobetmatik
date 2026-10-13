@@ -29,6 +29,7 @@ logs/
 *.log
 backups/
 exports/
+data/feedbacks.json
 
 # Excel temporary files
 ~$*.xlsx

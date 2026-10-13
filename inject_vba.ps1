@@ -183,7 +183,7 @@ Sub SecilenlerleYeniListeSayfasiOlustur()
     
     wsNew.Rows(2).RowHeight = 26
     wsNew.Range("A2:H2").Merge
-    wsNew.Range("A2").Value = "Şehit Kadir Altuntaş Cumhuriyet Ortaokulu Müdürlüğü"
+    wsNew.Range("A2").Value = "Örnek Ortaokulu Müdürlüğü"
     wsNew.Range("A2").Font.Name = "Segoe UI"
     wsNew.Range("A2").Font.Size = 12
     wsNew.Range("A2").Font.Bold = True

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "Nöbet Yönetim Sistemi"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 DEFAULT_GITHUB_REPO = "Barisbayrak19/nobetmatik"
 
 if getattr(sys, 'frozen', False):
@@ -36,3 +36,11 @@ DB_PATH = DATA_DIR / "nobet.db"
 LOG_PATH = LOG_DIR / "app.log"
 
 WEEKDAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
+
+DEVELOPER_EMAIL = "barisbayrak19@gmail.com"
+ANNOUNCEMENTS_URL = f"https://raw.githubusercontent.com/{DEFAULT_GITHUB_REPO}/main/data/announcements.json"
+FEEDBACK_WEBHOOK_URL = ""  # Özel webhook URL (İsteğe bağlı)
+
+# Telegram Geri Bildirim Botu Entegrasyonu
+TELEGRAM_BOT_TOKEN = "8673798021:AAFzfXm1a_zTTx94Eb469cVqz8WgfQ8aXSI"  # @BotFather'dan alınan Bot Token
+TELEGRAM_CHAT_ID = "852517487"    # Mesajın geleceği Telegram ID'niz

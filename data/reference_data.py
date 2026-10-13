@@ -1,16 +1,16 @@
 """
-Gerçek Kurulum Referans Verileri
-Şehit Kadir Altuntaş Cumhuriyet Ortaokulu resmi verileri ve nöbet çizelgesi.
-Nöbet listesinde yer almayan öğretmenler (idareciler, rehberlik, okul öncesi, özel eğitim vb.) varsayılan olarak pasif işaretlenmiştir.
+Referans ve Demo Kurulum Verileri
+Tüm okul, öğretmen ve nöbet verileri genel dağıtıma uygun jenerik/örnek (fictional) verilerdir.
+Gerçek kişisel veri (KVKK) içermez.
 """
 from typing import Dict, List, Any
 
 REFERENCE_SCHOOL = {
-    "name": "Şehit Kadir Altuntaş Cumhuriyet Ortaokulu",
-    "city": "İzmir",
-    "district": "Torbalı",
+    "name": "Örnek Ortaokulu",
+    "city": "Ankara",
+    "district": "Çankaya",
     "academic_year": "2026-2027",
-    "principal_name": "Salahattin GÜNEK",
+    "principal_name": "Ahmet ÖZTÜRK",
     "duty_rules": (
         "1- Günlük vakit çizelgesini uygulamak.\n"
         "2- Öğretmenlerin derslere zamanında girip girmediğini izlemek ve öğretmeni gelmeyen sınıfları okul yönetimine bildirmek ve bu sınıflara nezaret etmek.\n"
@@ -30,7 +30,6 @@ REFERENCE_DAYS = [
     {"name": "Cuma", "order_num": 5}
 ]
 
-# Nöbet Yerleri: Bahçe 1 ve Bahçe 2 ayrı nöbet yerleri olarak yapılandırılmıştır.
 REFERENCE_LOCATIONS = [
     {"name": "1. KAT", "order_num": 1, "capacity": 1},
     {"name": "2. KAT", "order_num": 2, "capacity": 1},
@@ -40,51 +39,50 @@ REFERENCE_LOCATIONS = [
     {"name": "ZEMİN KAT", "order_num": 6, "capacity": 1}
 ]
 
-# Gerçek Haftalık Nöbet Çizelgesi (Bahçe 1 ve Bahçe 2 ayrı yerler olarak atanmıştır)
+# Örnek Haftalık Nöbet Çizelgesi
 REFERENCE_DUTY_TABLE = {
     "Pazartesi": {
-        "1. KAT": ["MEHMET BEYDİLLİ"],
-        "2. KAT": ["İLKNUR AKBAŞ UZUN"],
-        "3. KAT": ["MELTEM ÖZEL"],
-        "BAHÇE 1": ["ADNAN KIRLIOĞLU"],
-        "BAHÇE 2": ["ANIL ÇATAK"],
-        "ZEMİN KAT": ["ÖZNUR GÖKMEN ATASOY"]
+        "1. KAT": ["MEHMET DEMİR"],
+        "2. KAT": ["İLKAY DEMİRTAŞ"],
+        "3. KAT": ["ARZU DEMİR"],
+        "BAHÇE 1": ["ADNAN YILMAZ"],
+        "BAHÇE 2": ["ANIL YILDIRIM"],
+        "ZEMİN KAT": ["ASLI ŞAHİN"]
     },
     "Salı": {
-        "1. KAT": ["AYŞE EREN"],
-        "2. KAT": ["DERYA YILDIZ SAVAŞ"],
-        "3. KAT": ["MEHMET ÖZBEK"],
-        "BAHÇE 1": ["FATMA ÇETİN"],
-        "BAHÇE 2": ["NALAN NARİN SÖNMEZ"],
-        "ZEMİN KAT": ["ÇİĞDEM YALÇINKAYA"]
+        "1. KAT": ["AYŞE ÖZTÜRK"],
+        "2. KAT": ["DERYA ASLAN"],
+        "3. KAT": ["BURAK GÜNEŞ"],
+        "BAHÇE 1": ["FATMA POLAT"],
+        "BAHÇE 2": ["ÇİĞDEM KOÇ"],
+        "ZEMİN KAT": ["AYŞEGÜL AYDIN"]
     },
     "Çarşamba": {
-        "1. KAT": ["BELGİN ÇAKIN"],
-        "2. KAT": ["GÜLAY YILMAZ"],
-        "3. KAT": ["LATİF CANDAN"],
-        "BAHÇE 1": ["AHU ŞENOL ÇALIK"],
-        "BAHÇE 2": ["VEYSİ ALTUN"],
-        "ZEMİN KAT": ["YASEMİN GÖKOĞLU"]
+        "1. KAT": ["CAN ERDOĞAN"],
+        "2. KAT": ["GAMZE YAVUZ"],
+        "3. KAT": ["HASAN ÇETİN"],
+        "BAHÇE 1": ["AHMET KAYA"],
+        "BAHÇE 2": ["İBRAHİM DOĞAN"],
+        "ZEMİN KAT": ["GÜLAY KURT"]
     },
     "Perşembe": {
-        "1. KAT": ["GÜLAY AYDIN SÖLPÜK"],
-        "2. KAT": ["AYŞEGÜL KAYA"],
-        "3. KAT": ["FUNDA VAROL DEMİR"],
-        "BAHÇE 1": ["NEZAHAT SALMAN"],
-        "BAHÇE 2": ["VİLDAN SATAN ERSOY"],
-        "ZEMİN KAT": ["SILA ÖZGÜN AYDIN"]
+        "1. KAT": ["HÜLYA KESKİN"],
+        "2. KAT": ["MURAT AVCI"],
+        "3. KAT": ["MUSTAFA AKSOY"],
+        "BAHÇE 1": ["NERMİN ÇAKIR"],
+        "BAHÇE 2": ["OĞUZ TAŞ"],
+        "ZEMİN KAT": ["ÖMER BOZKURT"]
     },
     "Cuma": {
-        "1. KAT": ["ARZU KARAKÜLAH"],
-        "2. KAT": ["ASLI ÖRGÜN AŞUTKALIOĞLU"],
-        "3. KAT": ["SEHER AYDIN"],
-        "BAHÇE 1": ["ŞENCAN YEŞİL"],
-        "BAHÇE 2": ["ZEHRA ARAS"],
-        "ZEMİN KAT": ["YASEMİN SAKA KILIÇ"]
+        "1. KAT": ["ÖZLEM ÖZKAN"],
+        "2. KAT": ["PINAR KARA"],
+        "3. KAT": ["RECEP YALÇIN"],
+        "BAHÇE 1": ["SEDA GÜLER"],
+        "BAHÇE 2": ["DENİZ YILDIZ"],
+        "ZEMİN KAT": ["FERİT BULUT"]
     }
 }
 
-# Nöbet çizelgesinde fiilen yer alan öğretmenler (30 kişi)
 DUTY_TEACHERS_SET = {
     t_name
     for day_dict in REFERENCE_DUTY_TABLE.values()
@@ -92,53 +90,52 @@ DUTY_TEACHERS_SET = {
     for t_name in loc_list
 }
 
-# Gerçek Öğretmen Listesi (İsim, Branş, Aktif/Pasif, Not)
-# Nöbet listesindeki 30 öğretmen is_active=True, diğerleri is_active=False
+# Jenerik Örnek Öğretmen Listesi (İsim, Branş, Not)
 RAW_TEACHERS_DATA = [
-    ("ADNAN KIRLIOĞLU", "Sosyal Bilgiler", ""),
-    ("AHU ŞENOL ÇALIK", "Fen Bilimleri", ""),
-    ("ALİ EMRE KARAGÖZ", "Özel Eğitim", "Özel Eğitim Öğretmeni (Nöbet Muaf)"),
-    ("ANIL ÇATAK", "Fen Bilimleri", ""),
-    ("ARZU KARAKÜLAH", "İlköğretim Matematik", ""),
-    ("ASLI ÖRGÜN AŞUTKALIOĞLU", "İngilizce", ""),
-    ("AYŞE EREN", "Sosyal Bilgiler", ""),
-    ("AYŞEGÜL KAYA", "Din Kültürü ve Ahlâk Bilgisi", ""),
-    ("BARIŞ BAYRAK", "Din Kültürü ve Ahlâk Bilgisi", "Müdür Yardımcısı (Nöbet Muaf)"),
-    ("BELGİN ÇAKIN", "Müzik", ""),
-    ("BURCU UÇAR", "Beden Eğitimi", "Nöbet Listesi Dışı"),
-    ("ÇİĞDEM YALÇINKAYA", "Din Kültürü ve Ahlâk Bilgisi", ""),
-    ("DENİZ AKER", "Okul Öncesi", "Okul Öncesi Öğretmeni (Nöbet Muaf)"),
-    ("DERYA YILDIZ SAVAŞ", "Türkçe", ""),
-    ("ESRA LAÇİN YILMAZ", "Okul Öncesi", "Okul Öncesi Öğretmeni (Nöbet Muaf)"),
-    ("FATMA ÇETİN", "Fen Bilimleri", ""),
-    ("FATMA EMOL DAGALAN", "Özel Eğitim", "Özel Eğitim Öğretmeni (Nöbet Muaf)"),
-    ("FERDİ CAN", "Bilişim Teknolojileri", "Bilişim Öğretmeni"),
-    ("FETHİYE GÜNER UĞURLU", "Okul Öncesi", "Okul Öncesi Öğretmeni (Nöbet Muaf)"),
-    ("FUNDA VAROL DEMİR", "Fen Bilimleri", ""),
-    ("GÜL NARİN", "Özel Eğitim", "Özel Eğitim Öğretmeni (Nöbet Muaf)"),
-    ("GÜLAY AYDIN SÖLPÜK", "İngilizce", ""),
-    ("GÜLAY YILMAZ", "Türkçe", ""),
-    ("HİLAL CENGİZ", "Okul Öncesi", "Okul Öncesi Öğretmeni (Nöbet Muaf)"),
-    ("İLKNUR TEKİN SEZGİN", "Rehberlik", "Rehber Öğretmen (Nöbet Muaf)"),
-    ("İLKNUR AKBAŞ UZUN", "Türkçe", "Belgede İ.AKBAŞ olarak geçmektedir"),
-    ("LATİF CANDAN", "Sosyal Bilgiler", ""),
-    ("MEHMET BEYDİLLİ", "Fen Bilimleri", ""),
-    ("MEHMET ÖZBEK", "Beden Eğitimi", ""),
-    ("MELTEM ÖZEL", "İngilizce", ""),
-    ("MUNİSE İYİ", "İlköğretim Matematik", "Nöbet Listesi Dışı"),
-    ("NALAN NARİN SÖNMEZ", "Teknoloji ve Tasarım", ""),
-    ("NERMİN ZENGİN", "Okul Öncesi", "Okul Öncesi Öğretmeni (Nöbet Muaf)"),
-    ("NEZAHAT SALMAN", "Beden Eğitimi", ""),
-    ("ÖZNUR GÖKMEN ATASOY", "Türkçe", ""),
-    ("SEHER AYDIN", "İlköğretim Matematik", ""),
-    ("SILA ÖZGÜN AYDIN", "Türkçe", ""),
-    ("ŞENCAN YEŞİL", "Görsel Sanatlar", ""),
-    ("VEYSİ ALTUN", "İlköğretim Matematik", ""),
-    ("VİLDAN SATAN ERSOY", "Türkçe", ""),
-    ("YASEMİN GÖKOĞLU", "İngilizce", ""),
-    ("YASEMİN SAKA KILIÇ", "İlköğretim Matematik", ""),
-    ("ZEHRA ARAS", "Din Kültürü ve Ahlâk Bilgisi", ""),
-    ("ZEYNEP AKKOYUN", "Okul Öncesi", "Okul Öncesi Öğretmeni (Nöbet Muaf)")
+    ("ADNAN YILMAZ", "Sosyal Bilgiler", ""),
+    ("AHMET KAYA", "Fen Bilimleri", ""),
+    ("ALİ ÇELİK", "Özel Eğitim", "Özel Eğitim Öğretmeni (Nöbet Muaf)"),
+    ("ANIL YILDIRIM", "Fen Bilimleri", ""),
+    ("ARZU DEMİR", "İlköğretim Matematik", ""),
+    ("ASLI ŞAHİN", "İngilizce", ""),
+    ("AYŞE ÖZTÜRK", "Sosyal Bilgiler", ""),
+    ("AYŞEGÜL AYDIN", "Din Kültürü ve Ahlâk Bilgisi", ""),
+    ("BURAK GÜNEŞ", "Beden Eğitimi", ""),
+    ("CAN ERDOĞAN", "Müzik", ""),
+    ("ÇİĞDEM KOÇ", "Din Kültürü ve Ahlâk Bilgisi", ""),
+    ("DENİZ YILDIZ", "Türkçe", ""),
+    ("DERYA ASLAN", "Türkçe", ""),
+    ("ELİF TEKİN", "Bilişim Teknolojileri", "Müdür Yardımcısı (Nöbet Muaf)"),
+    ("EMİNE ŞEN", "Okul Öncesi", "Okul Öncesi Öğretmeni (Nöbet Muaf)"),
+    ("FATMA POLAT", "Fen Bilimleri", ""),
+    ("FERİT BULUT", "İlköğretim Matematik", ""),
+    ("GAMZE YAVUZ", "Türkçe", ""),
+    ("GÜLAY KURT", "İngilizce", ""),
+    ("HAKAN KILIÇ", "Rehberlik", "Rehber Öğretmen (Nöbet Muaf)"),
+    ("HASAN ÇETİN", "İlköğretim Matematik", ""),
+    ("HÜLYA KESKİN", "Türkçe", ""),
+    ("İBRAHİM DOĞAN", "Görsel Sanatlar", ""),
+    ("İLKAY DEMİRTAŞ", "Türkçe", ""),
+    ("MEHMET DEMİR", "Fen Bilimleri", ""),
+    ("MURAT AVCI", "Beden Eğitimi", ""),
+    ("MUSTAFA AKSOY", "Teknoloji ve Tasarım", ""),
+    ("NERMİN ÇAKIR", "Sosyal Bilgiler", ""),
+    ("OĞUZ TAŞ", "İlköğretim Matematik", ""),
+    ("ÖMER BOZKURT", "Din Kültürü ve Ahlâk Bilgisi", ""),
+    ("ÖZLEM ÖZKAN", "İngilizce", ""),
+    ("PINAR KARA", "Fen Bilimleri", ""),
+    ("RECEP YALÇIN", "Sosyal Bilgiler", ""),
+    ("SEDA GÜLER", "Türkçe", ""),
+    ("SELİN SARIOĞLU", "İngilizce", "Nöbet Listesi Dışı"),
+    ("SERKAN YILMAZ", "İlköğretim Matematik", "Nöbet Listesi Dışı"),
+    ("SEVİM KAYA", "Türkçe", "Okul Öncesi Öğretmeni (Nöbet Muaf)"),
+    ("SİNAN ŞİMŞEK", "Beden Eğitimi", "Nöbet Listesi Dışı"),
+    ("TOLGA AKTAŞ", "Fen Bilimleri", "Nöbet Listesi Dışı"),
+    ("TÜLAY ÖZDEMİR", "Müzik", "Nöbet Listesi Dışı"),
+    ("UFUK CEYLAN", "Sosyal Bilgiler", "Nöbet Listesi Dışı"),
+    ("VEDAT ÖZCAN", "İngilizce", "Nöbet Listesi Dışı"),
+    ("YASEMİN TUNÇ", "İlköğretim Matematik", "Nöbet Listesi Dışı"),
+    ("ZEYNEP ÇAĞLAR", "Din Kültürü ve Ahlâk Bilgisi", "Nöbet Listesi Dışı")
 ]
 
 REFERENCE_TEACHERS = [
@@ -151,36 +148,36 @@ REFERENCE_TEACHERS = [
     for name, branch, notes in RAW_TEACHERS_DATA
 ]
 
-# PDF'teki kısaltmalar ile gerçek öğretmen isimleri arasındaki olası eşleşme tablosu
+# Örnek Kısaltma Eşleştirme Tablosu
 NAME_ALIASES = {
-    "M.BEYDİLLİ": "MEHMET BEYDİLLİ",
-    "İ.AKBAŞ": "İLKNUR AKBAŞ UZUN",
-    "M.ÖZEL": "MELTEM ÖZEL",
-    "A.KIRLIOĞLU": "ADNAN KIRLIOĞLU",
-    "A.ÇATAK": "ANIL ÇATAK",
-    "Ö.GÖKMEN ATASOY": "ÖZNUR GÖKMEN ATASOY",
-    "A.EREN": "AYŞE EREN",
-    "D.YILDIZ SAVAŞ": "DERYA YILDIZ SAVAŞ",
-    "M.ÖZBEK": "MEHMET ÖZBEK",
-    "F.ÇETİN": "FATMA ÇETİN",
-    "N.NARİN SÖNMEZ": "NALAN NARİN SÖNMEZ",
-    "Ç.YALÇINKAYA": "ÇİĞDEM YALÇINKAYA",
-    "B.ÇAKIN": "BELGİN ÇAKIN",
-    "G.YILMAZ": "GÜLAY YILMAZ",
-    "L.CANDAN": "LATİF CANDAN",
-    "A.ŞENOL ÇALIK": "AHU ŞENOL ÇALIK",
-    "V.ALTUN": "VEYSİ ALTUN",
-    "Y.GÖKOĞLU": "YASEMİN GÖKOĞLU",
-    "G.AYDIN SÖLPÜK": "GÜLAY AYDIN SÖLPÜK",
-    "A.KAYA": "AYŞEGÜL KAYA",
-    "F.VAROL DEMİR": "FUNDA VAROL DEMİR",
-    "N.SALMAN": "NEZAHAT SALMAN",
-    "V.SATANERSOY": "VİLDAN SATAN ERSOY",
-    "S.AYDIN (SILA)": "SILA ÖZGÜN AYDIN",
-    "A.KARAKÜLAH": "ARZU KARAKÜLAH",
-    "A.AŞUTKALIOĞLU": "ASLI ÖRGÜN AŞUTKALIOĞLU",
-    "S.AYDIN (SEHER)": "SEHER AYDIN",
-    "Ş.YEŞİL": "ŞENCAN YEŞİL",
-    "Z.ARAS": "ZEHRA ARAS",
-    "Y.SAKA KILIÇ": "YASEMİN SAKA KILIÇ"
+    "M.DEMİR": "MEHMET DEMİR",
+    "A.YILMAZ": "ADNAN YILMAZ",
+    "A.KAYA": "AHMET KAYA",
+    "A.DEMİR": "ARZU DEMİR",
+    "A.ŞAHİN": "ASLI ŞAHİN",
+    "A.ÖZTÜRK": "AYŞE ÖZTÜRK",
+    "A.AYDIN": "AYŞEGÜL AYDIN",
+    "B.GÜNEŞ": "BURAK GÜNEŞ",
+    "C.ERDOĞAN": "CAN ERDOĞAN",
+    "Ç.KOÇ": "ÇİĞDEM KOÇ",
+    "D.YILDIZ": "DENİZ YILDIZ",
+    "D.ASLAN": "DERYA ASLAN",
+    "E.TEKİN": "ELİF TEKİN",
+    "F.POLAT": "FATMA POLAT",
+    "F.BULUT": "FERİT BULUT",
+    "G.YAVUZ": "GAMZE YAVUZ",
+    "G.KURT": "GÜLAY KURT",
+    "H.ÇETİN": "HASAN ÇETİN",
+    "H.KESKİN": "HÜLYA KESKİN",
+    "İ.DOĞAN": "İBRAHİM DOĞAN",
+    "İ.DEMİRTAŞ": "İLKAY DEMİRTAŞ",
+    "M.AVCI": "MURAT AVCI",
+    "M.AKSOY": "MUSTAFA AKSOY",
+    "N.ÇAKIR": "NERMİN ÇAKIR",
+    "O.TAŞ": "OĞUZ TAŞ",
+    "Ö.BOZKURT": "ÖMER BOZKURT",
+    "Ö.ÖZKAN": "ÖZLEM ÖZKAN",
+    "P.KARA": "PINAR KARA",
+    "R.YALÇIN": "RECEP YALÇIN",
+    "S.GÜLER": "SEDA GÜLER"
 }

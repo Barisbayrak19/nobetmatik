@@ -20,7 +20,9 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-from core.models import Teacher, Location, Day, TeacherLesson, SubstitutionAssignment
+from core.models import (
+    Teacher, Location, Day, TeacherLesson, SubstitutionAssignment, SubstitutionFairnessReport
+)
 from core.database import Database
 from core.logger import logger
 from data.reference_data import NAME_ALIASES
@@ -638,7 +640,8 @@ class SubstitutionService:
         teachers_per_lesson: int = 1,
         exclude_teacher_ids: Optional[List[str]] = None,
         active_substitutions: Optional[List[SubstitutionAssignment]] = None,
-        allow_branch_peers_ek_ders: bool = True
+        allow_branch_peers_ek_ders: bool = True,
+        assign_tandem_for_unassigned: bool = False
     ) -> List[SubstitutionAssignment]:
         """
         Gelmeyen öğretmenin dolu derslerini boş nöbetçiler ve okuldaki boş branşdaş öğretmenlerle eşleştirir:
@@ -797,6 +800,28 @@ class SubstitutionService:
                 duty_assigned_at_period[p].add(chosen.id)
                 teacher_assigned_today[chosen.id] = teacher_assigned_today.get(chosen.id, 0) + 1
 
+        # O gün henüz 0 görev almış nöbetçileri boş derslerine başkasının yanına eşli/ortak görevlendir
+        if assign_tandem_for_unassigned:
+            unassigned_duty = [
+                d for d in duty_candidates
+                if teacher_assigned_today.get(d["teacher"].id, 0) == 0
+            ]
+            for d_info in unassigned_duty:
+                u_teach = d_info["teacher"]
+                free_pers = d_info["free_periods"]
+                for lesson in sorted(busy_lessons, key=lambda l: l.period):
+                    p = lesson.period
+                    if p in free_pers and u_teach.id not in duty_assigned_at_period[p]:
+                        current_items = period_assignments.get(p, [])
+                        if current_items and len(current_items) == 1 and current_items[0][0].id != u_teach.id:
+                            prim_t = current_items[0][0]
+                            is_ek = is_same_branch(u_teach.branch, absent_branch)
+                            note = f"👥 Ortak/Eşli İkame: {prim_t.name} ile birlikte ({lesson.class_name})\n✓ Boş saatinde adil iş yükü paylaşımı"
+                            period_assignments[p].append((u_teach, is_ek, note))
+                            duty_assigned_at_period[p].add(u_teach.id)
+                            teacher_assigned_today[u_teach.id] = teacher_assigned_today.get(u_teach.id, 0) + 1
+                            break
+
         # Sonuç SubstitutionAssignment listesini oluştur
         results: List[SubstitutionAssignment] = []
         for lesson in sorted(busy_lessons, key=lambda l: l.period):
@@ -836,7 +861,8 @@ class SubstitutionService:
         absent_teacher_ids: List[str],
         week_start: str,
         teachers_per_lesson: int = 1,
-        allow_branch_peers_ek_ders: bool = True
+        allow_branch_peers_ek_ders: bool = True,
+        assign_tandem_for_unassigned: bool = False
     ) -> Dict[str, List[SubstitutionAssignment]]:
         """
         Birden fazla gelmeyen öğretmenin derslerini tek bir küresel adalet optimizasyonuyla dağıtır.
@@ -1004,7 +1030,206 @@ class SubstitutionService:
                     is_ek_ders=False
                 )
                 results_by_teacher[a_teacher.id].append(sub)
+
+        # 4. Aşama: O gün henüz 0 görev almış nöbetçileri boş derslerine başkasının yanına eşli/ortak görevlendir (Tandem)
+        if assign_tandem_for_unassigned:
+            unassigned_duty = [
+                d for d in duty_candidates
+                if teacher_assigned_today.get(d["teacher"].id, 0) == 0
+            ]
+            for d_info in unassigned_duty:
+                u_teach = d_info["teacher"]
+                free_pers = d_info["free_periods"]
+                for a_id in absent_teacher_ids:
+                    if teacher_assigned_today.get(u_teach.id, 0) > 0:
+                        break
+                    sub_list = results_by_teacher.get(a_id, [])
+                    for p in free_pers:
+                        if u_teach.id in duty_assigned_at_period[p]:
+                            continue
+                        current_p_subs = [s for s in sub_list if s.period == p and s.duty_teacher_id]
+                        if len(current_p_subs) == 1 and current_p_subs[0].duty_teacher_id != u_teach.id:
+                            prim_sub = current_p_subs[0]
+                            prim_t = teachers.get(prim_sub.duty_teacher_id)
+                            prim_name = prim_t.name if prim_t else "Nöbetçi Öğretmen"
+                            a_teach_obj = teachers.get(a_id)
+                            a_branch = a_teach_obj.branch if a_teach_obj else ""
+                            is_ek = is_same_branch(u_teach.branch, a_branch)
+
+                            tandem_sub = SubstitutionAssignment(
+                                date_str=date_str,
+                                period=p,
+                                absent_teacher_id=a_id,
+                                class_name=prim_sub.class_name,
+                                subject_code=prim_sub.subject_code,
+                                duty_teacher_id=u_teach.id,
+                                notes=f"👥 Ortak/Eşli İkame: {prim_name} ile birlikte ({prim_sub.class_name})\n✓ Adil iş yükü dengelemesi (Boş Saat)",
+                                is_ek_ders=is_ek
+                            )
+                            sub_list.append(tandem_sub)
+                            duty_assigned_at_period[p].add(u_teach.id)
+                            teacher_assigned_today[u_teach.id] = teacher_assigned_today.get(u_teach.id, 0) + 1
+                            break
+
         return results_by_teacher
+
+    def get_fairness_report(
+        self,
+        date_str: str,
+        day_name: str,
+        assignments: List[SubstitutionAssignment],
+        week_start: str,
+        absent_teacher_ids: Optional[List[str]] = None
+    ) -> SubstitutionFairnessReport:
+        """
+        Günün ikame görevlendirmelerinin adalet, denge ve kural uyum karnesini hesaplar.
+        Gini katsayısı, boşta kalan öğretmenler ve eşli teklifleri içerir.
+        """
+        resolved_week = self._ensure_week_start(date_str if date_str else week_start)
+        teachers = {t.id: t for t in self.db.get_teachers()}
+        all_absent_ids = set(absent_teacher_ids or [])
+        for r in self.db.get_attendance_records(date_str=date_str):
+            all_absent_ids.add(r.teacher_id)
+        for s in assignments:
+            if s.absent_teacher_id:
+                all_absent_ids.add(s.absent_teacher_id)
+
+        duty_info_list = self.get_day_duty_teachers(resolved_week, day_name)
+        duty_candidates = [d for d in duty_info_list if d["teacher"].id not in all_absent_ids]
+
+        teacher_counts: Dict[str, int] = {d["teacher"].id: 0 for d in duty_candidates}
+        for s in assignments:
+            if s.duty_teacher_id:
+                teacher_counts[s.duty_teacher_id] = teacher_counts.get(s.duty_teacher_id, 0) + 1
+
+        active_counts = list(teacher_counts.values()) if teacher_counts else [0]
+        total_assigned_slots = sum(active_counts)
+
+        # Gini Katsayısı Hesaplama (0.0 = Kusursuz Eşitlik)
+        def _calc_gini(counts: List[int]) -> float:
+            if not counts or len(counts) <= 1:
+                return 0.0
+            s = sorted(counts)
+            n = len(s)
+            tot = sum(s)
+            if tot == 0:
+                return 0.0
+            gini_sum = sum((2 * i - n - 1) * c for i, c in enumerate(s, 1))
+            return max(0.0, min(1.0, round(gini_sum / (n * tot), 4)))
+
+        gini_val = _calc_gini(active_counts)
+        min_h = min(active_counts) if active_counts else 0
+        max_h = max(active_counts) if active_counts else 0
+        spread = max_h - min_h
+        avg_h = round(sum(active_counts) / len(active_counts), 2) if active_counts else 0.0
+
+        # Adalet Skoru (100 üzerinden)
+        fairness_score = max(0.0, min(100.0, round(100.0 - (gini_val * 100.0 * 0.75) - (spread * 5.0), 1)))
+
+        # Tandem / Eşli İkame Atamaları
+        lessons_grouped: Dict[Tuple[str, int], List[SubstitutionAssignment]] = defaultdict(list)
+        for s in assignments:
+            if s.duty_teacher_id:
+                lessons_grouped[(s.absent_teacher_id, s.period)].append(s)
+
+        tandem_assignments = []
+        for (a_id, p), sub_items in lessons_grouped.items():
+            if len(sub_items) > 1:
+                t_names = [teachers[s.duty_teacher_id].name for s in sub_items if s.duty_teacher_id in teachers]
+                tandem_assignments.append({
+                    "period": p,
+                    "class_name": sub_items[0].class_name,
+                    "subject_code": sub_items[0].subject_code,
+                    "absent_teacher_name": teachers[a_id].name if a_id in teachers else "",
+                    "assigned_teachers": t_names,
+                    "notes": sub_items[-1].notes
+                })
+
+        # O gün boşta kalan (0 görevli) nöbetçi öğretmenler
+        idle_teachers_today = []
+        for d in duty_candidates:
+            t = d["teacher"]
+            cnt = teacher_counts.get(t.id, 0)
+            if cnt == 0:
+                idle_teachers_today.append({
+                    "teacher_id": t.id,
+                    "teacher_name": t.name,
+                    "branch": t.branch,
+                    "location": d["location"].name if d["location"] else "Nöbetçi",
+                    "free_periods": d["free_periods"],
+                    "free_periods_str": ", ".join(map(str, d["free_periods"])) if d["free_periods"] else "Yok"
+                })
+
+        # Eşli İkame Teklifleri (Boşta kalanlar için başkasının yanına görevlendirme teklifi)
+        proposals = []
+        assigned_periods_taken: Dict[int, Set[str]] = defaultdict(set)
+        for s in assignments:
+            if s.duty_teacher_id:
+                assigned_periods_taken[s.period].add(s.duty_teacher_id)
+
+        for idle_info in idle_teachers_today:
+            t_id = idle_info["teacher_id"]
+            for s in assignments:
+                p = s.period
+                if p in idle_info["free_periods"] and s.duty_teacher_id and s.duty_teacher_id != t_id:
+                    if t_id not in assigned_periods_taken[p]:
+                        prim_t = teachers.get(s.duty_teacher_id)
+                        prim_name = prim_t.name if prim_t else "Nöbetçi"
+                        a_name = teachers[s.absent_teacher_id].name if s.absent_teacher_id in teachers else ""
+                        proposals.append({
+                            "absent_teacher_id": s.absent_teacher_id,
+                            "absent_teacher_name": a_name,
+                            "period": p,
+                            "class_name": s.class_name,
+                            "subject_code": s.subject_code,
+                            "primary_teacher_id": s.duty_teacher_id,
+                            "primary_teacher_name": prim_name,
+                            "co_teacher_id": t_id,
+                            "co_teacher_name": idle_info["teacher_name"],
+                            "co_teacher_branch": idle_info["branch"],
+                            "reason": f"{idle_info['teacher_name']} bugün nöbetçi olup henüz hiç ikame almamıştır. {p}. saatteki boş dersinde {s.class_name} sınıfında {prim_name} yanına eşli gözetmen olarak atanabilir."
+                        })
+                        break
+
+        total_lessons_needed = len(set((s.absent_teacher_id, s.period) for s in assignments))
+        unassigned_cnt = sum(1 for s in assignments if not s.duty_teacher_id)
+
+        details = {
+            "fairness_level": "🏆 A+ Mükemmel Eşitlik" if fairness_score >= 95 else ("A Çok Yüksek Adalet" if fairness_score >= 85 else "B Dengeli Dağılım"),
+            "zero_duty_teachers": len(idle_teachers_today),
+            "spread": spread,
+            "average_hours": avg_h,
+            "tandem_count": len(tandem_assignments),
+            "proposals_count": len(proposals),
+            "active_duty_teachers_count": len(duty_candidates)
+        }
+
+        stats = {
+            "total_duty_teachers": len(duty_candidates),
+            "assigned_teachers_count": sum(1 for c in active_counts if c > 0),
+            "zero_assigned_count": len(idle_teachers_today),
+            "total_slots": total_assigned_slots,
+            "gini_index": gini_val,
+            "fairness_score": fairness_score
+        }
+
+        return SubstitutionFairnessReport(
+            teacher_counts=teacher_counts,
+            teacher_names={t_id: teachers[t_id].name for t_id in teacher_counts if t_id in teachers},
+            average_hours=avg_h,
+            min_hours=min_h,
+            max_hours=max_h,
+            fairness_score=fairness_score,
+            gini_index=gini_val,
+            total_lessons_needed=total_lessons_needed,
+            total_assigned_slots=total_assigned_slots,
+            unassigned_lessons=unassigned_cnt,
+            tandem_assignments=tandem_assignments,
+            proposals=proposals,
+            idle_teachers_today=idle_teachers_today,
+            stats=stats,
+            details=details
+        )
 
     def export_substitution_pdf(
         self,

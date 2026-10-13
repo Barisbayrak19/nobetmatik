@@ -634,7 +634,19 @@ class ExportService:
         return output_path
 
     # 6. PERSONEL DEVAM TAKİP EXCEL (.xlsx)
-    def export_attendance_excel(self, records: List[AttendanceRecord], output_path: Path, title: str = "PERSONEL DEVAM-DEVAMSIZLIK TAKİP ÇİZELGESİ") -> Path:
+    def export_attendance_excel(self, records: Any, output_path: Any = None, title_or_path: Any = None, title: str = "PERSONEL DEVAM-DEVAMSIZLIK TAKİP ÇİZELGESİ") -> Path:
+        if isinstance(records, int):  # export_attendance_excel(year, month, Path(output_path), [title])
+            year = records
+            month = int(output_path)
+            output_path = Path(title_or_path)
+            month_str = f"{year}-{month:02d}"
+            records = self.db.get_attendance_records(month_str=month_str)
+            title = f"PERSONEL DEVAM-DEVAMSIZLIK TAKİP ÇİZELGESİ ({month:02d}/{year})"
+        else:
+            output_path = Path(output_path)
+            if isinstance(title_or_path, str):
+                title = title_or_path
+
         school = self.db.get_school_info()
         today_str = datetime.date.today().strftime("%d.%m.%Y")
 
@@ -763,7 +775,19 @@ class ExportService:
         return output_path
 
     # 7. PERSONEL DEVAM TAKİP PDF (.pdf)
-    def export_attendance_pdf(self, records: List[AttendanceRecord], output_path: Path, title: str = "PERSONEL DEVAM TAKİP ÇİZELGESİ") -> Path:
+    def export_attendance_pdf(self, records: Any, output_path: Any = None, title_or_path: Any = None, title: str = "PERSONEL DEVAM TAKİP ÇİZELGESİ") -> Path:
+        if isinstance(records, int):  # export_attendance_pdf(year, month, Path(output_path), [title])
+            year = records
+            month = int(output_path)
+            output_path = Path(title_or_path)
+            month_str = f"{year}-{month:02d}"
+            records = self.db.get_attendance_records(month_str=month_str)
+            title = f"PERSONEL DEVAM TAKİP ÇİZELGESİ ({month:02d}/{year})"
+        else:
+            output_path = Path(output_path)
+            if isinstance(title_or_path, str):
+                title = title_or_path
+
         _register_pdf_fonts()
         school = self.db.get_school_info()
         today_str = datetime.date.today().strftime("%d.%m.%Y")
@@ -841,25 +865,37 @@ class ExportService:
 
         headers = ["No", "Tarih", "Öğretmen Adı Soyadı", "Branşı", "Durumu", "Ders Saatleri", "Girmediği Şubeler", "Açıklama"]
         table_data = [[Paragraph(h, hdr_cell_style) for h in headers]]
-
-        for idx, r in enumerate(records, start=1):
-            try:
-                d_obj = datetime.date.fromisoformat(r.date_str)
-                d_formatted = d_obj.strftime("%d.%m.%Y")
-            except Exception:
-                d_formatted = r.date_str
-
-            row = [
-                Paragraph(str(idx), cell_style),
-                Paragraph(d_formatted, cell_style),
-                Paragraph(r.teacher_name, cell_bold_style),
-                Paragraph(r.branch, cell_style),
-                Paragraph(r.status, cell_bold_style),
-                Paragraph(r.periods_missed, cell_style),
-                Paragraph(r.lessons_missed or "-", cell_left_style),
-                Paragraph(r.notes, cell_left_style)
+        if not records:
+            empty_row = [
+                Paragraph("-", cell_style),
+                Paragraph(today_str, cell_style),
+                Paragraph("Bu döneme ait personel devamsızlık / sevk kaydı bulunmamaktadır.", cell_left_style),
+                Paragraph("-", cell_style),
+                Paragraph("-", cell_style),
+                Paragraph("-", cell_style),
+                Paragraph("-", cell_style),
+                Paragraph("Kayıt yok", cell_left_style)
             ]
-            table_data.append(row)
+            table_data.append(empty_row)
+        else:
+            for idx, r in enumerate(records, start=1):
+                try:
+                    d_obj = datetime.date.fromisoformat(r.date_str)
+                    d_formatted = d_obj.strftime("%d.%m.%Y")
+                except Exception:
+                    d_formatted = r.date_str
+
+                row = [
+                    Paragraph(str(idx), cell_style),
+                    Paragraph(d_formatted, cell_style),
+                    Paragraph(r.teacher_name, cell_bold_style),
+                    Paragraph(r.branch, cell_style),
+                    Paragraph(r.status, cell_bold_style),
+                    Paragraph(r.periods_missed, cell_style),
+                    Paragraph(r.lessons_missed or "-", cell_left_style),
+                    Paragraph(r.notes, cell_left_style)
+                ]
+                table_data.append(row)
 
         col_widths = [20, 52, 98, 70, 52, 60, 95, 100]
         tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
@@ -1166,6 +1202,8 @@ class ExportService:
         wb.save(output_path)
         logger.info(f"Öğretmen ders programı Excel oluşturuldu: {output_path}")
         return output_path
+
+    export_all_teachers_excel = export_teacher_timetable_excel
 
     # 10. SINIF / ŞUBE HAFTALIK DERS PROGRAMI PDF (.pdf)
     def export_class_timetable_pdf(self, output_path: Path, class_name: Optional[str] = None) -> Path:

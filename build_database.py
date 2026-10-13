@@ -539,7 +539,7 @@ cl_b1.alignment = Alignment(horizontal="center", vertical="center")
 ws_classlist.row_dimensions[2].height = 22
 ws_classlist.merge_cells("A2:G2")
 cl_b2 = ws_classlist["A2"]
-cl_b2.value = "Şehit Kadir Altuntaş Cumhuriyet Ortaokulu Müdürlüğü"
+cl_b2.value = "Örnek Ortaokulu Müdürlüğü"
 cl_b2.font = Font(name="Segoe UI", size=12, bold=True, color=PRIMARY_BLUE)
 cl_b2.alignment = Alignment(horizontal="center", vertical="center")
 

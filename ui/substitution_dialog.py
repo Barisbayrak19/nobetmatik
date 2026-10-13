@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
 from collections import defaultdict
 
-from core.models import Teacher, Day, Location, TeacherLesson, SubstitutionAssignment, AttendanceRecord
+from core.models import (
+    Teacher, Day, Location, TeacherLesson, SubstitutionAssignment, AttendanceRecord,
+    SubstitutionFairnessReport
+)
 from core.database import Database
 from logic.substitution_service import SubstitutionService, PERIOD_TIMES, is_same_branch
 from core.logger import logger
@@ -53,8 +56,16 @@ class SubstitutionDialog(ctk.CTkToplevel):
 
         super().__init__(parent)
         self.title("Boş Ders Doldurma ve Nöbetçi Öğretmen İkame Asistanı (Çoklu Öğretmen Destekli)")
-        self.geometry("1180x800")
-        self.minsize(880, 600)
+        
+        # Ekran boyutuna göre güvenli, taşmayan pencere boyutu
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w = min(1200, max(950, int(screen_w * 0.90)))
+        win_h = min(740, max(540, int(screen_h * 0.82)))
+        pos_x = max(10, (screen_w - win_w) // 2)
+        pos_y = max(10, (screen_h - win_h) // 2 - 25)
+        self.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
+        self.minsize(880, 520)
         self.configure(fg_color=COLOR_BG)
 
         # Ön plana çıkarma ve odaklanma
@@ -229,7 +240,7 @@ class SubstitutionDialog(ctk.CTkToplevel):
         self.allow_branch_peers_var = tk.BooleanVar(value=True)
         chk_branch = ctk.CTkCheckBox(
             f_row2,
-            text="Nöbetçi yetmezse branşdaşına ek ders öner (Gönüllü Ek Ders)",
+            text="Nöbetçi yetmezse branşdaşa ek ders öner (Gönüllü)",
             variable=self.allow_branch_peers_var,
             font=(FONT_FAMILY, 10, "bold"),
             text_color=COLOR_TEXT_MAIN,
@@ -237,12 +248,27 @@ class SubstitutionDialog(ctk.CTkToplevel):
             checkbox_height=18,
             corner_radius=4
         )
-        chk_branch.pack(side="left", padx=(4, 14))
+        chk_branch.pack(side="left", padx=(4, 12))
+
+        # Boşta Kalanları Eşli/Tandem İkameye Ata Checkbox
+        self.assign_tandem_for_unassigned_var = tk.BooleanVar(value=False)
+        chk_tandem = ctk.CTkCheckBox(
+            f_row2,
+            text="👥 Boşta kalanları eşli/ortak ata",
+            variable=self.assign_tandem_for_unassigned_var,
+            font=(FONT_FAMILY, 10, "bold"),
+            text_color=COLOR_TEXT_MAIN,
+            checkbox_width=18,
+            checkbox_height=18,
+            corner_radius=4,
+            command=self._on_tandem_checkbox_changed
+        )
+        chk_tandem.pack(side="left", padx=(4, 12))
 
         # Açıklama Rozeti
         lbl_info_badge = ctk.CTkLabel(
             f_row2,
-            text="💡 Okulda kabul kriteri: Öğretmenin o günkü ilk ve son ders saatleri aralığıdır.",
+            text="💡 Okulda kabul: İlk-son ders aralığı",
             font=(FONT_FAMILY, 9),
             text_color=COLOR_TEXT_MUTED
         )
@@ -250,9 +276,9 @@ class SubstitutionDialog(ctk.CTkToplevel):
 
         # 3. Gelmeyen Öğretmenler Çubuğu (Dinamik Rozetler / Tablar)
         self.f_absent_pills = ctk.CTkFrame(self, fg_color="transparent")
-        self.f_absent_pills.pack(fill="x", padx=16, pady=(4, 4))
+        self.f_absent_pills.pack(fill="x", padx=16, pady=(3, 3))
 
-        # 4. O Günün Nöbetçi Öğretmenleri Bilgi Paneli
+        # 4. O Günün Nöbetçi Öğretmenleri Bilgi Paneli (Kompakt ve Açılır/Kapanır)
         self.duty_banner = ctk.CTkFrame(
             self,
             fg_color="#EFF6FF",
@@ -260,43 +286,61 @@ class SubstitutionDialog(ctk.CTkToplevel):
             border_color="#BFDBFE",
             corner_radius=8
         )
-        self.duty_banner.pack(fill="x", padx=16, pady=(2, 6))
+        self.duty_banner.pack(fill="x", padx=16, pady=(2, 3))
+
+        self.f_duty_header = ctk.CTkFrame(self.duty_banner, fg_color="transparent")
+        self.f_duty_header.pack(fill="x", padx=12, pady=(5, 3))
+
+        self.lbl_duty_title = ctk.CTkLabel(
+            self.f_duty_header,
+            text="📋 Günün Nöbetçi Öğretmenleri ve Durumu",
+            font=(FONT_FAMILY, 10, "bold"),
+            text_color="#1E40AF"
+        )
+        self.lbl_duty_title.pack(side="left")
+
+        self.duty_expanded = True
+        self.btn_toggle_duty = ctk.CTkButton(
+            self.f_duty_header,
+            text="▲ Detayları Gizle",
+            font=(FONT_FAMILY, 9, "bold"),
+            fg_color="#DBEAFE",
+            hover_color="#BFDBFE",
+            text_color="#1E40AF",
+            height=22,
+            width=110,
+            corner_radius=4,
+            command=self._toggle_duty_banner
+        )
+        self.btn_toggle_duty.pack(side="right")
+
+        self.f_duty_details = ctk.CTkFrame(self.duty_banner, fg_color="transparent")
+        self.f_duty_details.pack(fill="x", padx=12, pady=(0, 5))
 
         self.lbl_duty_info = ctk.CTkLabel(
-            self.duty_banner,
+            self.f_duty_details,
             text="Günün Nöbetçileri yükleniyor...",
-            font=(FONT_FAMILY, 10),
+            font=(FONT_FAMILY, 9),
             text_color="#1E40AF",
             justify="left",
+            anchor="w",
             wraplength=1120
         )
-        self.lbl_duty_info.pack(fill="x", anchor="w", padx=14, pady=8)
+        self.lbl_duty_info.pack(fill="x", anchor="w")
 
-        # 5. Dersler ve İkame Tablosu (CustomTkinter Scrollable Frame)
-        self.table_container = ctk.CTkFrame(
+        # 4.5. Adaletli İkame Teklif Bannerı (Sadece teklif olduğunda görünür, boşken yer kaplamaz)
+        self.f_proposal_banner = ctk.CTkFrame(self, fg_color="transparent", height=0)
+
+        # 5. Alt Butonlar Barı (HER ZAMAN GÖRÜNÜR OLMASI İÇİN ÖNCE ALTA SABİTLENİR)
+        bottom_bar = ctk.CTkFrame(
             self,
             fg_color=COLOR_CARD,
             corner_radius=8,
             border_width=1,
-            border_color=COLOR_BORDER
+            border_color=COLOR_BORDER,
+            height=46
         )
-        self.table_container.pack(fill="both", expand=True, padx=16, pady=4)
-
-        # Container Header
-        self.lbl_table_header = ctk.CTkLabel(
-            self.table_container,
-            text=" 📚 Seçili Gelmeyen Öğretmenin Dersleri ve İkameleri ",
-            font=(FONT_FAMILY, 11, "bold"),
-            text_color=COLOR_TEXT_MAIN
-        )
-        self.lbl_table_header.pack(anchor="w", padx=14, pady=(10, 4))
-
-        self.scroll_content = ctk.CTkScrollableFrame(self.table_container, fg_color="transparent")
-        self.scroll_content.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-
-        # 6. Alt Butonlar Barı
-        bottom_bar = ctk.CTkFrame(self, fg_color="transparent", height=45)
-        bottom_bar.pack(fill="x", side="bottom", padx=16, pady=(6, 12))
+        bottom_bar.pack(fill="x", side="bottom", padx=16, pady=(4, 8))
 
         btn_save = ctk.CTkButton(
             bottom_bar,
@@ -308,7 +352,7 @@ class SubstitutionDialog(ctk.CTkToplevel):
             corner_radius=6,
             command=self.save_assignments
         )
-        btn_save.pack(side="left", padx=(0, 10))
+        btn_save.pack(side="left", padx=(10, 8), pady=5)
 
         btn_daily_preview = ctk.CTkButton(
             bottom_bar,
@@ -320,11 +364,11 @@ class SubstitutionDialog(ctk.CTkToplevel):
             corner_radius=6,
             command=self.preview_daily
         )
-        btn_daily_preview.pack(side="left", padx=(0, 8))
+        btn_daily_preview.pack(side="left", padx=(0, 6), pady=5)
 
         btn_single_preview = ctk.CTkButton(
             bottom_bar,
-            text="📄 Kişisel Fiş Önizle & Yazdır",
+            text="📄 Kişisel Fiş Önizle",
             font=(FONT_FAMILY, 10, "bold"),
             fg_color="#334155",
             hover_color="#1E293B",
@@ -332,11 +376,11 @@ class SubstitutionDialog(ctk.CTkToplevel):
             corner_radius=6,
             command=self.preview_single
         )
-        btn_single_preview.pack(side="left", padx=(0, 8))
+        btn_single_preview.pack(side="left", padx=(0, 6), pady=5)
 
         btn_whatsapp = ctk.CTkButton(
             bottom_bar,
-            text="📱 WhatsApp ile Bildir",
+            text="📱 WhatsApp",
             font=(FONT_FAMILY, 10, "bold"),
             fg_color="#16A34A",
             hover_color="#15803D",
@@ -344,7 +388,19 @@ class SubstitutionDialog(ctk.CTkToplevel):
             corner_radius=6,
             command=self.open_whatsapp_dialog
         )
-        btn_whatsapp.pack(side="left", padx=(0, 8))
+        btn_whatsapp.pack(side="left", padx=(0, 6), pady=5)
+
+        btn_fairness = ctk.CTkButton(
+            bottom_bar,
+            text="⚖️ İkame Adalet Karnesi",
+            font=(FONT_FAMILY, 10, "bold"),
+            fg_color="#4F46E5",
+            hover_color="#4338CA",
+            height=34,
+            corner_radius=6,
+            command=self.show_fairness_report
+        )
+        btn_fairness.pack(side="left", padx=(0, 6), pady=5)
 
         btn_close = ctk.CTkButton(
             bottom_bar,
@@ -357,7 +413,38 @@ class SubstitutionDialog(ctk.CTkToplevel):
             corner_radius=6,
             command=self.destroy
         )
-        btn_close.pack(side="right")
+        btn_close.pack(side="right", padx=(0, 10), pady=5)
+
+        # 6. Dersler ve İkame Tablosu (CustomTkinter Scrollable Frame - Kalan alanı doldurur)
+        self.table_container = ctk.CTkFrame(
+            self,
+            fg_color=COLOR_CARD,
+            corner_radius=8,
+            border_width=1,
+            border_color=COLOR_BORDER
+        )
+        self.table_container.pack(fill="both", expand=True, padx=16, pady=(2, 4))
+
+        # Container Header
+        self.lbl_table_header = ctk.CTkLabel(
+            self.table_container,
+            text=" 📚 Seçili Gelmeyen Öğretmenin Dersleri ve İkameleri ",
+            font=(FONT_FAMILY, 11, "bold"),
+            text_color=COLOR_TEXT_MAIN
+        )
+        self.lbl_table_header.pack(anchor="w", padx=14, pady=(8, 4))
+
+        self.scroll_content = ctk.CTkScrollableFrame(self.table_container, fg_color="transparent")
+        self.scroll_content.pack(fill="both", expand=True, padx=8, pady=(0, 6))
+
+    def _toggle_duty_banner(self):
+        self.duty_expanded = not self.duty_expanded
+        if self.duty_expanded:
+            self.f_duty_details.pack(fill="x", padx=12, pady=(0, 5))
+            self.btn_toggle_duty.configure(text="▲ Detayları Gizle")
+        else:
+            self.f_duty_details.pack_forget()
+            self.btn_toggle_duty.configure(text="▼ Detayları Göster")
 
     def destroy(self):
         SubstitutionDialog._instance = None
@@ -579,7 +666,9 @@ class SubstitutionDialog(ctk.CTkToplevel):
         day_name = self.day_var.get()
         duty_info = self.sub_service.get_day_duty_teachers(self.current_week_start, day_name)
         if not duty_info:
-            self.lbl_duty_info.configure(text=f"⚠️ {day_name} günü için ({self.current_week_start} haftası) atanmış nöbetçi öğretmen bulunamadı.")
+            if hasattr(self, "lbl_duty_title"):
+                self.lbl_duty_title.configure(text=f"⚠️ {day_name} günü için ({self.current_week_start} haftası) atanmış nöbetçi öğretmen bulunamadı.")
+            self.lbl_duty_info.configure(text="")
             return
 
         all_subs = self._get_all_in_memory_assignments(save_current=False)
@@ -591,20 +680,123 @@ class SubstitutionDialog(ctk.CTkToplevel):
                 assigned_periods_map[s.duty_teacher_id].append(s.period)
 
         absent_ids = {t.id for t in self.absent_teachers}
+        total_free = sum(len(d["free_periods"]) for d in duty_info if d["teacher"].id not in absent_ids)
+        total_given = sum(assigned_counts.values())
 
-        lines = [f"• {day_name.upper()} GÜNÜ NÖBETÇİ ÖĞRETMENLERİ VE GÖREVLENDİRME DURUMU:"]
+        if hasattr(self, "lbl_duty_title"):
+            self.lbl_duty_title.configure(
+                text=f"📋 {day_name.upper()} GÜNÜ NÖBETÇİLERİ: {len(duty_info)} Öğretmen  •  {total_free} Saat Boş Ders  •  ⚡ {total_given} Saat İkame Dağıtıldı"
+            )
+
+        items = []
         for d in duty_info:
             t = d["teacher"]
             loc = d["location"].name if d["location"] else "-"
             if t.id in absent_ids:
-                lines.append(f"   ⚠️ {t.name} ({loc}) ➔ NÖBETÇİ ANCAK KENDİSİ DE BUGÜN GELMEDİ (İzinli/Raporlu - İkame havuzundan muaf)")
+                items.append(f"⚠️ {t.name} ({loc}) [GELMEDİ - Muaf]")
             else:
                 free_str = ", ".join(map(str, d["free_periods"])) if d["free_periods"] else "Dolu"
                 given = assigned_counts[t.id]
-                given_str = f" | ⚡ Verilen İkame: {given} saat ({', '.join(map(str, sorted(assigned_periods_map[t.id])))}. Ders)" if given > 0 else " | Henüz İkame Verilmedi"
-                lines.append(f"   • {t.name} ({loc}) ➔ Boş Saatleri: {free_str}{given_str}")
+                given_str = f" | ⚡ {given}s ikame ({', '.join(map(str, sorted(assigned_periods_map[t.id])))}.D)" if given > 0 else " | ⚡ İkame yok"
+                items.append(f"• {t.name} ({loc}) ➔ Boş: {free_str}{given_str}")
 
-        self.lbl_duty_info.configure(text="\n".join(lines))
+        # İkişerli gruplayarak dikey alanı yarı yarıya tasarruf et
+        paired_lines = []
+        for i in range(0, len(items), 2):
+            if i + 1 < len(items):
+                paired_lines.append(f"{items[i]:<56}   {items[i+1]}")
+            else:
+                paired_lines.append(items[i])
+
+        self.lbl_duty_info.configure(text="\n".join(paired_lines))
+        self._update_proposal_banner()
+
+    def _update_proposal_banner(self):
+        for w in self.f_proposal_banner.winfo_children():
+            w.destroy()
+        self.f_proposal_banner.pack_forget()
+
+        all_subs = self._get_all_in_memory_assignments(save_current=False)
+        if not all_subs:
+            return
+
+        date_str = self.date_var.get().strip()
+        day_name = self.day_var.get()
+        report = self.sub_service.get_fairness_report(
+            date_str=date_str,
+            day_name=day_name,
+            assignments=all_subs,
+            week_start=self.current_week_start,
+            absent_teacher_ids=[t.id for t in self.absent_teachers]
+        )
+
+        if self.assign_tandem_for_unassigned_var.get() and report.tandem_assignments:
+            self.f_proposal_banner.pack(fill="x", padx=16, pady=(0, 3), before=self.table_container)
+            card = ctk.CTkFrame(self.f_proposal_banner, fg_color="#F0FDF4", border_width=1, border_color="#BBF7D0", corner_radius=8)
+            card.pack(fill="x")
+
+            lbl_txt = ctk.CTkLabel(
+                card,
+                text=f"✔ Eşli/Ortak İkameler Aktif: Boşta kalan {len(report.tandem_assignments)} ders diğer nöbetçilerin yanına eşli atanarak iş yükü adilce dengelendi.",
+                font=(FONT_FAMILY, 10, "bold"),
+                text_color="#166534"
+            )
+            lbl_txt.pack(side="left", padx=14, pady=6)
+
+            btn_rev = ctk.CTkButton(
+                card,
+                text="↩ Eşli İkameleri Kaldır",
+                font=(FONT_FAMILY, 9, "bold"),
+                fg_color="#E2E8F0",
+                hover_color="#CBD5E1",
+                text_color="#0F172A",
+                height=26,
+                corner_radius=5,
+                command=self._disable_tandem_and_recalc
+            )
+            btn_rev.pack(side="right", padx=10, pady=6)
+
+        elif not self.assign_tandem_for_unassigned_var.get() and report.proposals:
+            self.f_proposal_banner.pack(fill="x", padx=16, pady=(0, 3), before=self.table_container)
+            card = ctk.CTkFrame(self.f_proposal_banner, fg_color="#EFF6FF", border_width=1, border_color="#BFDBFE", corner_radius=8)
+            card.pack(fill="x")
+
+            msg = (
+                f"💡 ADALETLİ İKAME TEKLİFİ: O gün nöbetçi olup henüz hiç boş ders doldurma görevi almamış {len(report.proposals)} öğretmen tespit edildi!\n"
+                f"Bu öğretmenleri boş ders saatlerinde başkasının yanına (ortak/eşli gözetmen) görevlendirerek iş yükünü adilce dengelemek ister misiniz?"
+            )
+            lbl_txt = ctk.CTkLabel(
+                card,
+                text=msg,
+                font=(FONT_FAMILY, 10, "bold"),
+                text_color="#1E40AF",
+                justify="left"
+            )
+            lbl_txt.pack(side="left", padx=14, pady=6)
+
+            btn_acc = ctk.CTkButton(
+                card,
+                text=f"👥 Teklifi Kabul Et & Eşli/Adil Görevlendir ({len(report.proposals)} Görev)",
+                font=(FONT_FAMILY, 10, "bold"),
+                fg_color=COLOR_PRIMARY,
+                hover_color=COLOR_SECONDARY,
+                height=28,
+                corner_radius=6,
+                command=self._enable_tandem_and_recalc
+            )
+            btn_acc.pack(side="right", padx=10, pady=6)
+
+    def _enable_tandem_and_recalc(self):
+        self.assign_tandem_for_unassigned_var.set(True)
+        self.auto_match_all_teachers()
+
+    def _disable_tandem_and_recalc(self):
+        self.assign_tandem_for_unassigned_var.set(False)
+        self.auto_match_all_teachers()
+
+    def _on_tandem_checkbox_changed(self):
+        if self.absent_teachers:
+            self.auto_match_all_teachers()
 
     # --- Ders Tablosu Render ---
     def _render_active_teacher_lessons(self):
@@ -668,11 +860,11 @@ class SubstitutionDialog(ctk.CTkToplevel):
         h_frame = ctk.CTkFrame(self.scroll_content, fg_color="#1E293B", corner_radius=6)
         h_frame.pack(fill="x", pady=(0, 6), padx=4, ipady=6)
 
-        ctk.CTkLabel(h_frame, text="Ders Saati", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=80, anchor="w").pack(side="left", padx=(10, 0))
-        ctk.CTkLabel(h_frame, text="Saat Aralığı", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=110, anchor="w").pack(side="left")
-        ctk.CTkLabel(h_frame, text="Sınıf", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=70, anchor="w").pack(side="left")
-        ctk.CTkLabel(h_frame, text="Ders", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=80, anchor="w").pack(side="left")
-        ctk.CTkLabel(h_frame, text="Durum / Uyarı", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=170, anchor="w").pack(side="right", padx=(0, 10))
+        ctk.CTkLabel(h_frame, text="Ders Saati", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=75, anchor="w").pack(side="left", padx=(10, 0))
+        ctk.CTkLabel(h_frame, text="Saat Aralığı", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=100, anchor="w").pack(side="left")
+        ctk.CTkLabel(h_frame, text="Sınıf", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=65, anchor="w").pack(side="left")
+        ctk.CTkLabel(h_frame, text="Ders", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=165, anchor="w").pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(h_frame, text="Durum / Uyarı", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", width=165, anchor="w").pack(side="right", padx=(0, 10))
         ctk.CTkLabel(h_frame, text="Görevlendirilen Öğretmen(ler)", font=(FONT_FAMILY, 10, "bold"), text_color="#FFF", anchor="w").pack(side="left", padx=(0, 8))
 
         # Diğer gelmeyen öğretmenlerin atamaları (saat çakışması tespiti için)
@@ -704,25 +896,25 @@ class SubstitutionDialog(ctk.CTkToplevel):
                 if c.get("is_duty"):
                     role_text = "[Nöbetçi]"
                     if c["is_free"]:
-                        status_text = "✔ [BOŞ]"
+                        status_text = "[BOŞ]"
                     else:
                         ld = c.get('lesson_desc', 'Dolu')
                         if ld.startswith("⚠️") or ld.startswith("⛔") or ld.startswith("🔴") or ld.startswith("⚪"):
                             status_text = ld
                         else:
-                            status_text = f"⚠️ [{ld}]"
-                    ek_ders_tag = " ⭐ [Ek Ders (Branş)]" if c.get("is_branch_match") and c["is_free"] else ""
+                            status_text = f"[{ld}]"
+                    ek_ders_tag = " ⭐ [Ek Ders]" if c.get("is_branch_match") and c["is_free"] else ""
                     opt_text = f"{c['teacher'].name} {role_text} {status_text}{ek_ders_tag}"
                 else:
                     role_text = "⭐ [Branşdaş]"
                     if c["is_free"]:
-                        status_text = "✔ [BOŞ - Ek Ders]"
+                        status_text = "[BOŞ - Ek Ders]"
                     else:
                         ld = c.get('lesson_desc', 'Dolu')
                         if ld.startswith("⚠️") or ld.startswith("⛔") or ld.startswith("🔴") or ld.startswith("⚪"):
                             status_text = ld
                         else:
-                            status_text = f"⚠️ [{ld}]"
+                            status_text = f"[{ld}]"
                     opt_text = f"{c['teacher'].name} {role_text} {status_text}"
                 cb_values.append(opt_text)
                 teacher_option_map[opt_text] = c["teacher"]
@@ -730,11 +922,12 @@ class SubstitutionDialog(ctk.CTkToplevel):
             row_f = ctk.CTkFrame(self.scroll_content, fg_color="#F8FAFC", corner_radius=6, border_width=1, border_color="#E2E8F0")
             row_f.pack(fill="x", pady=3, padx=4, ipady=4)
 
-            ctk.CTkLabel(row_f, text=f"{l.period}. Ders", font=(FONT_FAMILY, 10, "bold"), text_color=COLOR_TEXT_MAIN, width=80, anchor="w").pack(side="left", padx=(10, 0))
+            ctk.CTkLabel(row_f, text=f"{l.period}. Ders", font=(FONT_FAMILY, 10, "bold"), text_color=COLOR_TEXT_MAIN, width=75, anchor="w").pack(side="left", padx=(10, 0))
             time_str = PERIOD_TIMES.get(l.period, "")
-            ctk.CTkLabel(row_f, text=time_str, font=(FONT_FAMILY, 10), text_color=COLOR_TEXT_MAIN, width=110, anchor="w").pack(side="left")
-            ctk.CTkLabel(row_f, text=l.class_name, font=(FONT_FAMILY, 10, "bold"), text_color="#2563EB", width=70, anchor="w").pack(side="left")
-            ctk.CTkLabel(row_f, text=l.subject_code, font=(FONT_FAMILY, 10), text_color=COLOR_TEXT_MAIN, width=80, anchor="w").pack(side="left")
+            ctk.CTkLabel(row_f, text=time_str, font=(FONT_FAMILY, 10), text_color=COLOR_TEXT_MAIN, width=100, anchor="w").pack(side="left")
+            ctk.CTkLabel(row_f, text=l.class_name, font=(FONT_FAMILY, 10, "bold"), text_color="#2563EB", width=65, anchor="w").pack(side="left")
+            subj_disp = l.subject_code if len(l.subject_code) <= 22 else l.subject_code[:20] + ".."
+            ctk.CTkLabel(row_f, text=subj_disp, font=(FONT_FAMILY, 10), text_color=COLOR_TEXT_MAIN, width=165, anchor="w").pack(side="left", padx=(0, 8))
 
             duty_container = ctk.CTkFrame(row_f, fg_color="transparent")
             duty_container.pack(side="left", fill="x", padx=(0, 8))
@@ -820,7 +1013,7 @@ class SubstitutionDialog(ctk.CTkToplevel):
             values=row_data["cb_values"],
             state="readonly",
             style="SubCandidate.TCombobox",
-            width=44,
+            width=48,
             font=(FONT_FAMILY, 9)
         )
         cb.pack(side="left", padx=(0, 2), ipady=2)
@@ -895,6 +1088,7 @@ class SubstitutionDialog(ctk.CTkToplevel):
         self.current_week_start = self.sub_service._ensure_week_start(date_str)
 
         allow_branch_peers = self.allow_branch_peers_var.get()
+        assign_tandem = self.assign_tandem_for_unassigned_var.get()
 
         results_by_teacher = self.sub_service.auto_assign_multi_substitutions(
             date_str=date_str,
@@ -902,7 +1096,8 @@ class SubstitutionDialog(ctk.CTkToplevel):
             absent_teacher_ids=absent_ids,
             week_start=self.current_week_start,
             teachers_per_lesson=count_per_lesson,
-            allow_branch_peers_ek_ders=allow_branch_peers
+            allow_branch_peers_ek_ders=allow_branch_peers,
+            assign_tandem_for_unassigned=assign_tandem
         )
 
         for tid, subs in results_by_teacher.items():
@@ -911,15 +1106,16 @@ class SubstitutionDialog(ctk.CTkToplevel):
         # Aktif tablodaki satırları yeniden doldur
         self._render_active_teacher_lessons()
 
-        total_lessons = sum(len(subs) for subs in results_by_teacher.values())
-        assigned_duties = sum(1 for subs in results_by_teacher.values() for s in subs if s.duty_teacher_id)
-
-        messagebox.showinfo(
-            "Toplu Adil Dağıtım Tamamlandı",
-            f"Toplam {len(self.absent_teachers)} gelmeyen öğretmenin {total_lessons} ders saatine "
-            f"toplam {assigned_duties} görevlendirme sıfır çakışma ile adil olarak paylaştırıldı.\n\n"
-            f"(Önce boş nöbetçiler, gerekirse aynı branştaki boş öğretmenler veya kat nöbetçileri devreye alındı)."
+        # Adalet raporunu hesapla ve bilgilendirme karnesini aç
+        all_subs = self._get_all_in_memory_assignments(save_current=False)
+        report = self.sub_service.get_fairness_report(
+            date_str=date_str,
+            day_name=day_name,
+            assignments=all_subs,
+            week_start=self.current_week_start,
+            absent_teacher_ids=absent_ids
         )
+        SubstitutionFairnessDialog(self, report=report)
 
     def auto_match_single_teacher(self):
         """
@@ -935,6 +1131,7 @@ class SubstitutionDialog(ctk.CTkToplevel):
         day_name = self.day_var.get()
         count_per_lesson = self.teachers_per_lesson_var.get()
         allow_branch_peers = self.allow_branch_peers_var.get()
+        assign_tandem = self.assign_tandem_for_unassigned_var.get()
 
         self.current_week_start = self.sub_service._ensure_week_start(date_str)
 
@@ -952,18 +1149,22 @@ class SubstitutionDialog(ctk.CTkToplevel):
             teachers_per_lesson=count_per_lesson,
             exclude_teacher_ids=[at.id for at in self.absent_teachers],
             active_substitutions=other_subs,
-            allow_branch_peers_ek_ders=allow_branch_peers
+            allow_branch_peers_ek_ders=allow_branch_peers,
+            assign_tandem_for_unassigned=assign_tandem
         )
 
         self.assignments_cache[teacher.id] = auto_subs
         self._render_active_teacher_lessons()
 
-        assigned_count = sum(1 for s in auto_subs if s.duty_teacher_id)
-        messagebox.showinfo(
-            "Eşleştirme Tamamlandı",
-            f"'{teacher.name}' isimli öğretmenin {len(auto_subs)} ders saatine "
-            f"{assigned_count} görevlendirme çakışmasız yapıldı."
+        all_subs = self._get_all_in_memory_assignments(save_current=False)
+        report = self.sub_service.get_fairness_report(
+            date_str=date_str,
+            day_name=day_name,
+            assignments=all_subs,
+            week_start=self.current_week_start,
+            absent_teacher_ids=[at.id for at in self.absent_teachers]
         )
+        SubstitutionFairnessDialog(self, report=report)
 
     def _collect_current_rows(self) -> List[SubstitutionAssignment]:
         teacher = self.teacher_map.get(self.active_teacher_id)
@@ -1089,6 +1290,7 @@ class SubstitutionDialog(ctk.CTkToplevel):
             self.db.save_attendance_record(att_rec)
 
         self._update_duty_banner()
+        self._update_proposal_banner()
 
         messagebox.showinfo(
             "Başarılı",
@@ -1096,6 +1298,38 @@ class SubstitutionDialog(ctk.CTkToplevel):
             f"görevlendirmesi başarıyla veritabanına ve devam-takip çizelgesine kaydedildi!\n\n"
             f"Fişler 'exports/slips' klasörüne arşivlendi."
         )
+
+        # Kayıt sonrası adalet karnesini göster
+        date_str = self.date_var.get().strip()
+        day_name = self.day_var.get()
+        absent_ids = [t.id for t in self.absent_teachers]
+        report = self.sub_service.get_fairness_report(
+            date_str=date_str,
+            day_name=day_name,
+            assignments=all_subs,
+            week_start=self.current_week_start,
+            absent_teacher_ids=absent_ids
+        )
+        SubstitutionFairnessDialog(self, report=report)
+
+    def show_fairness_report(self):
+        """Mevcut ikame atamalarının adalet ve eşitlik analiz karnesini açar."""
+        all_subs = self._get_all_in_memory_assignments(save_current=True)
+        if not all_subs:
+            messagebox.showwarning("Uyarı", "Analiz edilecek ikame görevlendirmesi bulunamadı.", parent=self)
+            return
+
+        date_str = self.date_var.get().strip()
+        day_name = self.day_var.get()
+        absent_ids = [t.id for t in self.absent_teachers]
+        report = self.sub_service.get_fairness_report(
+            date_str=date_str,
+            day_name=day_name,
+            assignments=all_subs,
+            week_start=self.current_week_start,
+            absent_teacher_ids=absent_ids
+        )
+        SubstitutionFairnessDialog(self, report=report)
 
     def export_daily_pdf(self):
         all_subs = self._get_all_in_memory_assignments()
@@ -1359,5 +1593,244 @@ class SubstitutionDialog(ctk.CTkToplevel):
                 })
 
         WhatsAppNotifyDialog(self, school_name, date_str, day_name, tasks)
+
+
+class SubstitutionFairnessDialog(ctk.CTkToplevel):
+    """
+    Boş Ders Doldurma (İkame) Görevlendirmeleri Sonucu Adalet ve Dağıtım Analizi Penceresi.
+    Gini katsayısı, tandem (eşli) görevler, boşta kalan nöbetçiler ve adalet puanı sunar.
+    """
+    def __init__(self, parent: Any, report: SubstitutionFairnessReport):
+        super().__init__(parent)
+        self.report = report
+        self.title("⚖️ Boş Ders Doldurma (İkame) Adalet ve Dağıtım Analizi")
+        self.geometry("880x700")
+        self.minsize(800, 580)
+        self.transient(parent)
+        self.after(100, lambda: self.focus_force())
+
+        self._build_ui()
+
+    def _build_ui(self):
+        content = ctk.CTkFrame(self, fg_color="#F8FAFC", corner_radius=0)
+        content.pack(fill="both", expand=True, padx=16, pady=16)
+
+        # 1. Başlık Alanı
+        title_box = ctk.CTkFrame(content, fg_color="transparent")
+        title_box.pack(fill="x", pady=(0, 10))
+
+        lbl_title = ctk.CTkLabel(
+            title_box,
+            text="⚖️ Boş Ders Doldurma (İkame) Adalet ve Dağıtım Karnesi",
+            font=(FONT_FAMILY, 15, "bold"),
+            text_color="#0F172A"
+        )
+        lbl_title.pack(anchor="w")
+
+        lbl_desc = ctk.CTkLabel(
+            title_box,
+            text="Günün boş ders görevlendirmelerinin mevzuat uyumu, nöbetçi yük dengesi ve eşitlik karnesi.",
+            font=(FONT_FAMILY, 10),
+            text_color="#64748B"
+        )
+        lbl_desc.pack(anchor="w", pady=(2, 0))
+
+        # 2. Büyük Skor Kartı
+        score = self.report.fairness_score
+        gini = self.report.gini_index
+        score_card = ctk.CTkFrame(
+            content,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color=COLOR_BORDER
+        )
+        score_card.pack(fill="x", pady=(0, 10), ipady=6)
+
+        score_inner = ctk.CTkFrame(score_card, fg_color="transparent")
+        score_inner.pack(fill="x", padx=16, pady=8)
+
+        score_color = "#059669" if score >= 90 else ("#2563EB" if score >= 80 else "#D97706")
+        lbl_score = ctk.CTkLabel(
+            score_inner,
+            text=f"%{score:.1f}",
+            font=(FONT_FAMILY, 30, "bold"),
+            text_color=score_color
+        )
+        lbl_score.pack(side="left", padx=(0, 14))
+
+        sub_info = ctk.CTkFrame(score_inner, fg_color="transparent")
+        sub_info.pack(side="left", fill="y")
+
+        level_text = self.report.details.get("fairness_level", "Dengeli Dağılım")
+        lbl_level = ctk.CTkLabel(
+            sub_info,
+            text=level_text,
+            font=(FONT_FAMILY, 13, "bold"),
+            text_color="#0F172A"
+        )
+        lbl_level.pack(anchor="w")
+
+        lbl_gini = ctk.CTkLabel(
+            sub_info,
+            text=f"Gini Eşitlik Endeksi: {gini:.4f}  (0.00 = Kusursuz Eşit Dağılım / Dünya Standardı)",
+            font=(FONT_FAMILY, 9),
+            text_color="#64748B"
+        )
+        lbl_gini.pack(anchor="w", pady=(2, 0))
+
+        lbl_badge = ctk.CTkLabel(
+            score_inner,
+            text="🏆" if score >= 90 else "⚖️",
+            font=(FONT_FAMILY, 28)
+        )
+        lbl_badge.pack(side="right", padx=10)
+
+        # 3. 4'lü Metrik Kutuları
+        metrics_frame = ctk.CTkFrame(content, fg_color="transparent")
+        metrics_frame.pack(fill="x", pady=(0, 10))
+        for i in range(4):
+            metrics_frame.columnconfigure(i, weight=1, uniform="sub_metric")
+
+        cards_data = [
+            ("Toplam Boş Ders", f"{self.report.total_lessons_needed} Ders", "#0F172A"),
+            ("Doldurulan Slot", f"{self.report.total_assigned_slots} Slot ({len(self.report.tandem_assignments)} Eşli)", "#2563EB"),
+            ("Boşta Kalan Nöbetçi", f"{len(self.report.idle_teachers_today)} Öğretmen", "#D97706" if self.report.idle_teachers_today else "#059669"),
+            ("İkame Yük Yayılımı", f"{self.report.min_hours} – {self.report.max_hours} Saat / Kişi", "#64748B")
+        ]
+
+        for idx, (title, val, val_col) in enumerate(cards_data):
+            c_box = ctk.CTkFrame(
+                metrics_frame,
+                fg_color="#FFFFFF",
+                corner_radius=8,
+                border_width=1,
+                border_color=COLOR_BORDER
+            )
+            c_box.grid(row=0, column=idx, padx=4, sticky="nsew")
+
+            lbl_t = ctk.CTkLabel(c_box, text=title, font=(FONT_FAMILY, 8), text_color="#64748B")
+            lbl_t.pack(anchor="w", padx=10, pady=(6, 0))
+
+            lbl_v = ctk.CTkLabel(c_box, text=val, font=(FONT_FAMILY, 11, "bold"), text_color=val_col)
+            lbl_v.pack(anchor="w", padx=10, pady=(0, 6))
+
+        # 4. Detaylı Metin Rapor Kutusu
+        report_frame = ctk.CTkFrame(content, fg_color="#FFFFFF", corner_radius=8, border_width=1, border_color=COLOR_BORDER)
+        report_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+        txt_box = tk.Text(
+            report_frame,
+            wrap="word",
+            font=(FONT_FAMILY, 9),
+            padx=12,
+            pady=10,
+            bg="#FFFFFF",
+            fg="#0F172A",
+            relief="flat",
+            highlightthickness=0
+        )
+        sb_txt = ttk.Scrollbar(report_frame, orient="vertical", command=txt_box.yview)
+        txt_box.configure(yscrollcommand=sb_txt.set)
+        txt_box.pack(side="left", fill="both", expand=True)
+        sb_txt.pack(side="right", fill="y")
+
+        self.generated_text_report = self._generate_report_text()
+        txt_box.insert(tk.END, self.generated_text_report)
+        txt_box.configure(state="disabled")
+
+        # 5. Alt Buton Çubuğu
+        btn_bar = ctk.CTkFrame(content, fg_color="transparent")
+        btn_bar.pack(fill="x")
+
+        self.lbl_copy_status = ctk.CTkLabel(btn_bar, text="", font=(FONT_FAMILY, 9), text_color=COLOR_SUCCESS)
+        self.lbl_copy_status.pack(side="left")
+
+        btn_close = ctk.CTkButton(
+            btn_bar,
+            text="✔ Tamamla ve Kapat",
+            font=(FONT_FAMILY, 10, "bold"),
+            fg_color="#2563EB",
+            hover_color="#1D4ED8",
+            corner_radius=6,
+            height=32,
+            command=self.destroy
+        )
+        btn_close.pack(side="right", padx=(8, 0))
+
+        btn_copy = ctk.CTkButton(
+            btn_bar,
+            text="📋 Raporu Panoya Kopyala",
+            font=(FONT_FAMILY, 10),
+            fg_color="#F1F5F9",
+            hover_color="#E2E8F0",
+            text_color="#0F172A",
+            corner_radius=6,
+            height=32,
+            command=self._copy_to_clipboard
+        )
+        btn_copy.pack(side="right")
+
+    def _generate_report_text(self) -> str:
+        lines = []
+        lines.append("═════════════════════════════════════════════════════════════════════════")
+        lines.append("       🏆 BOŞ DERS DOLDURMA (İKAME) GÖREVLENDİRME ADALET VE DAĞITIM RAPORU")
+        lines.append("═════════════════════════════════════════════════════════════════════════\n")
+        lines.append(f"Adalet Skoru        : %{self.report.fairness_score:.1f} ({self.report.details.get('fairness_level', 'Dengeli')})")
+        lines.append(f"Gini Eşitlik Endeksi: {self.report.gini_index:.4f} (0.00 = Kusursuz Eşit Dağılım)")
+        lines.append(f"Ortalama İkame Yükü : {self.report.average_hours} saat / nöbetçi")
+        lines.append(f"İkame Yük Yayılımı  : En az {self.report.min_hours} saat, En çok {self.report.max_hours} saat (Fark: {self.report.max_hours - self.report.min_hours})\n")
+
+        lines.append("🔍 MEVZUAT VE DAĞITIM İLKELERİ UYUMU:")
+        lines.append("  ✓ NÖBETÇİ ÖNCELİĞİ: O gün nöbetçi olan öğretmenlerin boş dersleri öncelikle kullanıldı.")
+        lines.append("  ✓ EK DERS KORUMASI: Nöbetçi harici öğretmenlerden yalnızca gelmeyenle aynı branşta olanlara ek ders kapsamında öneri yapıldı.")
+        lines.append("  ✓ ÇAKIŞMA ENGELİ: Hiçbir öğretmen aynı ders saatinde iki ayrı sınıfa görevlendirilmedi.")
+        lines.append("  ✓ DİNLENME KORUMASI: O gün okulda olmayan veya dersi bitmiş öğretmenlere görev yazılmadı.\n")
+
+        if self.report.tandem_assignments:
+            lines.append("👥 EŞLİ / ORTAK İKAME GÖREVLENDİRMELERİ (TANDEM):")
+            lines.append(f"O gün tek başına görev almamış olan öğretmenler, boş ders saatlerinde başkasının yanına destek gözetmen olarak eklendi:")
+            lines.append("─────────────────────────────────────────────────────────────────────────")
+            for t in self.report.tandem_assignments:
+                t_names = " + ".join(t["assigned_teachers"])
+                lines.append(f" • {t['period']}. Ders | {t['class_name']} ({t['subject_code']})")
+                lines.append(f"   👥 Ortak Görevliler: {t_names}")
+                if t.get('notes'):
+                    lines.append(f"   ℹ️ Not: {t['notes']}")
+            lines.append("─────────────────────────────────────────────────────────────────────────\n")
+        else:
+            lines.append("👥 EŞLİ İKAME DURUMU: Eşli ikame uygulanmadı; standart tekli ikame dağıtımı yapıldı.\n")
+
+        if self.report.idle_teachers_today:
+            lines.append("⚪ GÖREV ALMAYAN (BOŞTA KALAN) NÖBETÇİLER VE TEKLİFLER:")
+            for idle in self.report.idle_teachers_today:
+                lines.append(f" • {idle['teacher_name']} ({idle['branch']} - {idle['location']})")
+                lines.append(f"   Boş Ders Saatleri: {idle['free_periods_str']}. saatler (0 saat ikame aldı)")
+            if self.report.proposals:
+                lines.append("\n 💡 Sistem Tarafından Üretilen Eşli Görevlendirme Teklifleri:")
+                for p in self.report.proposals:
+                    lines.append(f"   ➡️ {p['period']}. Saat {p['class_name']}: {p['co_teacher_name']} ({p['co_teacher_branch']}), {p['primary_teacher_name']} yanına atanabilir.")
+            lines.append("─────────────────────────────────────────────────────────────────────────\n")
+
+        lines.append("📊 ÖĞRETMEN BAZLI İKAME DERS SAATİ DAĞILIMI:")
+        sorted_counts = sorted(self.report.teacher_counts.items(), key=lambda x: (x[1], self.report.teacher_names.get(x[0], "")), reverse=True)
+        for t_id, cnt in sorted_counts:
+            t_name = self.report.teacher_names.get(t_id, t_id)
+            badge = "👥 Eşli/Dolu" if cnt > 1 else ("✔ 1 Ders" if cnt == 1 else "⚪ 0 Ders (Boşta)")
+            lines.append(f" • {t_name:<30}: {cnt} saat  [{badge}]")
+
+        lines.append("\nSonuç: Boş ders ikame dağıtımı, öğretmenler arası adil iş yükü dengesi ve okul güvenliğini gözetecek şekilde tamamlanmıştır.")
+        return "\n".join(lines)
+
+    def _copy_to_clipboard(self):
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(self.generated_text_report)
+            self.update()
+            self.lbl_copy_status.configure(text="✔ Rapor panoya kopyalandı!")
+            self.after(3000, lambda: self.lbl_copy_status.configure(text=""))
+        except Exception as e:
+            logger.error(f"Pano kopyalama hatası: {e}")
+
 
 

@@ -112,9 +112,9 @@ class TestNobetSystem(unittest.TestCase):
     def test_first_install_import(self):
         school = self.db.get_school_info()
         self.assertTrue(school.installed)
-        self.assertEqual(school.name, "Şehit Kadir Altuntaş Cumhuriyet Ortaokulu")
-        self.assertEqual(school.district, "Torbalı")
-        self.assertEqual(school.principal_name, "Salahattin GÜNEK")
+        self.assertEqual(school.name, REFERENCE_SCHOOL["name"])
+        self.assertEqual(school.district, REFERENCE_SCHOOL["district"])
+        self.assertEqual(school.principal_name, REFERENCE_SCHOOL["principal_name"])
 
         days = self.db.get_days()
         self.assertEqual(len(days), 5)
@@ -368,16 +368,16 @@ class TestNobetSystem(unittest.TestCase):
     def test_import_matching(self):
         existing_names = [t["name"] for t in REFERENCE_TEACHERS]
 
-        # 1. Kısaltma eşleşmesi: "M.BEYDİLLİ" -> "MEHMET BEYDİLLİ"
-        matches1 = MatchingService.find_best_matches("M.BEYDİLLİ", existing_names)
+        # 1. Kısaltma eşleşmesi: "M.DEMİR" -> "MEHMET DEMİR"
+        matches1 = MatchingService.find_best_matches("M.DEMİR", existing_names)
         self.assertGreater(len(matches1), 0)
-        self.assertEqual(matches1[0][0], "MEHMET BEYDİLLİ")
+        self.assertEqual(matches1[0][0], "MEHMET DEMİR")
         self.assertGreaterEqual(matches1[0][1], 0.85)
 
-        # 2. İsim benzerliği: "İlknur Akbaş" -> "İLKNUR AKBAŞ UZUN"
-        matches2 = MatchingService.find_best_matches("İlknur Akbaş", existing_names)
+        # 2. İsim benzerliği: "İlkay Demir" -> "İLKAY DEMİRTAŞ"
+        matches2 = MatchingService.find_best_matches("İlkay Demir", existing_names)
         self.assertGreater(len(matches2), 0)
-        self.assertEqual(matches2[0][0], "İLKNUR AKBAŞ UZUN")
+        self.assertEqual(matches2[0][0], "İLKAY DEMİRTAŞ")
 
     # 14. test_pdf_export
     def test_pdf_export(self):
@@ -446,7 +446,7 @@ class TestNobetSystem(unittest.TestCase):
         with open(res_path, "r", encoding="utf-8") as f:
             content = f.read()
             self.assertIn("<table", content)
-            self.assertIn("Şehit Kadir Altuntaş Cumhuriyet Ortaokulu", content)
+            self.assertIn(REFERENCE_SCHOOL["name"], content)
             self.assertIn("28.09.2026", content)
             today_str = datetime.date.today().strftime("%d.%m.%Y")
             self.assertIn(today_str, content)
@@ -542,7 +542,7 @@ class TestNobetSystem(unittest.TestCase):
 
     # 24. test_timetable_import_and_queries
     def test_timetable_import_and_queries(self):
-        t = self.teachers_map["MEHMET BEYDİLLİ"]
+        t = self.teachers_map["MEHMET DEMİR"]
         lessons = self.sub_service.get_teacher_schedule(t.id, "Pazartesi")
         self.assertEqual(len(lessons), 7)
         for i, l in enumerate(lessons, 1):
@@ -554,7 +554,7 @@ class TestNobetSystem(unittest.TestCase):
 
     # 25. test_teacher_free_periods
     def test_teacher_free_periods(self):
-        t = self.teachers_map["MEHMET BEYDİLLİ"]
+        t = self.teachers_map["MEHMET DEMİR"]
         free_p = self.sub_service.get_teacher_free_periods(t.id, "Pazartesi")
         self.assertIsInstance(free_p, list)
         for p in free_p:
@@ -563,7 +563,7 @@ class TestNobetSystem(unittest.TestCase):
     # 26. test_substitution_candidate_search
     def test_substitution_candidate_search(self):
         # Pazartesi günü nöbetçileri arasında aday arama
-        absent_t = self.teachers_map["MEHMET BEYDİLLİ"]
+        absent_t = self.teachers_map["MEHMET DEMİR"]
         candidates = self.sub_service.find_candidates_for_period(
             self.week_start, "Pazartesi", period=1, absent_teacher_id=absent_t.id
         )
@@ -575,7 +575,7 @@ class TestNobetSystem(unittest.TestCase):
     # 27. test_substitution_auto_matching_fairness
     def test_substitution_auto_matching_fairness(self):
         # Pazartesi günü dersi olan bir öğretmeni seç
-        absent_t = self.teachers_map["İLKNUR AKBAŞ UZUN"]
+        absent_t = self.teachers_map["İLKAY DEMİRTAŞ"]
         date_str = "2026-09-28"
         subs = self.sub_service.auto_assign_substitutions(
             date_str=date_str,
@@ -594,7 +594,7 @@ class TestNobetSystem(unittest.TestCase):
 
     # 28. test_substitution_save_and_export
     def test_substitution_save_and_export(self):
-        absent_t = self.teachers_map["LATİF CANDAN"]
+        absent_t = self.teachers_map["CAN ERDOĞAN"]
         date_str = "2026-09-30"
         subs = self.sub_service.auto_assign_substitutions(
             date_str=date_str,
@@ -638,7 +638,7 @@ class TestNobetSystem(unittest.TestCase):
     # 29. test_fair_distribution_no_overload
     def test_fair_distribution_no_overload(self):
         # Pazartesi günü dersi olan bir öğretmeni seç
-        absent_t = self.teachers_map["İLKNUR AKBAŞ UZUN"]
+        absent_t = self.teachers_map["İLKAY DEMİRTAŞ"]
         date_str = "2026-09-28"
         subs = self.sub_service.auto_assign_substitutions(
             date_str=date_str,
@@ -664,7 +664,7 @@ class TestNobetSystem(unittest.TestCase):
 
     # 30. test_multi_duty_teachers_per_lesson
     def test_multi_duty_teachers_per_lesson(self):
-        absent_t = self.teachers_map["MEHMET BEYDİLLİ"]
+        absent_t = self.teachers_map["MEHMET DEMİR"]
         date_str = "2026-09-28"
         # Her derse 2 nöbetçi ata
         subs = self.sub_service.auto_assign_substitutions(
@@ -988,8 +988,9 @@ class TestNobetSystem(unittest.TestCase):
 
     # 39. test_past_duty_pdf_parsing_and_import
     def test_past_duty_pdf_parsing_and_import(self):
-        pdf_path = Path("data/past_duty_sample.pdf")
-        self.assertTrue(pdf_path.exists(), "Test PDF dosyası data/past_duty_sample.pdf bulunamadı")
+        pdf_path = self.export_dir / "test_duty_export.pdf"
+        self.export_service.export_pdf(self.week_start, pdf_path)
+        self.assertTrue(pdf_path.exists())
 
         target_week = "2026-10-12"
         assignments = self.duty_service.parse_duty_table_pdf(str(pdf_path), target_week)
@@ -1010,13 +1011,6 @@ class TestNobetSystem(unittest.TestCase):
 
         db_assignments = self.db.get_assignments_for_week(target_week)
         self.assertEqual(len(db_assignments), 30)
-
-        # Sistem çıktısı formatındaki PDF'i de test et (Nobet_Cizelgesi_2026-09-28.pdf)
-        sys_pdf = Path("Nobet_Cizelgesi_2026-09-28.pdf")
-        if sys_pdf.exists():
-            sys_assignments = self.duty_service.parse_duty_table_pdf(str(sys_pdf), "2026-10-19")
-            self.assertEqual(len(sys_assignments), 30)
-            self.assertTrue(all(a.teacher_id is not None for a in sys_assignments))
 
     # 40. test_timetable_exports
     def test_timetable_exports(self):

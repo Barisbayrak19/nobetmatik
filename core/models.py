@@ -13,11 +13,11 @@ def generate_id() -> str:
 @dataclass
 class SchoolInfo:
     id: str = field(default_factory=generate_id)
-    name: str = "Şehit Kadir Altuntaş Cumhuriyet Ortaokulu"
-    city: str = "İzmir"
-    district: str = "Torbalı"
+    name: str = ""
+    city: str = ""
+    district: str = ""
     academic_year: str = "2026-2027"
-    principal_name: str = "Salahattin GÜNEK"
+    principal_name: str = ""
     school_level: str = "Ortaokul"
     education_type: str = "Normal (Tekli)"
     daily_periods: int = 7
@@ -43,6 +43,14 @@ class Teacher:
     unavailable_days: List[str] = field(default_factory=list)
     notes: str = ""
     created_at: str = field(default_factory=lambda: datetime.datetime.now().isoformat())
+    # Gelişmiş Mevzuat, Muafiyet ve Tercih Alanları
+    is_exempt: bool = False                    # Kesin mevzuat/sağlık muafiyeti
+    exemption_reason: str = ""                 # 'İdareci', 'YEĞİTEK Okul Sorumlusu', 'Hamilelik / Süt İzni', 'Engellilik', 'Engelli Yakını', 'Yönetici İzni', 'Diğer'
+    seniority_years: int = 0                   # Hizmet yılı (20/25 yıl kuralı)
+    exemption_requested: bool = False          # 20/25 yıl veya istekli muafiyet talebi
+    preferred_days: List[str] = field(default_factory=list)   # Tercih edilen günler (+puan)
+    avoided_days: List[str] = field(default_factory=list)     # Tercih edilmeyen günler (-puan)
+    is_primary_school: bool = True             # Kadrosunun bulunduğu okul mu?
 
 @dataclass
 class Location:
@@ -92,6 +100,14 @@ class DutyFairnessReport:
     max_duties: int = 0
     fairness_score: float = 100.0
     warnings: List[str] = field(default_factory=list)
+    excluded_teachers: Dict[str, str] = field(default_factory=dict)      # teacher_name -> elenme gerekçesi
+    assignment_reasons: Dict[str, List[str]] = field(default_factory=dict) # assignment key -> gerekçe maddeleri
+    unfilled_slots: List[Dict[str, Any]] = field(default_factory=list)   # doldurulamayan slotlar ve nedenleri
+    stats: Dict[str, Any] = field(default_factory=dict)                  # özet istatistikler
+    co_duty_proposals: List[Dict[str, Any]] = field(default_factory=list) # Boşta kalan öğretmenler için eşli/destek nöbet teklifleri
+    co_duty_assignments: List[Assignment] = field(default_factory=list) # Atanan eşli nöbet nesneleri
+    gini_index: float = 0.0                                              # Gini eşitlik katsayısı (0.0 = Tam eşitlik)
+    fairness_details: Dict[str, Any] = field(default_factory=dict)       # Ayrıntılı adalet karnesi metrikleri
 
 @dataclass
 class TeacherLesson:
@@ -128,3 +144,21 @@ class AttendanceRecord:
     slip_path: str = ""               # Saklanan görevlendirme fişi dosya yolu (.html veya .pdf)
     notes: str = ""
     created_at: str = field(default_factory=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M"))
+
+@dataclass
+class SubstitutionFairnessReport:
+    teacher_counts: Dict[str, int] = field(default_factory=dict)         # teacher_id -> assigned substitution hours today
+    teacher_names: Dict[str, str] = field(default_factory=dict)
+    average_hours: float = 0.0
+    min_hours: int = 0
+    max_hours: int = 0
+    fairness_score: float = 100.0
+    gini_index: float = 0.0
+    total_lessons_needed: int = 0
+    total_assigned_slots: int = 0
+    unassigned_lessons: int = 0
+    tandem_assignments: List[Dict[str, Any]] = field(default_factory=list) # Başkasının yanına atananlar
+    proposals: List[Dict[str, Any]] = field(default_factory=list)          # Boşta kalanlar için eşli teklifler
+    idle_teachers_today: List[Dict[str, Any]] = field(default_factory=list)# O gün okulda/nöbetçi olup 0 saat alanlar
+    stats: Dict[str, Any] = field(default_factory=dict)
+    details: Dict[str, Any] = field(default_factory=dict)

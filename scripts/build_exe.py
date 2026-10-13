@@ -8,6 +8,9 @@ import shutil
 import zipfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from core.config import APP_VERSION
+
 def build():
     root_dir = Path(__file__).resolve().parent.parent
     dist_dir = root_dir / "dist"
@@ -41,7 +44,7 @@ def build():
 
     # 3. Taşınabilir (Portable) ZIP arşivi oluştur
     print("[*] 3. Tasinabilir (Portable) ZIP paketi olusturuluyor...")
-    portable_zip = dist_dir / "NobetMatik_v2.0.0_Tasinabilir.zip"
+    portable_zip = dist_dir / f"NobetMatik_v{APP_VERSION}_Tasinabilir.zip"
     with zipfile.ZipFile(portable_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for file_path in app_dist_dir.rglob("*"):
             arcname = file_path.relative_to(dist_dir)
@@ -53,7 +56,7 @@ def build():
     # Masaüstüne de kopyala
     desktop_dir = Path.home() / "Desktop"
     if desktop_dir.exists():
-        desktop_zip = desktop_dir / "NobetMatik_v2.0.0_Tasinabilir.zip"
+        desktop_zip = desktop_dir / f"NobetMatik_v{APP_VERSION}_Tasinabilir.zip"
         shutil.copy2(portable_zip, desktop_zip)
         print(f"[BASARILI] Masaustune kopyalandi: {desktop_zip}")
 
