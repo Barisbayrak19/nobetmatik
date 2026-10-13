@@ -1296,11 +1296,11 @@ class SettingsView(ctk.CTkFrame):
             height=34
         ).pack(side="left")
 
-        # 4. Yazılım Güncellemeleri Kartı (GitHub Releases)
+        # 4. Yazılım Güncellemeleri Kartı
         body_update = self._create_section_card(
             tab,
-            "🔄 Yazılım Güncellemeleri (GitHub Releases)",
-            "En son sürümü denetleyin, sürüm notlarını inceleyin ve otomatik güncelleme tercihlerini yönetin."
+            "🔄 Yazılım Güncellemeleri",
+            "En son kararlı sürümü denetleyin ve güncelleme tercihlerini yönetin."
         )
 
         f_up_info = ctk.CTkFrame(body_update, fg_color="#F8FAFC", corner_radius=8, border_width=1, border_color="#E2E8F0")
@@ -1313,13 +1313,8 @@ class SettingsView(ctk.CTkFrame):
             text_color="#059669"
         ).pack(side="left", padx=12, pady=8)
 
-        f_repo_row = ctk.CTkFrame(body_update, fg_color="transparent")
-        f_repo_row.pack(fill="x", pady=4)
-        ctk.CTkLabel(f_repo_row, text="GitHub Deposu (Kullanıcı/Depo):", font=ctk.CTkFont(family=FONT_FAMILY, size=13), text_color="#0F172A").pack(side="left", padx=(0, 8))
-        self._create_entry(f_repo_row, textvariable=self.github_repo_var, width=280).pack(side="left")
-
         f_chk_row = ctk.CTkFrame(body_update, fg_color="transparent")
-        f_chk_row.pack(fill="x", pady=6)
+        f_chk_row.pack(fill="x", pady=(2, 8))
         ctk.CTkCheckBox(
             f_chk_row,
             text="Uygulama açılışında yeni sürümleri arka planda otomatik denetle",
@@ -1328,7 +1323,7 @@ class SettingsView(ctk.CTkFrame):
         ).pack(side="left")
 
         f_btn_row = ctk.CTkFrame(body_update, fg_color="transparent")
-        f_btn_row.pack(fill="x", pady=(4, 0))
+        f_btn_row.pack(fill="x", pady=(2, 0))
         self.btn_check_update = create_modern_button(
             f_btn_row,
             text="🔄 Güncellemeleri Şimdi Denetle",
@@ -1340,7 +1335,7 @@ class SettingsView(ctk.CTkFrame):
 
     def _check_for_updates(self):
         from logic.update_service import UpdateService
-        repo = self.github_repo_var.get().strip() or DEFAULT_GITHUB_REPO
+        repo = DEFAULT_GITHUB_REPO
         svc = UpdateService(repo)
         if hasattr(self, "btn_check_update"):
             self.btn_check_update.configure(state="disabled", text="⏳ Denetleniyor...")
@@ -1370,7 +1365,7 @@ class SettingsView(ctk.CTkFrame):
             messagebox.showinfo(
                 "Yazılım Güncel",
                 f"🎉 Tebrikler! En güncel NöbetMatik sürümünü (v{APP_VERSION}) kullanıyorsunuz.\n\n"
-                f"GitHub deposunda ({svc.repo}) daha yeni bir sürüm yayını bulunmuyor.",
+                f"Yeni bir güncelleme bulunmuyor.",
                 parent=self
             )
 
