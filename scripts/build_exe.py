@@ -37,10 +37,10 @@ def build():
     target_exports_dir = app_dist_dir / "exports"
     target_exports_dir.mkdir(parents=True, exist_ok=True)
 
-    src_db = root_dir / "data" / "nobet.db"
-    if src_db.exists():
-        shutil.copy2(src_db, target_data_dir / "nobet.db")
-        print(f"[OK] Varsayilan veritabani kopyalandi: {target_data_dir / 'nobet.db'}")
+    src_ann = root_dir / "data" / "announcements.json"
+    if src_ann.exists():
+        shutil.copy2(src_ann, target_data_dir / "announcements.json")
+        print(f"[OK] Varsayilan duyurular kopyalandi: {target_data_dir / 'announcements.json'}")
 
     # 3. Taşınabilir (Portable) ZIP arşivi oluştur
     print("[*] 3. Tasinabilir (Portable) ZIP paketi olusturuluyor...")
