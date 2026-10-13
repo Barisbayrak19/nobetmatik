@@ -30,6 +30,7 @@ logs/
 backups/
 exports/
 data/feedbacks.json
+data/announcements_cache.json
 
 # Excel temporary files
 ~$*.xlsx
