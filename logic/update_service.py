@@ -107,18 +107,26 @@ class UpdateService:
             lat_v = parse_version(latest_tag)
             has_update = lat_v > cur_v
 
-            # Windows yükleyici (.exe) varlığını araştır
+            # Windows yükleyici (.exe) veya taşınabilir paket (.zip) varlığını araştır
             assets = data.get("assets", [])
-            exe_asset = None
+            target_asset = None
+            # 1. Öncelik: Kurulum/Çalıştırılabilir dosya (.exe)
             for a in assets:
                 a_name = a.get("name", "").lower()
                 if a_name.endswith(".exe") and not a_name.startswith("unins"):
-                    exe_asset = a
+                    target_asset = a
                     break
+            # 2. Öncelik: Taşınabilir ZIP paketi (.zip)
+            if not target_asset:
+                for a in assets:
+                    a_name = a.get("name", "").lower()
+                    if a_name.endswith(".zip"):
+                        target_asset = a
+                        break
 
-            download_url = exe_asset.get("browser_download_url") if exe_asset else None
-            asset_name = exe_asset.get("name") if exe_asset else None
-            asset_size = exe_asset.get("size", 0) if exe_asset else 0
+            download_url = target_asset.get("browser_download_url") if target_asset else None
+            asset_name = target_asset.get("name") if target_asset else None
+            asset_size = target_asset.get("size", 0) if target_asset else 0
 
             return {
                 "success": True,
@@ -220,16 +228,26 @@ class UpdateService:
 
     @staticmethod
     def launch_installer_and_exit(installer_path: Path):
-        """İndirilen kurulum dosyasını başlatır ve mevcut uygulamayı kapatır."""
+        """İndirilen kurulum dosyasını başlatır veya zip paketini klasörde gösterir."""
         if not installer_path.exists():
             raise FileNotFoundError(f"Kurulum dosyası bulunamadı: {installer_path}")
 
-        logger.info(f"Yeni sürüm kurulumu başlatılıyor: {installer_path}")
+        logger.info(f"Yeni sürüm dosyası açılıyor: {installer_path}")
+        is_zip = str(installer_path).lower().endswith(".zip")
+        if is_zip:
+            if sys.platform.startswith("win"):
+                import subprocess
+                subprocess.Popen(f'explorer /select,"{installer_path}"')
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", str(installer_path.parent)])
+            return
+
         if sys.platform.startswith("win"):
             os.startfile(str(installer_path))
         else:
             import subprocess
             subprocess.Popen([str(installer_path)])
 
-        # Mevcut süreci temiz bir şekilde sonlandır
+        # Kurulum programı başlatıldığında mevcut süreci temiz bir şekilde sonlandır
         sys.exit(0)

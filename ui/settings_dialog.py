@@ -1296,6 +1296,84 @@ class SettingsView(ctk.CTkFrame):
             height=34
         ).pack(side="left")
 
+        # 4. Yazılım Güncellemeleri Kartı (GitHub Releases)
+        body_update = self._create_section_card(
+            tab,
+            "🔄 Yazılım Güncellemeleri (GitHub Releases)",
+            "En son sürümü denetleyin, sürüm notlarını inceleyin ve otomatik güncelleme tercihlerini yönetin."
+        )
+
+        f_up_info = ctk.CTkFrame(body_update, fg_color="#F8FAFC", corner_radius=8, border_width=1, border_color="#E2E8F0")
+        f_up_info.pack(fill="x", pady=(0, 10), padx=2)
+
+        ctk.CTkLabel(
+            f_up_info,
+            text=f"• Mevcut NöbetMatik Sürümü: v{APP_VERSION} (Kararlı Dağıtım)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color="#059669"
+        ).pack(side="left", padx=12, pady=8)
+
+        f_repo_row = ctk.CTkFrame(body_update, fg_color="transparent")
+        f_repo_row.pack(fill="x", pady=4)
+        ctk.CTkLabel(f_repo_row, text="GitHub Deposu (Kullanıcı/Depo):", font=ctk.CTkFont(family=FONT_FAMILY, size=13), text_color="#0F172A").pack(side="left", padx=(0, 8))
+        self._create_entry(f_repo_row, textvariable=self.github_repo_var, width=280).pack(side="left")
+
+        f_chk_row = ctk.CTkFrame(body_update, fg_color="transparent")
+        f_chk_row.pack(fill="x", pady=6)
+        ctk.CTkCheckBox(
+            f_chk_row,
+            text="Uygulama açılışında yeni sürümleri arka planda otomatik denetle",
+            variable=self.auto_check_updates_var,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13)
+        ).pack(side="left")
+
+        f_btn_row = ctk.CTkFrame(body_update, fg_color="transparent")
+        f_btn_row.pack(fill="x", pady=(4, 0))
+        self.btn_check_update = create_modern_button(
+            f_btn_row,
+            text="🔄 Güncellemeleri Şimdi Denetle",
+            command=self._check_for_updates,
+            variant="primary",
+            height=34
+        )
+        self.btn_check_update.pack(side="left")
+
+    def _check_for_updates(self):
+        from logic.update_service import UpdateService
+        repo = self.github_repo_var.get().strip() or DEFAULT_GITHUB_REPO
+        svc = UpdateService(repo)
+        if hasattr(self, "btn_check_update"):
+            self.btn_check_update.configure(state="disabled", text="⏳ Denetleniyor...")
+
+        def worker():
+            info = svc.check_for_updates()
+            self.after(0, lambda: self._on_update_checked(info, svc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_update_checked(self, info: dict, svc):
+        from ui.update_dialog import UpdateDialog
+        if hasattr(self, "btn_check_update"):
+            self.btn_check_update.configure(state="normal", text="🔄 Güncellemeleri Şimdi Denetle")
+
+        if not info.get("success"):
+            messagebox.showwarning(
+                "Güncelleme Denetimi",
+                f"Güncelleme kontrolü tamamlanamadı:\n{info.get('error')}\n\nİnternet bağlantınızı kontrol ediniz.",
+                parent=self
+            )
+            return
+
+        if info.get("has_update"):
+            UpdateDialog(self, info, svc)
+        else:
+            messagebox.showinfo(
+                "Yazılım Güncel",
+                f"🎉 Tebrikler! En güncel NöbetMatik sürümünü (v{APP_VERSION}) kullanıyorsunuz.\n\n"
+                f"GitHub deposunda ({svc.repo}) daha yeni bir sürüm yayını bulunmuyor.",
+                parent=self
+            )
+
     def _test_telegram_connection(self):
         from core.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
         from logic.feedback_service import FeedbackService, FeedbackData

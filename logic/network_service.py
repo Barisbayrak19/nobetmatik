@@ -211,9 +211,13 @@ class NetworkHostService:
             try:
                 msg = json.dumps(payload, ensure_ascii=False).encode("utf-8")
                 sock.sendto(msg, ("255.255.255.255", DISCOVERY_PORT))
+                try:
+                    sock.sendto(msg, ("127.0.0.1", DISCOVERY_PORT))
+                except Exception:
+                    pass
             except Exception:
                 pass
-            self._stop_event.wait(2.0)
+            self._stop_event.wait(0.5)
 
         sock.close()
 

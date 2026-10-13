@@ -182,6 +182,7 @@ class MainApp(ctk.CTk):
         self.undo_manager.register_callback(self.update_undo_redo_ui)
         self.update_header_info()
         self.after(600, self._check_announcements_background)
+        self.after(1200, self._check_updates_background)
 
     def get_current_week_str(self) -> str:
         return self.current_week_start.isoformat()
@@ -1742,6 +1743,46 @@ class MainApp(ctk.CTk):
             self._apply_announcements_badge(unread_count, announcements)
         except Exception:
             pass
+
+    # --- Otomatik Güncelleme Arka Plan Kontrolü ---
+    def _check_updates_background(self):
+        """Açılışta arka planda yeni sürüm olup olmadığını otomatik sorgular."""
+        if self.db.get_setting("auto_check_updates", "1") != "1":
+            return
+
+        def worker():
+            try:
+                from logic.update_service import UpdateService
+                repo = self.db.get_setting("github_repo", DEFAULT_GITHUB_REPO)
+                svc = UpdateService(repo)
+                info = svc.check_for_updates()
+                if info.get("success") and info.get("has_update"):
+                    self.after(0, lambda: self._on_startup_update_found(info, svc))
+            except Exception as e:
+                logger.debug(f"Arka plan güncelleme sorgulama hatası: {e}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_startup_update_found(self, info: dict, svc):
+        """Yeni bir sürüm yayınlandığında üst başlıkta rozet gösterir ve güncelleme penceresini açar."""
+        if hasattr(self, "header_actions_box") and self.header_actions_box.winfo_exists():
+            if not hasattr(self, "btn_update_badge") or not self.btn_update_badge.winfo_exists():
+                from ui.update_dialog import UpdateDialog
+                self.btn_update_badge = ctk.CTkButton(
+                    self.header_actions_box,
+                    text=f"🚀 Yeni Sürüm ({info.get('latest_version')})",
+                    font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+                    fg_color="#059669",
+                    hover_color="#047857",
+                    text_color="#FFFFFF",
+                    height=30,
+                    corner_radius=8,
+                    command=lambda: UpdateDialog(self, info, svc)
+                )
+                self.btn_update_badge.pack(side="right", padx=(3, 3), pady=3)
+
+        from ui.update_dialog import UpdateDialog
+        UpdateDialog(self, info, svc)
 
     def on_close(self):
         try:

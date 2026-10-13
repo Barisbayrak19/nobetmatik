@@ -224,26 +224,42 @@ class UpdateDialog(ctk.CTkToplevel):
 
     def _on_download_complete(self):
         self.progress_bar.set(1.0)
-        self.lbl_progress.configure(text="✔ İndirme tamamlandı! Kurulum başlatılıyor...", text_color=COLOR_SUCCESS)
+        self.lbl_progress.configure(text="✔ İndirme tamamlandı!", text_color=COLOR_SUCCESS)
 
-        ask = messagebox.askyesno(
-            "Güncelleme Hazır",
-            f"Yeni sürüm ({self.update_info.get('latest_version')}) başarıyla indirildi.\n\n"
-            f"Kurulumun tamamlanabilmesi için mevcut NöbetMatik uygulaması kapatılacaktır.\n"
-            f"(Okul verileriniz korunacaktır).\n\n"
-            f"Şimdi kurulsun mu?",
-            parent=self
-        )
-        if ask:
-            try:
-                self.update_service.launch_installer_and_exit(self.target_path)
-            except Exception as e:
-                messagebox.showerror("Hata", f"Kurulum dosyası başlatılamadı:\n{e}", parent=self)
-                self.btn_download.configure(state="normal")
-                self.btn_close.configure(text="Kapat")
-        else:
-            self.btn_download.configure(state="normal", text="🚀 Kurulumu Başlat")
+        is_zip = str(self.target_path).lower().endswith(".zip")
+        if is_zip:
+            ask = messagebox.askyesno(
+                "Güncelleme Paketi İndirildi",
+                f"Yeni sürüm taşınabilir paketi ({self.update_info.get('latest_version')}) başarıyla indirildi:\n{self.target_path.name}\n\n"
+                f"İndirilen zip dosyasını klasörde açmak ister misiniz?",
+                parent=self
+            )
+            if ask:
+                try:
+                    self.update_service.launch_installer_and_exit(self.target_path)
+                except Exception as e:
+                    messagebox.showerror("Hata", f"Klasör açılamadı:\n{e}", parent=self)
+            self.btn_download.configure(state="normal", text="📂 Dosyayı Göster")
             self.btn_close.configure(text="Kapat")
+        else:
+            ask = messagebox.askyesno(
+                "Güncelleme Hazır",
+                f"Yeni sürüm ({self.update_info.get('latest_version')}) başarıyla indirildi.\n\n"
+                f"Kurulumun tamamlanabilmesi için mevcut NöbetMatik uygulaması kapatılacaktır.\n"
+                f"(Okul verileriniz korunacaktır).\n\n"
+                f"Şimdi kurulsun mu?",
+                parent=self
+            )
+            if ask:
+                try:
+                    self.update_service.launch_installer_and_exit(self.target_path)
+                except Exception as e:
+                    messagebox.showerror("Hata", f"Kurulum dosyası başlatılamadı:\n{e}", parent=self)
+                    self.btn_download.configure(state="normal")
+                    self.btn_close.configure(text="Kapat")
+            else:
+                self.btn_download.configure(state="normal", text="🚀 Kurulumu Başlat")
+                self.btn_close.configure(text="Kapat")
 
     def _on_download_error(self, err: Exception):
         self.is_downloading = False
