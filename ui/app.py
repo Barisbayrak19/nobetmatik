@@ -162,6 +162,9 @@ class MainApp(ctk.CTk):
 
         self._build_top_header()
 
+        # Dinamik Güncelleme & Bildirim Bandı Alanı (Modern Banner)
+        self.update_banner_container = ctk.CTkFrame(self.main_container, fg_color="transparent")
+
         # SPA Ana İçerik Alanı
         self.content_container = ctk.CTkFrame(self.main_container, fg_color="transparent", corner_radius=0)
         self.content_container.pack(fill="both", expand=True)
@@ -325,20 +328,38 @@ class MainApp(ctk.CTk):
         for key, text in system_nav_items:
             _create_sidebar_pill(key, text, is_active=False)
 
-        # Alt Alan (Sadece Sürüm Bilgisi)
-        bottom_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        bottom_frame.pack(side="bottom", fill="x", padx=10, pady=12)
+        # Alt Alan: Dinamik & Şık Sürüm / Güncelleme Kartı
+        self.sidebar_version_card = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        self.sidebar_version_card.pack(side="bottom", fill="x", padx=10, pady=12)
 
-        div3 = ctk.CTkFrame(bottom_frame, fg_color="#1E293B", height=1)
+        div3 = ctk.CTkFrame(self.sidebar_version_card, fg_color="#1E293B", height=1)
         div3.pack(fill="x", pady=(0, 8))
 
-        lbl_ver = ctk.CTkLabel(
-            bottom_frame,
-            text=f"v{APP_VERSION} (Kararlı)",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+        self.sidebar_ver_box = ctk.CTkFrame(self.sidebar_version_card, fg_color="transparent")
+        self.sidebar_ver_box.pack(fill="x", padx=4)
+
+        self.lbl_sidebar_version = ctk.CTkLabel(
+            self.sidebar_ver_box,
+            text=f"🟢 v{APP_VERSION}",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
             text_color="#94A3B8"
         )
-        lbl_ver.pack(anchor="w", padx=6, pady=(2, 0))
+        self.lbl_sidebar_version.pack(side="left")
+
+        self.btn_sidebar_check = ctk.CTkButton(
+            self.sidebar_ver_box,
+            text="🔄",
+            width=26,
+            height=24,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            fg_color="transparent",
+            hover_color="#1E293B",
+            text_color="#64748B",
+            corner_radius=6,
+            command=self.check_updates_manual
+        )
+        self.btn_sidebar_check.pack(side="right")
+        SimpleTooltip(self.btn_sidebar_check, "Güncellemeleri Denetle")
 
     def _update_sidebar_active(self, active_key: str):
         for key, btn in self.sidebar_buttons.items():
@@ -1754,7 +1775,7 @@ class MainApp(ctk.CTk):
         except Exception:
             pass
 
-    # --- Otomatik Güncelleme Arka Plan Kontrolü ---
+    # --- Otomatik Güncelleme ve Şık Bildirim Merkezi ---
     def _check_updates_background(self):
         """Açılışta arka planda yeni sürüm olup olmadığını otomatik sorgular."""
         if self.db.get_setting("auto_check_updates", "1") != "1":
@@ -1773,26 +1794,217 @@ class MainApp(ctk.CTk):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_startup_update_found(self, info: dict, svc):
-        """Yeni bir sürüm yayınlandığında üst başlıkta rozet gösterir ve güncelleme penceresini açar."""
-        if hasattr(self, "header_actions_box") and self.header_actions_box.winfo_exists():
-            if not hasattr(self, "btn_update_badge") or not self.btn_update_badge.winfo_exists():
-                from ui.update_dialog import UpdateDialog
-                self.btn_update_badge = ctk.CTkButton(
-                    self.header_actions_box,
-                    text=f"🚀 Yeni Sürüm ({info.get('latest_version')})",
+    def _show_update_banner(self, info: dict, svc=None):
+        """Ana pencerenin en üstünde modern, dikkat çekici ve şık bir güncelleme bildirim bandı gösterir."""
+        if not hasattr(self, "update_banner_container") or not self.update_banner_container.winfo_exists():
+            return
+
+        for w in self.update_banner_container.winfo_children():
+            w.destroy()
+
+        latest_v = info.get("latest_version", "")
+        title_text = info.get("title") or "Yeni Sürüm ve Özellikler Paketi"
+
+        # Şık Koyu Lacivert / Mavi Vurgulu Bildirim Kartı
+        banner_card = ctk.CTkFrame(
+            self.update_banner_container,
+            fg_color="#0F172A",
+            corner_radius=10,
+            border_width=1,
+            border_color="#3B82F6"
+        )
+        banner_card.pack(fill="x", ipady=4)
+
+        # Sol Alan (Rozet ve Metinler)
+        f_left = ctk.CTkFrame(banner_card, fg_color="transparent")
+        f_left.pack(side="left", fill="both", expand=True, padx=14, pady=8)
+
+        f_badge_row = ctk.CTkFrame(f_left, fg_color="transparent")
+        f_badge_row.pack(fill="x", anchor="w")
+
+        badge = ctk.CTkFrame(f_badge_row, fg_color="#1E293B", corner_radius=6, border_width=1, border_color="#38BDF8")
+        badge.pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(
+            badge,
+            text=f"🚀 YENİ SÜRÜM: {latest_v}",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color="#38BDF8"
+        ).pack(padx=8, pady=2)
+
+        ctk.CTkLabel(
+            f_badge_row,
+            text=f"{title_text}",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            text_color="#FFFFFF"
+        ).pack(side="left", anchor="w")
+
+        ctk.CTkLabel(
+            f_left,
+            text=f"Mevcut sürümünüz: v{APP_VERSION} • Yeni MEB mevzuat uyumu, performans geliştirmeleri ve raporlama araçları hazır.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#94A3B8"
+        ).pack(anchor="w", pady=(3, 0))
+
+        # Sağ Alan (Eylem Butonları)
+        f_actions = ctk.CTkFrame(banner_card, fg_color="transparent")
+        f_actions.pack(side="right", padx=(8, 14), pady=8)
+
+        btn_update = ctk.CTkButton(
+            f_actions,
+            text="⬇️ Şimdi Güncelle",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#2563EB",
+            hover_color="#1D4ED8",
+            text_color="#FFFFFF",
+            height=32,
+            corner_radius=8,
+            command=lambda: self._open_update_center(info, svc)
+        )
+        btn_update.pack(side="left", padx=(0, 6))
+
+        btn_notes = ctk.CTkButton(
+            f_actions,
+            text="📋 Yenilikler",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            fg_color="#334155",
+            hover_color="#475569",
+            text_color="#F1F5F9",
+            height=32,
+            corner_radius=8,
+            command=lambda: self._open_update_center(info, svc)
+        )
+        btn_notes.pack(side="left", padx=(0, 6))
+
+        btn_dismiss = ctk.CTkButton(
+            f_actions,
+            text="✕",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            fg_color="transparent",
+            hover_color="#1E293B",
+            text_color="#94A3B8",
+            width=28,
+            height=32,
+            corner_radius=6,
+            command=lambda: self.update_banner_container.pack_forget()
+        )
+        btn_dismiss.pack(side="left")
+        SimpleTooltip(btn_dismiss, "Bu bildirimi gizle")
+
+        # Görünür yap (Header ile Content arasına yerleştir)
+        self.update_banner_container.pack(fill="x", side="top", padx=16, pady=(10, 4), before=self.content_container)
+
+    def _update_sidebar_for_new_version(self, info: dict, svc=None):
+        """Sol menünün altındaki sürüm alanını parlak güncelleme butonuna çevirir."""
+        if hasattr(self, "sidebar_version_card") and self.sidebar_version_card.winfo_exists():
+            if hasattr(self, "sidebar_ver_box") and self.sidebar_ver_box.winfo_exists():
+                self.sidebar_ver_box.pack_forget()
+
+            if not hasattr(self, "btn_sidebar_update") or not self.btn_sidebar_update.winfo_exists():
+                self.btn_sidebar_update = ctk.CTkButton(
+                    self.sidebar_version_card,
+                    text=f"🚀 {info.get('latest_version')} Yayında!",
                     font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
                     fg_color="#059669",
                     hover_color="#047857",
                     text_color="#FFFFFF",
                     height=30,
                     corner_radius=8,
-                    command=lambda: UpdateDialog(self, info, svc)
+                    command=lambda: self._open_update_center(info, svc)
                 )
-                self.btn_update_badge.pack(side="right", padx=(3, 3), pady=3)
+                self.btn_sidebar_update.pack(fill="x", pady=(4, 0))
+                SimpleTooltip(self.btn_sidebar_update, "Yeni sürümü yüklemek için tıklayın")
 
+    def _open_update_center(self, info: dict, svc=None):
+        """Güncelleme diyalogunu açar."""
+        if not svc:
+            from logic.update_service import UpdateService
+            repo = self.db.get_setting("github_repo", DEFAULT_GITHUB_REPO)
+            svc = UpdateService(repo)
         from ui.update_dialog import UpdateDialog
         UpdateDialog(self, info, svc)
+
+    def _on_startup_update_found(self, info: dict, svc):
+        """Yeni bir sürüm yayınlandığında tüm şık bildirim bileşenlerini aktif eder."""
+        # 1. Ana pencere üst banner'ı
+        self._show_update_banner(info, svc)
+
+        # 2. Üst başlık rozeti
+        if hasattr(self, "header_actions_box") and self.header_actions_box.winfo_exists():
+            if not hasattr(self, "btn_update_badge") or not self.btn_update_badge.winfo_exists():
+                self.btn_update_badge = ctk.CTkButton(
+                    self.header_actions_box,
+                    text=f"🚀 {info.get('latest_version')}",
+                    font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+                    fg_color="#059669",
+                    hover_color="#047857",
+                    text_color="#FFFFFF",
+                    height=28,
+                    corner_radius=7,
+                    command=lambda: self._open_update_center(info, svc)
+                )
+                self.btn_update_badge.pack(side="right", padx=(2, 2), pady=2)
+                SimpleTooltip(self.btn_update_badge, "Yeni sürümü yüklemek için tıklayın")
+
+        # 3. Sol menü alt sürüm alanı
+        self._update_sidebar_for_new_version(info, svc)
+
+    def check_updates_manual(self, simulate_preview: bool = False):
+        """Kullanıcının manuel güncelleme denetimini yönetir."""
+        if hasattr(self, "btn_sidebar_check") and self.btn_sidebar_check.winfo_exists():
+            self.btn_sidebar_check.configure(state="disabled", text="⏳")
+
+        if simulate_preview:
+            # Önizleme ve test simülasyonu
+            sim_info = {
+                "success": True,
+                "has_update": True,
+                "latest_version": "v2.2.0",
+                "current_version": APP_VERSION,
+                "title": "NöbetMatik v2.2.0 - Yeni Özellikler & Güncelleme Paketi",
+                "body": "## 🚀 NöbetMatik v2.2.0 Yenilikleri\n\n- 💰 Ek Ders Hakediş Hesaplamaları ve MEB 44. Madde Uyumu\n- 📋 Personel Devam Takip Tablosu ve Yeşil Hakediş Vurgulaması\n- 🎨 Modernleştirilmiş Okul Yönetim Merkezi Raporlar Ekranı\n- 🔔 Yeni Şık Otomatik Güncelleme Bildirimleri\n- ⚡ Performans ve Hata Düzeltmeleri",
+                "html_url": "https://github.com/Barisbayrak19/nobetmatik/releases",
+                "published_at": "2026-10-19",
+                "download_url": "https://github.com/Barisbayrak19/nobetmatik/releases/download/v2.1.0/NobetMatik_v2.1.0_Kurulum.exe",
+                "asset_name": "NobetMatik_v2.1.0_Kurulum.exe"
+            }
+            if hasattr(self, "btn_sidebar_check") and self.btn_sidebar_check.winfo_exists():
+                self.btn_sidebar_check.configure(state="normal", text="🔄")
+            from logic.update_service import UpdateService
+            svc = UpdateService()
+            self._on_startup_update_found(sim_info, svc)
+            return
+
+        def worker():
+            try:
+                from logic.update_service import UpdateService
+                repo = self.db.get_setting("github_repo", DEFAULT_GITHUB_REPO)
+                svc = UpdateService(repo)
+                info = svc.check_for_updates()
+                self.after(0, lambda: self._on_manual_update_result(info, svc))
+            except Exception as e:
+                self.after(0, lambda: self._on_manual_update_result({"success": False, "error": str(e)}, None))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_manual_update_result(self, info: dict, svc):
+        if hasattr(self, "btn_sidebar_check") and self.btn_sidebar_check.winfo_exists():
+            self.btn_sidebar_check.configure(state="normal", text="🔄")
+
+        if not info.get("success"):
+            if hasattr(self, "lbl_sidebar_version") and self.lbl_sidebar_version.winfo_exists():
+                orig_text = self.lbl_sidebar_version.cget("text")
+                self.lbl_sidebar_version.configure(text="⚠️ Bağlantı Yok", text_color="#EF4444")
+                self.after(3500, lambda: self.lbl_sidebar_version.configure(text=orig_text, text_color="#94A3B8"))
+            return
+
+        if info.get("has_update"):
+            self._on_startup_update_found(info, svc)
+            self._open_update_center(info, svc)
+        else:
+            if hasattr(self, "lbl_sidebar_version") and self.lbl_sidebar_version.winfo_exists():
+                orig_text = self.lbl_sidebar_version.cget("text")
+                self.lbl_sidebar_version.configure(text="✔ Sürümünüz Güncel", text_color="#10B981")
+                self.after(3500, lambda: self.lbl_sidebar_version.configure(text=orig_text, text_color="#94A3B8"))
 
     def on_close(self):
         try:

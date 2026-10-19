@@ -1333,6 +1333,20 @@ class SettingsView(ctk.CTkFrame):
         )
         self.btn_check_update.pack(side="left")
 
+        self.btn_preview_update = create_modern_button(
+            f_btn_row,
+            text="✨ Bildirimi Önizle (Test)",
+            command=self._preview_update_banner,
+            variant="secondary",
+            height=34
+        )
+        self.btn_preview_update.pack(side="left", padx=(8, 0))
+
+    def _preview_update_banner(self):
+        if hasattr(self.parent, "check_updates_manual"):
+            self.parent.check_updates_manual(simulate_preview=True)
+            self.destroy()
+
     def _check_for_updates(self):
         from logic.update_service import UpdateService
         repo = DEFAULT_GITHUB_REPO
@@ -1360,6 +1374,8 @@ class SettingsView(ctk.CTkFrame):
             return
 
         if info.get("has_update"):
+            if hasattr(self.parent, "_on_startup_update_found"):
+                self.parent._on_startup_update_found(info, svc)
             UpdateDialog(self, info, svc)
         else:
             messagebox.showinfo(

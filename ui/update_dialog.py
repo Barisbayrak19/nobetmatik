@@ -41,28 +41,41 @@ class UpdateDialog(ctk.CTkToplevel):
         self._build_ui()
 
     def _build_ui(self):
-        # 1. Üst Başlık Kartı
-        top_frame = ctk.CTkFrame(self, fg_color=COLOR_PRIMARY, corner_radius=0)
-        top_frame.pack(fill="x", side="top", ipady=10)
+        # 1. Üst Başlık Kartı (Modern Koyu Lacivert / Mavi Vurgulu)
+        top_frame = ctk.CTkFrame(self, fg_color="#0F172A", corner_radius=0)
+        top_frame.pack(fill="x", side="top", ipady=12)
 
         f_inner_top = ctk.CTkFrame(top_frame, fg_color="transparent")
         f_inner_top.pack(fill="x", padx=20)
 
-        lbl_title = ctk.CTkLabel(
-            f_inner_top,
-            text=f"🚀 YENİ SÜRÜM MEVCUT: {self.update_info.get('latest_version', '')}",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
-            text_color="#FFFFFF"
-        )
-        lbl_title.pack(anchor="w")
+        f_badge_row = ctk.CTkFrame(f_inner_top, fg_color="transparent")
+        f_badge_row.pack(fill="x", anchor="w")
+
+        chip_new = ctk.CTkFrame(f_badge_row, fg_color="#1E293B", corner_radius=6, border_width=1, border_color="#38BDF8")
+        chip_new.pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(
+            chip_new,
+            text=f"🚀 YENİ SÜRÜM: {self.update_info.get('latest_version', '')}",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color="#38BDF8"
+        ).pack(padx=8, pady=3)
+
+        chip_cur = ctk.CTkFrame(f_badge_row, fg_color="#1E293B", corner_radius=6)
+        chip_cur.pack(side="left")
+        ctk.CTkLabel(
+            chip_cur,
+            text=f"Mevcut Sürümünüz: v{APP_VERSION}",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#94A3B8"
+        ).pack(padx=8, pady=3)
 
         lbl_desc = ctk.CTkLabel(
             f_inner_top,
-            text=f"Mevcut Sürüm: v{APP_VERSION} ➔ Yeni Sürüm: {self.update_info.get('latest_version', '')}",
+            text="Yeni özellikler, güvenlik güncellemeleri ve resmi MEB mevzuat geliştirmeleri hazır.",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color="#CBD5E1"
         )
-        lbl_desc.pack(anchor="w", pady=(2, 0))
+        lbl_desc.pack(anchor="w", pady=(8, 0))
 
         # 2. Ana İçerik Kartı
         content_card = ctk.CTkFrame(self, fg_color=COLOR_CARD, corner_radius=8, border_width=1, border_color=COLOR_BORDER)

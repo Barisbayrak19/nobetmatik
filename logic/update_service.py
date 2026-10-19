@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
 
-from core.config import APP_VERSION, APP_NAME
+from core.config import APP_VERSION, APP_NAME, DEFAULT_GITHUB_REPO
 from core.logger import logger
 
 def parse_version(v_str: str) -> tuple:
@@ -70,8 +70,9 @@ def _urlopen_with_fallback(req: urllib.request.Request, timeout: int = 10):
         raise
 
 class UpdateService:
-    def __init__(self, repo: str = "nobetmatik/nobetmatik"):
-        self.repo = repo.strip().strip("/")
+    def __init__(self, repo: Optional[str] = None):
+        target = repo if (repo and repo.strip()) else DEFAULT_GITHUB_REPO
+        self.repo = target.strip().strip("/")
         self.api_url = f"https://api.github.com/repos/{self.repo}/releases/latest"
 
     def check_for_updates(self, timeout: int = 8) -> Dict[str, Any]:

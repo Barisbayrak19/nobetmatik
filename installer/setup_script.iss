@@ -1,6 +1,6 @@
 ; Inno Setup 6 Script - NöbetMatik Okul Nöbet Yönetim Sistemi
 #define MyAppName "NöbetMatik"
-#define MyAppVersion "2.1.0"
+#define MyAppVersion "2.1.1"
 #define MyAppPublisher "Barış Bayrak"
 #define MyAppURL "https://github.com/Barisbayrak19/nobetmatik"
 #define MyAppExeName "NobetMatik.exe"
@@ -38,10 +38,10 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
 
 [Dirs]
-Name: "{app}\data"
-Name: "{app}\logs"
-Name: "{app}\backups"
-Name: "{app}\exports"
+Name: "{app}\data"; Permissions: users-full
+Name: "{app}\logs"; Permissions: users-full
+Name: "{app}\backups"; Permissions: users-full
+Name: "{app}\exports"; Permissions: users-full
 
 [Files]
 Source: "..\dist\NobetMatik\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
