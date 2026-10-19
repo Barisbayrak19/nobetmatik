@@ -38,29 +38,10 @@ def to_title_case(text: str) -> str:
     return " ".join(result)
 
 def format_branch_display(branch: str) -> str:
-    """Uzun branş isimlerini hücreye sığacak şekilde zarifçe kısaltır."""
+    """Branş metnini döndürür; metni kesmeden veya kırpmadan tam olarak korur."""
     if not branch:
         return ""
-    b = branch.strip()
-    known_abbrevs = {
-        "Din Kültürü ve Ahlak Bilgisi": "Din Kült. ve Ahlak Bil.",
-        "İlköğretim Matematik": "İlköğr. Matematik",
-        "Bilişim Teknolojileri": "Bilişim Tek.",
-        "Görsel Sanatlar": "Görsel Sanatlar",
-        "Beden Eğitimi ve Spor": "Beden Eğitimi",
-        "Teknoloji ve Tasarım": "Teknoloji ve Tas.",
-        "Sosyal Bilgiler": "Sosyal Bilgiler",
-        "Fen Bilimleri": "Fen Bilimleri",
-        "Türkçe": "Türkçe",
-        "İngilizce": "İngilizce",
-        "Matematik": "Matematik",
-        "Müzik": "Müzik",
-    }
-    if b in known_abbrevs:
-        return known_abbrevs[b]
-    if len(b) > 22:
-        return b[:20] + "..."
-    return b
+    return branch.strip()
 
 def get_location_icon(name: str) -> str:
     """Nöbet yeri adına uygun modern sembol döndürür."""
@@ -416,27 +397,39 @@ class CellWidget(ctk.CTkFrame):
         self.btn_info = None
 
         if self.assignment.fixed:
-            # Üst Küçük Rozet (Sadece Sabit Kilitliyse göster)
-            self.top_bar = ctk.CTkFrame(self, fg_color="transparent", height=18)
-            self.top_bar.pack(fill="x", padx=4, pady=(2, 0))
-            self.lbl_lock = ctk.CTkLabel(
+            # Üst Küçük Rozet (Sadece Sabit Kilitliyse göster - ferah aralıklarla)
+            self.top_bar = ctk.CTkFrame(self, fg_color="transparent")
+            self.top_bar.pack(fill="x", padx=6, pady=(4, 2))
+            self.badge_lock = ctk.CTkFrame(
                 self.top_bar,
-                text="🔒 Sabit",
-                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=11, weight="bold"),
-                text_color="#B45309",
-                fg_color="transparent"
+                fg_color="#FEF3C7",
+                border_width=1,
+                border_color="#F59E0B",
+                corner_radius=4,
+                height=18
             )
-            self.lbl_lock.pack(side="left", padx=2)
+            self.badge_lock.pack(side="left")
+            self.lbl_lock = ctk.CTkLabel(
+                self.badge_lock,
+                text="🔒 Sabit",
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=10, weight="bold"),
+                text_color="#B45309"
+            )
+            self.lbl_lock.pack(padx=5, pady=1)
 
         # Dikey ortalanmış içerik kutusu
         self.center_box = ctk.CTkFrame(self, fg_color="transparent")
         self.center_box.pack(expand=True, fill="both", padx=4, pady=(2, 2))
 
         if self.teacher:
-            # 1. Satır: İsim (Dinamik font boyutu, Title Case, bold, yüksek kontrast #0F172A)
+            # 1. Satır: İsim (2 satıra sarkan uzun isimlerin hizayı bozmaması için sabit min-h kutusu)
             name_text = to_title_case(self.teacher.name)
+            self.name_container = ctk.CTkFrame(self.center_box, fg_color="transparent", height=38)
+            self.name_container.pack(fill="x", pady=(0, 1))
+            self.name_container.pack_propagate(False)
+
             self.lbl_name = ctk.CTkLabel(
-                self.center_box,
+                self.name_container,
                 text=name_text,
                 font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_TEACHER, weight=theme.FONT_WEIGHT_TEACHER),
                 text_color="#0F172A",
@@ -444,44 +437,53 @@ class CellWidget(ctk.CTkFrame):
                 justify="center",
                 cursor="hand2"
             )
-            self.lbl_name.pack(fill="x", pady=(0, 1))
+            self.lbl_name.pack(expand=True, fill="both")
 
-            # 2. Satır: Branş Bilgisi (Net okunaklı 12px ve yüksek kontrast #334155)
+            # 2. Satır: Branş Bilgisi (1 kademe daha küçük text-xs slate-500, kırpma yok, wrap destekli)
             branch_raw = self.teacher.branch if self.teacher.branch else ""
             branch_disp = format_branch_display(branch_raw)
             if branch_disp:
                 self.lbl_branch = ctk.CTkLabel(
                     self.center_box,
                     text=branch_disp,
-                    font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SECONDARY),
-                    text_color="#334155",
+                    font=ctk.CTkFont(family=theme.FONT_FAMILY, size=max(10, theme.FONT_SIZE_SECONDARY - 1), weight="normal"),
+                    text_color="#64748B",
+                    wraplength=135,
                     justify="center",
                     cursor="hand2"
                 )
                 self.lbl_branch.pack(fill="x", pady=(0, 2))
 
-            # 3. Satır: Boş Ders Rozeti (Net 11px bold rozet)
+            # 3. Satır: Boş Ders Rozeti (Nötr, sade bilgilendirme stili: bg-slate-100 text-slate-600)
             free_periods = self.controller.get_teacher_free_periods(self.teacher.id, self.day.name)
             if free_periods:
                 free_str = ", ".join(map(str, free_periods))
-                badge_text = f"🟢 Boş: {free_str}. Ders"
-                badge_bg = "#DCFCE7"
-                badge_fg = "#15803D"
-            else:
-                badge_text = "⚪ Tüm saatler dolu"
+                badge_text = f"Boş: {free_str}. Ders"
                 badge_bg = "#F1F5F9"
-                badge_fg = "#334155"
+                badge_fg = "#475569"
+                badge_border = "#CBD5E1"
+            else:
+                badge_text = "Tüm saatler dolu"
+                badge_bg = "#F8FAFC"
+                badge_fg = "#94A3B8"
+                badge_border = "#E2E8F0"
 
-            self.badge_free = ctk.CTkFrame(self.center_box, fg_color=badge_bg, corner_radius=5)
+            self.badge_free = ctk.CTkFrame(
+                self.center_box,
+                fg_color=badge_bg,
+                border_width=1,
+                border_color=badge_border,
+                corner_radius=5
+            )
             self.badge_free.pack(pady=(0, 2))
             self.lbl_free = ctk.CTkLabel(
                 self.badge_free,
                 text=badge_text,
-                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SMALL, weight="bold"),
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SMALL, weight="normal"),
                 text_color=badge_fg,
                 cursor="hand2"
             )
-            self.lbl_free.pack(padx=6, pady=1)
+            self.lbl_free.pack(padx=6, pady=2)
 
         else:
             # Boş Slot (+ Nöbetçi Ata - Davetkar yumuşak mavi stil)
@@ -498,6 +500,8 @@ class CellWidget(ctk.CTkFrame):
         widgets_to_bind = [self, self._canvas, self.center_box]
         if hasattr(self.center_box, "_canvas"):
             widgets_to_bind.append(self.center_box._canvas)
+        if hasattr(self, "name_container"):
+            widgets_to_bind.append(self.name_container)
         if hasattr(self, "lbl_name"):
             widgets_to_bind.append(self.lbl_name)
         if hasattr(self, "lbl_branch"):
@@ -508,6 +512,8 @@ class CellWidget(ctk.CTkFrame):
             widgets_to_bind.append(self.lbl_free)
         if hasattr(self, "lbl_empty"):
             widgets_to_bind.append(self.lbl_empty)
+        if hasattr(self, "badge_lock"):
+            widgets_to_bind.append(self.badge_lock)
         if hasattr(self, "lbl_lock"):
             widgets_to_bind.append(self.lbl_lock)
 
@@ -864,24 +870,25 @@ class ScheduleGrid(ttk.Frame):
             lbl.pack(pady=40)
             return
 
-        # Sütun Başlıkları: Günler / Nöbet Yerleri (Koyu lacivert #1E293B, ~8px yuvarlak köşe)
+        # Sütun Başlıkları: Günler / Nöbet Yerleri (Açık gri-mavi #F1F5F9 zemin, ince border)
         corner_frame = ctk.CTkFrame(
             self.table_frame,
             corner_radius=8,
-            fg_color="#1E293B",
-            border_width=0
+            fg_color="#F1F5F9",
+            border_width=1,
+            border_color="#CBD5E1"
         )
         lbl_corner = ctk.CTkLabel(
             corner_frame,
-            text="📍 Nöbet Yerleri",
+            text="Gün / Nöbet Yeri",
             font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
-            text_color="#FFFFFF"
+            text_color="#334155"
         )
         lbl_corner.pack(expand=True, fill="both", padx=6, pady=4)
         corner_frame.grid(row=0, column=0, sticky="nsew", padx=3, pady=3)
 
         col_idx = 1
-        # Sütun başlıkları (Nöbet Yerleri ve Slotları - ~8px yuvarlak köşe)
+        # Sütun başlıkları (Nöbet Yerleri ve Slotları - Açık gri-mavi #F1F5F9 zemin, ince border)
         loc_col_map: Dict[Tuple[str, int], int] = {}
         for loc in locations:
             for slot in range(loc.capacity):
@@ -893,14 +900,15 @@ class ScheduleGrid(ttk.Frame):
                 loc_frame = ctk.CTkFrame(
                     self.table_frame,
                     corner_radius=8,
-                    fg_color="#1E293B",
-                    border_width=0
+                    fg_color="#F1F5F9",
+                    border_width=1,
+                    border_color="#CBD5E1"
                 )
                 lbl_loc = ctk.CTkLabel(
                     loc_frame,
                     text=f"{icon}{slot_label}",
                     font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
-                    text_color="#FFFFFF"
+                    text_color="#0F172A"
                 )
                 lbl_loc.pack(expand=True, fill="both", padx=6, pady=4)
                 loc_frame.grid(row=0, column=col_idx, sticky="nsew", padx=3, pady=3)
@@ -959,9 +967,9 @@ class ScheduleGrid(ttk.Frame):
         self.table_frame.columnconfigure(0, weight=0, minsize=88)
         for c in range(1, col_idx):
             self.table_frame.columnconfigure(c, weight=1, uniform="duty_col")
-        self.table_frame.rowconfigure(0, weight=0, minsize=32)
+        self.table_frame.rowconfigure(0, weight=0, minsize=34)
         for r in range(1, len(days) + 1):
-            self.table_frame.rowconfigure(r, weight=1, uniform="day_row", minsize=54)
+            self.table_frame.rowconfigure(r, weight=1, uniform="day_row", minsize=68)
 
     # --- Sürükle ve Bırak (Drag & Drop) Mekanizması ---
     def is_valid_drop_target(self, source_cell: CellWidget, target_cell: CellWidget) -> Tuple[bool, str]:

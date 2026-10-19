@@ -1,6 +1,6 @@
 ; Inno Setup 6 Script - NöbetMatik Okul Nöbet Yönetim Sistemi
 #define MyAppName "NöbetMatik"
-#define MyAppVersion "2.0.2"
+#define MyAppVersion "2.1.0"
 #define MyAppPublisher "Barış Bayrak"
 #define MyAppURL "https://github.com/Barisbayrak19/nobetmatik"
 #define MyAppExeName "NobetMatik.exe"

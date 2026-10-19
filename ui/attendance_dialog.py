@@ -15,7 +15,7 @@ from typing import Optional, List, Dict, Any
 from core.models import Teacher, AttendanceRecord
 from core.database import Database
 from logic.export_service import ExportService
-from logic.substitution_service import SubstitutionService
+from logic.substitution_service import SubstitutionService, is_same_branch
 from core.logger import logger
 from ui.theme import (
     COLOR_BG, COLOR_CARD, COLOR_PRIMARY, COLOR_SECONDARY, COLOR_SUCCESS,
@@ -335,7 +335,7 @@ class AttendanceDialog(tk.Toplevel):
         table_container = tk.Frame(self, bg=COLOR_CARD, relief="solid", bd=1)
         table_container.pack(fill="both", expand=True, padx=15, pady=5)
 
-        cols = ("date", "teacher", "branch", "status", "periods", "lessons", "slip", "notes", "created")
+        cols = ("date", "teacher", "branch", "status", "periods", "lessons", "ek_ders", "slip", "notes", "created")
         self.tree = ttk.Treeview(table_container, columns=cols, show="headings", selectmode="browse")
 
         self.tree.heading("date", text="Tarih", anchor="center")
@@ -344,19 +344,24 @@ class AttendanceDialog(tk.Toplevel):
         self.tree.heading("status", text="Durumu", anchor="center")
         self.tree.heading("periods", text="Saatler", anchor="center")
         self.tree.heading("lessons", text="Girmediği Şubeler & Dersler", anchor="w")
+        self.tree.heading("ek_ders", text="İkame / Ek Ders Hak Edişi", anchor="center")
         self.tree.heading("slip", text="Görevlendirme Fişi", anchor="center")
         self.tree.heading("notes", text="Açıklama / İkame Notu", anchor="w")
         self.tree.heading("created", text="İşlem Zamanı", anchor="center")
 
-        self.tree.column("date", width=90, anchor="center")
-        self.tree.column("teacher", width=175, anchor="w")
-        self.tree.column("branch", width=125, anchor="center")
-        self.tree.column("status", width=95, anchor="center")
-        self.tree.column("periods", width=90, anchor="center")
-        self.tree.column("lessons", width=170, anchor="w")
-        self.tree.column("slip", width=120, anchor="center")
-        self.tree.column("notes", width=180, anchor="w")
-        self.tree.column("created", width=110, anchor="center")
+        self.tree.column("date", width=85, anchor="center")
+        self.tree.column("teacher", width=160, anchor="w")
+        self.tree.column("branch", width=115, anchor="center")
+        self.tree.column("status", width=90, anchor="center")
+        self.tree.column("periods", width=80, anchor="center")
+        self.tree.column("lessons", width=150, anchor="w")
+        self.tree.column("ek_ders", width=180, anchor="center")
+        self.tree.column("slip", width=110, anchor="center")
+        self.tree.column("notes", width=160, anchor="w")
+        self.tree.column("created", width=105, anchor="center")
+
+        self.tree.tag_configure("has_ek_ders", background="#F0FDF4")
+        self.tree.tag_configure("has_supervision", background="#F8FAFC")
 
         tree_scroll_y = ttk.Scrollbar(table_container, orient="vertical", command=self.tree.yview)
         tree_scroll_x = ttk.Scrollbar(table_container, orient="horizontal", command=self.tree.xview)
@@ -412,6 +417,20 @@ class AttendanceDialog(tk.Toplevel):
 
         status_counts = {"Raporlu": 0, "İzinli": 0, "Sevkli": 0, "Görevli": 0, "Mazeretli": 0}
 
+        # İkame kayıtlarını tek sorguda yükle ve indeksle
+        try:
+            subs_list = self.db.get_substitutions(month_str=month_param)
+        except Exception:
+            subs_list = []
+
+        subs_by_key: Dict[tuple, List[Any]] = {}
+        for s in subs_list:
+            if s.date_str and s.absent_teacher_id:
+                key = (s.date_str, s.absent_teacher_id)
+                subs_by_key.setdefault(key, []).append(s)
+
+        total_ek_hours_in_view = 0
+
         for r in self.records:
             status_counts[r.status] = status_counts.get(r.status, 0) + 1
 
@@ -423,16 +442,51 @@ class AttendanceDialog(tk.Toplevel):
 
             c_str = r.created_at[:16].replace("T", " ") if r.created_at else "-"
 
+            # İkame ve Ek Ders Hak Ediş Kontrolü
+            rel_subs = subs_by_key.get((r.date_str, r.teacher_id), [])
+            absent_t = self.teacher_map.get(r.teacher_id)
+            ek_h = 0
+            sup_h = 0
+            duty_names = []
+
+            for s in rel_subs:
+                if not s.duty_teacher_id:
+                    continue
+                duty_t = self.teacher_map.get(s.duty_teacher_id)
+                d_name = duty_t.name if duty_t else "Öğretmen"
+                if d_name not in duty_names:
+                    duty_names.append(d_name)
+
+                is_match = is_same_branch(duty_t.branch, absent_t.branch) if (duty_t and absent_t) else False
+                if s.is_ek_ders or is_match:
+                    ek_h += 1
+                else:
+                    sup_h += 1
+
+            row_tag = ""
+            names_str = ", ".join(duty_names) if duty_names else "Görevli"
+            if ek_h > 0:
+                ek_label = f"⭐ {ek_h} Sa. Ek Ders ({names_str})"
+                row_tag = "has_ek_ders"
+                total_ek_hours_in_view += ek_h
+            elif sup_h > 0:
+                ek_label = f"👁️ {sup_h} Sa. Nezaret ({names_str})"
+                row_tag = "has_supervision"
+            else:
+                ek_label = "-"
+
             # Fiş durumu
             has_slip = bool(r.slip_path and os.path.exists(r.slip_path))
             slip_label = "📄 Fişi Aç" if has_slip else "-"
 
+            tags = (row_tag,) if row_tag else ()
             self.tree.insert(
                 "",
                 "end",
                 iid=r.id,
                 values=(d_str, r.teacher_name, r.branch, r.status, r.periods_missed,
-                        r.lessons_missed or "-", slip_label, r.notes, c_str)
+                        r.lessons_missed or "-", ek_label, slip_label, r.notes, c_str),
+                tags=tags
             )
 
         summary = (
@@ -441,7 +495,8 @@ class AttendanceDialog(tk.Toplevel):
             f"İzinli: {status_counts.get('İzinli', 0)}  |  "
             f"Sevkli: {status_counts.get('Sevkli', 0)}  |  "
             f"Görevli: {status_counts.get('Görevli', 0)}  |  "
-            f"Mazeretli: {status_counts.get('Mazeretli', 0)}"
+            f"Mazeretli: {status_counts.get('Mazeretli', 0)}  |  "
+            f"⭐ İkame Ek Ders: {total_ek_hours_in_view} Saat"
         )
         self.lbl_stats.configure(text=summary)
 

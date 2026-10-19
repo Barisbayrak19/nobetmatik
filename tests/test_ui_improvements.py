@@ -162,7 +162,116 @@ class TestUIImprovements(unittest.TestCase):
         # Detay paneli kaldırıldı (tam genişlikte ızgara)
         self.assertIsNone(app.detail_panel)
 
+        # 1. İstatistik / KPI barının kaldırıldığını doğrula
+        self.assertIsNone(app.kpi_cards_frame)
+
+        # 5. Toolbar düğmelerinin 32px yükseklikte ve standart oklarda olduğunu doğrula
+        self.assertEqual(app.btn_distribute.cget("height"), 32)
+        self.assertEqual(app.btn_save.cget("height"), 32)
+        self.assertEqual(app.btn_shift.cget("height"), 32)
+        self.assertEqual(app.btn_announcements.cget("height"), 32)
+        # İkame Sistemi öne çıkan buton ve menü doğrulaması
+        self.assertTrue(hasattr(app, "btn_substitution"))
+        self.assertEqual(app.btn_substitution.cget("height"), 32)
+        self.assertIn("İkame", app.btn_substitution.cget("text"))
+        self.assertIn("substitution", app.sidebar_buttons)
+
+        # 6. Sidebar 3px aktif vurgu çizgisini doğrula
+        self.assertIn("weekly", app.sidebar_indicators)
+        self.assertEqual(app.sidebar_indicators["weekly"].cget("width"), 3)
+
         app.destroy()
+
+    def test_branch_format_and_cell_typography(self):
+        """2, 3 ve 4. İstekler: Branş metninin kırpılmaması, sabit isim yüksekliği, açık başlıklar ve nötr rozetler."""
+        from ui.schedule_grid import format_branch_display
+        # Kırpma olmamalı
+        self.assertEqual(format_branch_display("Din Kültürü ve Ahlak Bilgisi"), "Din Kültürü ve Ahlak Bilgisi")
+        self.assertEqual(format_branch_display("Teknoloji ve Tasarım"), "Teknoloji ve Tasarım")
+
+        assign = Assignment(
+            week_start=self.week_start,
+            day_id=self.day.id,
+            location_id=self.loc.id,
+            slot_index=0,
+            teacher_id=self.teacher.id,
+            fixed=True
+        )
+        controller = ScheduleGrid(
+            parent=self.root,
+            db=self.db,
+            duty_service=self.duty_service,
+            get_current_week=lambda: self.week_start,
+            on_data_changed=lambda: None
+        )
+        cell = CellWidget(
+            parent=self.root,
+            assignment=assign,
+            teacher=self.teacher,
+            day=self.day,
+            location=self.loc,
+            slot_index=0,
+            grid_controller=controller
+        )
+
+        # Sabit isim kutusu yüksekliği (38px min-h dengesi)
+        self.assertTrue(hasattr(cell, "name_container"))
+        self.assertEqual(cell.name_container.cget("height"), 38)
+
+        # Branş etiketi
+        self.assertTrue(hasattr(cell, "lbl_branch"))
+        self.assertEqual(cell.lbl_branch.cget("text_color"), "#64748B")
+
+        # Nötr rozet
+        self.assertTrue(hasattr(cell, "badge_free"))
+        self.assertEqual(cell.badge_free.cget("fg_color"), "#F1F5F9")
+        self.assertNotIn("🟢", cell.lbl_free.cget("text"))
+
+        # Sabit kilit rozeti
+        self.assertTrue(hasattr(cell, "badge_lock"))
+
+        controller.destroy()
+        cell.destroy()
+
+    def test_button_design_system_variants(self):
+        """Düğme Tasarım Sistemi (Button Design System) kılavuz standartlarını test eder."""
+        from ui.theme import create_modern_button, BTN_RADIUS, COLOR_BTN_PRIMARY_DARK_BG, COLOR_BTN_SECONDARY_BORDER
+
+        # 1. Primary Dark (Koyu Lacivert)
+        btn_prim = create_modern_button(self.root, text="+ Nöbet Ekle", variant="primary")
+        self.assertEqual(btn_prim.cget("fg_color"), COLOR_BTN_PRIMARY_DARK_BG)
+        self.assertEqual(btn_prim.cget("text_color"), "#FFFFFF")
+        self.assertEqual(btn_prim.cget("corner_radius"), BTN_RADIUS)
+        btn_prim.destroy()
+
+        # 2. Secondary / Outline (Beyaz zemin, ince sınır, açık mavi hover)
+        btn_sec = create_modern_button(self.root, text="Taslak Olarak Kaydet", variant="default")
+        self.assertEqual(btn_sec.cget("fg_color"), "#FFFFFF")
+        self.assertEqual(btn_sec.cget("border_width"), 1)
+        self.assertEqual(btn_sec.cget("border_color"), COLOR_BTN_SECONDARY_BORDER)
+        self.assertEqual(btn_sec.cget("corner_radius"), BTN_RADIUS)
+        btn_sec.destroy()
+
+        # 3. Success (Onayla)
+        btn_suc = create_modern_button(self.root, text="✓ Onayla", variant="success")
+        self.assertEqual(btn_suc.cget("fg_color"), "#059669")
+        self.assertEqual(btn_suc.cget("text_color"), "#FFFFFF")
+        btn_suc.destroy()
+
+        # 4. Danger (Reddet)
+        btn_dan = create_modern_button(self.root, text="✕ Reddet", variant="danger")
+        self.assertEqual(btn_dan.cget("fg_color"), "#DC2626")
+        self.assertEqual(btn_dan.cget("text_color"), "#FFFFFF")
+        btn_dan.destroy()
+
+        # 5. Segmented Active / Inactive
+        btn_seg_act = create_modern_button(self.root, text="Günlük", variant="segmented_active")
+        btn_seg_inact = create_modern_button(self.root, text="Haftalık", variant="segmented_inactive")
+        self.assertEqual(btn_seg_act.cget("fg_color"), COLOR_BTN_PRIMARY_DARK_BG)
+        self.assertEqual(btn_seg_inact.cget("fg_color"), "#FFFFFF")
+        self.assertEqual(btn_seg_inact.cget("border_width"), 1)
+        btn_seg_act.destroy()
+        btn_seg_inact.destroy()
 
     def test_feedback_rate_limiting(self):
         """Geri bildirim kısıtlama kuralları (günlük 20 limit, cooldown, içerik doğrulama) testi."""

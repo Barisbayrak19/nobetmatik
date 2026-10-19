@@ -633,6 +633,52 @@ class ExportService:
         logger.info(f"CSV çıktısı oluşturuldu: {output_path}")
         return output_path
 
+    def _get_record_sub_info(self, record: Any, teachers_map: Dict[str, Any]) -> Dict[str, Any]:
+        """Devamsızlık kaydına ait ikame ders görevlendirmelerini ve ek ders hak ediş durumunu inceler."""
+        try:
+            subs = self.db.get_substitutions(date_str=record.date_str, absent_teacher_id=record.teacher_id)
+        except Exception:
+            subs = []
+
+        if not subs:
+            return {"has_sub": False, "ek_ders_hours": 0, "supervision_hours": 0, "duty_names": [], "text": "-"}
+
+        from logic.substitution_service import is_same_branch
+        ek_ders_h = 0
+        sup_h = 0
+        duty_names = []
+        absent_t = teachers_map.get(record.teacher_id)
+
+        for s in subs:
+            if not s.duty_teacher_id:
+                continue
+            duty_t = teachers_map.get(s.duty_teacher_id)
+            d_name = duty_t.name if duty_t else "Öğretmen"
+            if d_name not in duty_names:
+                duty_names.append(d_name)
+
+            is_branch_match = is_same_branch(duty_t.branch, absent_t.branch) if (duty_t and absent_t) else False
+            if s.is_ek_ders or is_branch_match:
+                ek_ders_h += 1
+            else:
+                sup_h += 1
+
+        names_str = ", ".join(duty_names) if duty_names else "Görevli"
+        if ek_ders_h > 0:
+            text = f"⭐ {ek_ders_h} Saat Ek Ders ({names_str})"
+        elif sup_h > 0:
+            text = f"👁️ {sup_h} Saat Nezaret ({names_str})"
+        else:
+            text = "-"
+
+        return {
+            "has_sub": True,
+            "ek_ders_hours": ek_ders_h,
+            "supervision_hours": sup_h,
+            "duty_names": duty_names,
+            "text": text
+        }
+
     # 6. PERSONEL DEVAM TAKİP EXCEL (.xlsx)
     def export_attendance_excel(self, records: Any, output_path: Any = None, title_or_path: Any = None, title: str = "PERSONEL DEVAM-DEVAMSIZLIK TAKİP ÇİZELGESİ") -> Path:
         if isinstance(records, int):  # export_attendance_excel(year, month, Path(output_path), [title])
@@ -649,6 +695,8 @@ class ExportService:
 
         school = self.db.get_school_info()
         today_str = datetime.date.today().strftime("%d.%m.%Y")
+        teachers_list = self.db.get_teachers(active_only=False)
+        teachers_map = {t.id: t for t in teachers_list}
 
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -660,6 +708,7 @@ class ExportService:
         tbl_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
         cell_font = Font(name="Calibri", size=9.5)
         bold_cell_font = Font(name="Calibri", size=9.5, bold=True)
+        fill_ek_ders = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
 
         status_colors = {
             "Raporlu": PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid"),
@@ -676,7 +725,7 @@ class ExportService:
             bottom=Side(style='thin', color='CBD5E1')
         )
 
-        col_count = 8
+        col_count = 9
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=col_count)
         ws.cell(row=1, column=1, value="T.C.").alignment = Alignment(horizontal="center")
         ws.cell(row=1, column=1).font = sub_font
@@ -693,7 +742,7 @@ class ExportService:
         ws.cell(row=4, column=1, value=title).alignment = Alignment(horizontal="center")
         ws.cell(row=4, column=1).font = Font(name="Calibri", size=11, bold=True, color="2563EB")
 
-        headers = ["Sıra No", "Tarih", "Öğretmen Adı Soyadı", "Branşı", "Devamsızlık Nedeni", "Ders Saatleri", "Girmediği Şubeler / Dersler", "Açıklama"]
+        headers = ["Sıra No", "Tarih", "Öğretmen Adı Soyadı", "Branşı", "Devamsızlık Nedeni", "Ders Saatleri", "Girmediği Şubeler / Dersler", "İkame / Ek Ders Hak Edişi", "Açıklama"]
         hdr_row = 6
         for col_idx, h_text in enumerate(headers, start=1):
             c = ws.cell(row=hdr_row, column=col_idx, value=h_text)
@@ -747,7 +796,18 @@ class ExportService:
             c_lessons.font = cell_font
             c_lessons.border = thin_border
 
-            c_notes = ws.cell(row=curr_row, column=8, value=r.notes)
+            # İkame & Ek ders durumu
+            sub_info = self._get_record_sub_info(r, teachers_map)
+            c_sub = ws.cell(row=curr_row, column=8, value=sub_info["text"])
+            c_sub.alignment = Alignment(horizontal="center")
+            c_sub.border = thin_border
+            if sub_info["ek_ders_hours"] > 0:
+                c_sub.fill = fill_ek_ders
+                c_sub.font = bold_cell_font
+            else:
+                c_sub.font = cell_font
+
+            c_notes = ws.cell(row=curr_row, column=9, value=r.notes)
             c_notes.alignment = Alignment(horizontal="left")
             c_notes.font = cell_font
             c_notes.border = thin_border
@@ -756,15 +816,15 @@ class ExportService:
 
         # İmza Satırı
         curr_row += 2
-        ws.cell(row=curr_row, column=7, value=today_str).alignment = Alignment(horizontal="center")
-        ws.cell(row=curr_row, column=7).font = sub_font
-        ws.cell(row=curr_row + 1, column=7, value=school.principal_name).alignment = Alignment(horizontal="center")
-        ws.cell(row=curr_row + 1, column=7).font = header_font
-        ws.cell(row=curr_row + 2, column=7, value="Okul Müdürü").alignment = Alignment(horizontal="center")
-        ws.cell(row=curr_row + 2, column=7).font = sub_font
+        ws.cell(row=curr_row, column=8, value=today_str).alignment = Alignment(horizontal="center")
+        ws.cell(row=curr_row, column=8).font = sub_font
+        ws.cell(row=curr_row + 1, column=8, value=school.principal_name).alignment = Alignment(horizontal="center")
+        ws.cell(row=curr_row + 1, column=8).font = header_font
+        ws.cell(row=curr_row + 2, column=8, value="Okul Müdürü").alignment = Alignment(horizontal="center")
+        ws.cell(row=curr_row + 2, column=8).font = sub_font
 
         # Sütun Genişlikleri
-        widths = [8, 13, 26, 20, 18, 16, 26, 30]
+        widths = [8, 13, 25, 18, 18, 15, 25, 28, 26]
         for col_idx, width in enumerate(widths, start=1):
             col_letter = get_column_letter(col_idx)
             ws.column_dimensions[col_letter].width = width
@@ -863,8 +923,11 @@ class ExportService:
         story.append(Paragraph(title, title_style))
         story.append(Spacer(1, 10))
 
-        headers = ["No", "Tarih", "Öğretmen Adı Soyadı", "Branşı", "Durumu", "Ders Saatleri", "Girmediği Şubeler", "Açıklama"]
+        headers = ["No", "Tarih", "Öğretmen Adı Soyadı", "Branşı", "Durumu", "Ders Saatleri", "Girmediği Şubeler", "Açıklama / İkame"]
         table_data = [[Paragraph(h, hdr_cell_style) for h in headers]]
+        teachers_list = self.db.get_teachers(active_only=False)
+        teachers_map = {t.id: t for t in teachers_list}
+
         if not records:
             empty_row = [
                 Paragraph("-", cell_style),
@@ -885,6 +948,14 @@ class ExportService:
                 except Exception:
                     d_formatted = r.date_str
 
+                sub_info = self._get_record_sub_info(r, teachers_map)
+                if sub_info["has_sub"]:
+                    color_tag = "#166534" if sub_info["ek_ders_hours"] > 0 else "#475569"
+                    sub_badge = f"<font color='{color_tag}'><b>[{sub_info['text']}]</b></font>"
+                    note_html = f"{r.notes}<br/>{sub_badge}" if r.notes else sub_badge
+                else:
+                    note_html = r.notes or "-"
+
                 row = [
                     Paragraph(str(idx), cell_style),
                     Paragraph(d_formatted, cell_style),
@@ -893,11 +964,11 @@ class ExportService:
                     Paragraph(r.status, cell_bold_style),
                     Paragraph(r.periods_missed, cell_style),
                     Paragraph(r.lessons_missed or "-", cell_left_style),
-                    Paragraph(r.notes, cell_left_style)
+                    Paragraph(note_html, cell_left_style)
                 ]
                 table_data.append(row)
 
-        col_widths = [20, 52, 98, 70, 52, 60, 95, 100]
+        col_widths = [20, 50, 95, 68, 50, 55, 92, 117]
         tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
 
         t_style = [
@@ -1626,3 +1697,364 @@ class ExportService:
         wb.save(output_path)
         logger.info(f"Boş ders çizelgesi Excel oluşturuldu: {output_path}")
         return output_path
+
+    # =========================================================================
+    # AY SONU İKAME VE EK DERS ÇIKTILARI (MONTHLY EK DERS EXPORTS)
+    # =========================================================================
+
+    def export_monthly_ek_ders_excel(self, month_str: str, output_path: Path) -> Path:
+        """
+        Belirtilen ay (YYYY-MM) için ikame derse giren öğretmenlerin
+        ek ders tahakkuk ve nöbet nezareti icmalini Excel (.xlsx) olarak üretir.
+        """
+        from logic.substitution_service import get_monthly_ek_ders_summary
+        summary = get_monthly_ek_ders_summary(self.db, month_str)
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = f"Ek Ders İcmal {month_str}"
+        ws.views.sheetView[0].showGridLines = True
+
+        school = self.db.get_school_info()
+        today_str = datetime.date.today().strftime("%d.%m.%Y")
+
+        font_title = Font(name="Calibri", size=14, bold=True, color="1E3A8A")
+        font_sub = Font(name="Calibri", size=11, bold=True, color="334155")
+        font_hdr = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        font_bold = Font(name="Calibri", size=10, bold=True)
+        font_norm = Font(name="Calibri", size=10)
+        font_meta = Font(name="Calibri", size=9, italic=True, color="64748B")
+
+        fill_hdr = PatternFill("solid", fgColor="1E3A8A")
+        fill_zebra = PatternFill("solid", fgColor="F8FAFC")
+        fill_ek_ders = PatternFill("solid", fgColor="DCFCE7")  # Hafif yeşil vurgulama
+        fill_total = PatternFill("solid", fgColor="E2E8F0")
+
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+
+        align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        align_left = Alignment(horizontal="left", vertical="center")
+        align_right = Alignment(horizontal="right", vertical="center")
+
+        # Başlık Blokları
+        ws.merge_cells("A1:H1")
+        ws["A1"] = f"T.C. {school.district.upper() if school.district else ''} {school.name.upper()} MÜDÜRLÜĞÜ"
+        ws["A1"].font = font_title
+        ws["A1"].alignment = align_center
+
+        ws.merge_cells("A2:H2")
+        ws["A2"] = f"AY SONU İKAME DERS VE EK DERS TAHAKKUK İCMALİ ({month_str})"
+        ws["A2"].font = font_sub
+        ws["A2"].alignment = align_center
+
+        ws.merge_cells("A3:H3")
+        ws["A3"] = f"Rapor Tarihi: {today_str} | Toplam İkame: {summary['total_hours']} Saat | Ek Ders Hak Edilen: {summary['total_ek_ders_hours']} Saat | Hak Eden Öğretmen: {summary['eligible_teacher_count']} Kişi"
+        ws["A3"].font = font_meta
+        ws["A3"].alignment = align_center
+
+        # Tablo Başlıkları
+        headers = [
+            "Sıra",
+            "Öğretmen Adı Soyadı",
+            "Branşı",
+            "Toplam İkame (Saat)",
+            "Ek Ders Hak Ediş (Saat)",
+            "Nöbet Nezareti (Saat)",
+            "Girdiği Sınıflar",
+            "Mevzuat / Açıklama"
+        ]
+        ws.append([])  # 4. satır boş
+        ws.append(headers)  # 5. satır başlıklar
+        ws.row_dimensions[5].height = 28
+
+        for col_idx in range(1, 9):
+            cell = ws.cell(row=5, column=col_idx)
+            cell.font = font_hdr
+            cell.fill = fill_hdr
+            cell.alignment = align_center
+            cell.border = thin_border
+
+        # Veri Satırları
+        row_idx = 6
+        for idx, st in enumerate(summary["teachers"], start=1):
+            is_eligible = st["ek_ders_hours"] > 0
+            mevzuat_note = "MEB Yön. Md. 44 (Aynı Branş / Ek Ders)" if is_eligible else "Nöbet Gözetim Görevi (Ücretsiz)"
+
+            row_data = [
+                idx,
+                st["teacher_name"],
+                st["branch"] or "-",
+                st["total_substitutions"],
+                st["ek_ders_hours"],
+                st["supervision_hours"],
+                st["classes_str"],
+                mevzuat_note
+            ]
+            ws.append(row_data)
+            ws.row_dimensions[row_idx].height = 22
+
+            for c_i in range(1, 9):
+                cell = ws.cell(row=row_idx, column=c_i)
+                cell.border = thin_border
+                cell.font = font_bold if (c_i == 5 and is_eligible) or c_i == 2 else font_norm
+
+                if c_i in (1, 4, 5, 6):
+                    cell.alignment = align_center
+                else:
+                    cell.alignment = align_left
+
+                if is_eligible and c_i == 5:
+                    cell.fill = fill_ek_ders
+                elif idx % 2 == 0:
+                    cell.fill = fill_zebra
+
+            row_idx += 1
+
+        # Genel Toplam Satırı
+        total_row = [
+            "",
+            "GENEL TOPLAM",
+            "",
+            summary["total_hours"],
+            summary["total_ek_ders_hours"],
+            summary["total_supervision_hours"],
+            "",
+            f"Toplam {summary['eligible_teacher_count']} öğretmen ek ders hak etti."
+        ]
+        ws.append(total_row)
+        ws.row_dimensions[row_idx].height = 24
+        for c_i in range(1, 9):
+            cell = ws.cell(row=row_idx, column=c_i)
+            cell.font = font_bold
+            cell.fill = fill_total
+            cell.border = thin_border
+            cell.alignment = align_center if c_i in (4, 5, 6) else align_left
+
+        row_idx += 2
+        # İmza Bloğu
+        ws.cell(row=row_idx, column=2, value=f"{today_str}\nDüzenleyen\nMüdür Yardımcısı").alignment = align_center
+        ws.cell(row=row_idx, column=2).font = font_bold
+
+        ws.cell(row=row_idx, column=6, value=f"{today_str}\n{school.principal_name}\nOkul Müdürü").alignment = align_center
+        ws.cell(row=row_idx, column=6).font = font_bold
+
+        # Sütun Genişlikleri
+        ws.column_dimensions["A"].width = 6
+        ws.column_dimensions["B"].width = 28
+        ws.column_dimensions["C"].width = 22
+        ws.column_dimensions["D"].width = 16
+        ws.column_dimensions["E"].width = 18
+        ws.column_dimensions["F"].width = 16
+        ws.column_dimensions["G"].width = 24
+        ws.column_dimensions["H"].width = 32
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Ay sonu ek ders Excel icmali oluşturuldu: {output_path}")
+        return output_path
+
+    def export_monthly_ek_ders_pdf(self, month_str: str, output_path: Path) -> Path:
+        """
+        Belirtilen ay (YYYY-MM) için ikame derse giren öğretmenlerin
+        ek ders tahakkuk ve nöbet nezareti icmalini resmi formatta PDF olarak üretir.
+        """
+        _register_pdf_fonts()
+        from logic.substitution_service import get_monthly_ek_ders_summary
+        summary = get_monthly_ek_ders_summary(self.db, month_str)
+
+        school = self.db.get_school_info()
+        today_str = datetime.date.today().strftime("%d.%m.%Y")
+
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=landscape(A4),
+            rightMargin=24,
+            leftMargin=24,
+            topMargin=25,
+            bottomMargin=25
+        )
+
+        font_family = "CustomArial" if _FONT_REGISTERED else "Helvetica"
+        font_bold = "CustomArial-Bold" if _FONT_REGISTERED else "Helvetica-Bold"
+
+        title_style = ParagraphStyle(
+            name="EkDersPdfTitle",
+            fontName=font_bold,
+            fontSize=11,
+            alignment=1,
+            leading=14
+        )
+        subtitle_style = ParagraphStyle(
+            name="EkDersPdfSubTitle",
+            fontName=font_bold,
+            fontSize=12,
+            alignment=1,
+            textColor=colors.HexColor("#1E3A8A"),
+            leading=15
+        )
+        meta_style = ParagraphStyle(
+            name="EkDersPdfMeta",
+            fontName=font_family,
+            fontSize=8,
+            alignment=1,
+            textColor=colors.HexColor("#64748B"),
+            leading=11
+        )
+        hdr_cell_style = ParagraphStyle(
+            name="EkDersHdrCell",
+            fontName=font_bold,
+            fontSize=8,
+            alignment=1,
+            textColor=colors.white,
+            leading=10
+        )
+        cell_style = ParagraphStyle(
+            name="EkDersCell",
+            fontName=font_family,
+            fontSize=8,
+            alignment=0,
+            leading=10
+        )
+        cell_center = ParagraphStyle(
+            name="EkDersCellCenter",
+            fontName=font_family,
+            fontSize=8,
+            alignment=1,
+            leading=10
+        )
+        cell_bold_center = ParagraphStyle(
+            name="EkDersCellBoldCenter",
+            fontName=font_bold,
+            fontSize=8,
+            alignment=1,
+            leading=10
+        )
+        sign_style = ParagraphStyle(
+            name="EkDersSign",
+            fontName=font_bold,
+            fontSize=9,
+            alignment=1,
+            leading=13
+        )
+
+        story = []
+
+        # Başlık
+        dist_str = f" / {school.district.upper()}" if school.district else ""
+        story.append(Paragraph(f"T.C.<br/>{school.city.upper()}{dist_str} KAYMAKAMLIĞI<br/>{school.name.upper()} MÜDÜRLÜĞÜ", title_style))
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(f"AY SONU İKAME DERS VE EK DERS TAHAKKUK İCMALİ ({month_str})", subtitle_style))
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(
+            f"Rapor Tarihi: {today_str} &nbsp;|&nbsp; Toplam İkame: {summary['total_hours']} Saat &nbsp;|&nbsp; "
+            f"Ek Ders Hak Edilen: <b>{summary['total_ek_ders_hours']} Saat</b> &nbsp;|&nbsp; Hak Eden Öğretmen: {summary['eligible_teacher_count']} Kişi",
+            meta_style
+        ))
+        story.append(Spacer(1, 10))
+
+        # Tablo
+        table_data = [[
+            Paragraph("Sıra", hdr_cell_style),
+            Paragraph("Öğretmen Adı Soyadı", hdr_cell_style),
+            Paragraph("Branşı", hdr_cell_style),
+            Paragraph("Toplam İkame", hdr_cell_style),
+            Paragraph("Ek Ders Hak Ediş", hdr_cell_style),
+            Paragraph("Nöbet Nezareti", hdr_cell_style),
+            Paragraph("Girdiği Sınıflar", hdr_cell_style),
+            Paragraph("Mevzuat / Açıklama", hdr_cell_style)
+        ]]
+
+        for idx, st in enumerate(summary["teachers"], start=1):
+            is_eligible = st["ek_ders_hours"] > 0
+            ek_text = f"<b>{st['ek_ders_hours']} Saat ⭐</b>" if is_eligible else "0"
+            mevzuat = "MEB Yön. Md. 44 (Aynı Branş / Ek Ders)" if is_eligible else "Nöbet Gözetim Görevi"
+
+            table_data.append([
+                Paragraph(str(idx), cell_center),
+                Paragraph(f"<b>{st['teacher_name']}</b>", cell_style),
+                Paragraph(st["branch"] or "-", cell_style),
+                Paragraph(f"{st['total_substitutions']} Saat", cell_center),
+                Paragraph(ek_text, cell_bold_center if is_eligible else cell_center),
+                Paragraph(f"{st['supervision_hours']} Saat", cell_center),
+                Paragraph(st["classes_str"], cell_style),
+                Paragraph(mevzuat, cell_style)
+            ])
+
+        # Toplam Satırı
+        table_data.append([
+            Paragraph("", cell_center),
+            Paragraph("<b>GENEL TOPLAM</b>", cell_style),
+            Paragraph("", cell_style),
+            Paragraph(f"<b>{summary['total_hours']} Saat</b>", cell_bold_center),
+            Paragraph(f"<b>{summary['total_ek_ders_hours']} Saat</b>", cell_bold_center),
+            Paragraph(f"<b>{summary['total_supervision_hours']} Saat</b>", cell_bold_center),
+            Paragraph("", cell_style),
+            Paragraph(f"<b>{summary['eligible_teacher_count']} Öğretmen Hak Etti</b>", cell_style)
+        ])
+
+        col_widths = [26, 130, 95, 75, 85, 75, 110, 160]
+        tbl = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+        t_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]
+
+        for i in range(1, len(table_data) - 1):
+            if i % 2 == 0:
+                t_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor("#F8FAFC")))
+            # Ek ders alanları hafif yeşille vurgula
+            if summary["teachers"][i-1]["ek_ders_hours"] > 0:
+                t_style.append(('BACKGROUND', (4, i), (4, i), colors.HexColor("#DCFCE7")))
+
+        # Toplam satırı stili
+        total_row_idx = len(table_data) - 1
+        t_style.append(('BACKGROUND', (0, total_row_idx), (-1, total_row_idx), colors.HexColor("#E2E8F0")))
+
+        tbl.setStyle(TableStyle(t_style))
+        story.append(tbl)
+        story.append(Spacer(1, 14))
+
+        # Yasal Not
+        note_style = ParagraphStyle(
+            name="EkDersNote",
+            fontName=font_family,
+            fontSize=7,
+            textColor=colors.HexColor("#64748B"),
+            leading=9
+        )
+        story.append(Paragraph(
+            "<i>* MEB Okul Öncesi ve İlköğretim Kurumları Yönetmeliği Madde 44 uyarınca; nöbetçi öğretmenler boş ders saatlerinde sınıflara nezaret etmekle "
+            "yükümlüdür. Gelmeyen öğretmenle aynı branşta olup derse fiilen giren nöbetçi öğretmenlere ilgili mevzuat uyarınca ek ders ücreti tahakkuk ettirilir.</i>",
+            note_style
+        ))
+        story.append(Spacer(1, 16))
+
+        # İmza Bloğu
+        sign_table_data = [
+            [
+                Paragraph(f"{today_str}<br/>Düzenleyen<br/>Müdür Yardımcısı", sign_style),
+                Paragraph(f"{today_str}<br/>{school.principal_name}<br/>Okul Müdürü", sign_style)
+            ]
+        ]
+        sign_tbl = Table(sign_table_data, colWidths=[380, 380])
+        sign_tbl.setStyle(TableStyle([
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+        story.append(sign_tbl)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.build(story)
+        logger.info(f"Ay sonu ek ders PDF icmali oluşturuldu: {output_path}")
+        return output_path
+

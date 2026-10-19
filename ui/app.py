@@ -201,7 +201,7 @@ class MainApp(ctk.CTk):
         # Üst Okul & Yönetici Bilgi Kartı
         school = self.db.get_school_info()
         brand_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        brand_frame.pack(fill="x", padx=16, pady=(16, 10))
+        brand_frame.pack(fill="x", padx=16, pady=(20, 14))
 
         lbl_logo = ctk.CTkLabel(
             brand_frame,
@@ -209,7 +209,7 @@ class MainApp(ctk.CTk):
             font=ctk.CTkFont(family=FONT_FAMILY, size=17, weight="bold"),
             text_color="#38BDF8"
         )
-        lbl_logo.pack(anchor="w")
+        lbl_logo.pack(anchor="w", pady=(0, 10))
 
         self.lbl_sidebar_school = ctk.CTkLabel(
             brand_frame,
@@ -219,7 +219,7 @@ class MainApp(ctk.CTk):
             wraplength=188,
             justify="left"
         )
-        self.lbl_sidebar_school.pack(anchor="w", pady=(4, 0))
+        self.lbl_sidebar_school.pack(anchor="w", pady=(0, 8))
 
         self.lbl_sidebar_year = ctk.CTkLabel(
             brand_frame,
@@ -229,19 +229,19 @@ class MainApp(ctk.CTk):
             fg_color="#1E293B",
             corner_radius=6,
             padx=8,
-            pady=3
+            pady=4
         )
-        self.lbl_sidebar_year.pack(anchor="w", pady=(5, 3))
+        self.lbl_sidebar_year.pack(anchor="w", pady=(0, 8))
 
         self.lbl_sidebar_principal = ctk.CTkLabel(
             brand_frame,
             text=f"Müdür: {school.principal_name}" if school.principal_name else "Müdürlük",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            text_color="#CBD5E1",
+            text_color="#94A3B8",
             wraplength=188,
             justify="left"
         )
-        self.lbl_sidebar_principal.pack(anchor="w", pady=(1, 0))
+        self.lbl_sidebar_principal.pack(anchor="w", pady=(0, 2))
 
         # İnce ayırıcı çizgi
         div1 = ctk.CTkFrame(self.sidebar_frame, fg_color="#1E293B", height=1)
@@ -261,6 +261,7 @@ class MainApp(ctk.CTk):
 
         main_nav_items = [
             ("weekly", "📅  Haftalık Nöbet"),
+            ("substitution", "🔄  İkame Sistemi"),
             ("teachers", "👥  Öğretmenler"),
             ("locations", "📍  Nöbet Yerleri"),
             ("distribute", "⚡  Otomatik Dağıtım"),
@@ -269,18 +270,17 @@ class MainApp(ctk.CTk):
         ]
 
         def _create_sidebar_pill(key: str, text: str, is_active: bool = False):
-            row = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent", height=36)
-            row.pack(fill="x", padx=8, pady=2)
+            row = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent", height=38)
+            row.pack(fill="x", padx=(0, 8), pady=2)
             row.pack_propagate(False)
 
             ind = ctk.CTkFrame(
                 row,
-                width=4,
-                height=20,
-                corner_radius=2,
+                width=3,
+                corner_radius=1,
                 fg_color="#38BDF8" if is_active else "transparent"
             )
-            ind.pack(side="left", padx=(2, 4), pady=8)
+            ind.pack(side="left", fill="y", padx=(0, 6), pady=4)
 
             btn = ctk.CTkButton(
                 row,
@@ -290,8 +290,8 @@ class MainApp(ctk.CTk):
                 anchor="w",
                 fg_color="#1E293B" if is_active else "transparent",
                 hover_color="#1E293B",
-                text_color="#38BDF8" if is_active else "#F8FAFC",
-                corner_radius=12,
+                text_color="#38BDF8" if is_active else "#E2E8F0",
+                corner_radius=10,
                 border_width=0,
                 command=lambda k=key: self.switch_page(k)
             )
@@ -346,7 +346,7 @@ class MainApp(ctk.CTk):
             btn.configure(
                 fg_color="#1E293B" if is_active else "transparent",
                 hover_color="#1E293B",
-                text_color="#38BDF8" if is_active else "#F8FAFC",
+                text_color="#38BDF8" if is_active else "#E2E8F0",
                 font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if is_active else "normal")
             )
             if hasattr(self, "sidebar_indicators") and key in self.sidebar_indicators:
@@ -360,6 +360,9 @@ class MainApp(ctk.CTk):
             return
         if key == "feedback":
             self.open_feedback_dialog()
+            return
+        if key == "substitution":
+            self.open_substitution_dialog()
             return
 
         if hasattr(self, "current_page_key") and key == self.current_page_key and key != "weekly":
@@ -380,10 +383,20 @@ class MainApp(ctk.CTk):
         self._do_switch_page(key)
 
     def _do_switch_page(self, key: str):
+        try:
+            target_frame = self._get_or_create_page(key)
+        except Exception as e:
+            logger.error(f"Sayfa açılırken hata ({key}): {e}", exc_info=True)
+            messagebox.showerror(
+                "Sayfa Yükleme Hatası",
+                f"'{key}' sayfası açılırken bir hata oluştu:\n{e}",
+                parent=self
+            )
+            return
+
         if hasattr(self, "current_page_frame") and self.current_page_frame:
             self.current_page_frame.pack_forget()
 
-        target_frame = self._get_or_create_page(key)
         target_frame.pack(fill="both", expand=True)
         self.current_page_frame = target_frame
         self.current_page_key = key
@@ -561,13 +574,13 @@ class MainApp(ctk.CTk):
             corner_radius=10,
             border_width=0
         )
-        self.header_actions_box.pack(side="right", padx=(0, 12), pady=10)
+        self.header_actions_box.pack(side="right", padx=(0, 16), pady=10)
 
         self.btn_feedback = ctk.CTkButton(
             self.header_actions_box,
             text="💬",
-            width=30,
-            height=30,
+            width=32,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14),
             fg_color="transparent",
             hover_color="#E2E8F0",
@@ -582,8 +595,8 @@ class MainApp(ctk.CTk):
         self.btn_announcements = ctk.CTkButton(
             self.header_actions_box,
             text="🔔",
-            width=30,
-            height=30,
+            width=32,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14),
             fg_color="transparent",
             hover_color="#E2E8F0",
@@ -595,7 +608,7 @@ class MainApp(ctk.CTk):
         self.btn_announcements.pack(side="right", padx=(3, 1), pady=3)
         SimpleTooltip(self.btn_announcements, "Sistem Duyuruları")
 
-        # Üst Sol Hafta Gezinme ve Geçmiş Kapsülü (Modern Yekpare Entegre Segmented Pill)
+        # Üst Sol Hafta Gezinme Kapsülü (Sadeleştirilmiş: < Tarih > Bugün)
         self.nav_card = ctk.CTkFrame(
             self.top_header_frame,
             fg_color="#F1F5F9",
@@ -604,52 +617,15 @@ class MainApp(ctk.CTk):
         )
         self.nav_card.pack(side="left", padx=(16, 8), pady=10)
 
-        # Geri / İleri Al (Tarih ve çalışma geçmişiyle birleşik)
-        self.btn_undo = ctk.CTkButton(
-            self.nav_card,
-            text="↶",
-            width=28,
-            height=30,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
-            fg_color="transparent",
-            hover_color="#FFFFFF",
-            text_color="#0F172A",
-            text_color_disabled="#94A3B8",
-            border_width=0,
-            corner_radius=8,
-            state="disabled",
-            command=self.do_undo
-        )
-        self.btn_undo.pack(side="left", padx=(3, 1), pady=3)
-        SimpleTooltip(self.btn_undo, "Geri Al (Ctrl+Z)")
-
-        self.btn_redo = ctk.CTkButton(
-            self.nav_card,
-            text="↷",
-            width=28,
-            height=30,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
-            fg_color="transparent",
-            hover_color="#FFFFFF",
-            text_color="#0F172A",
-            text_color_disabled="#94A3B8",
-            border_width=0,
-            corner_radius=8,
-            state="disabled",
-            command=self.do_redo
-        )
-        self.btn_redo.pack(side="left", padx=(1, 2), pady=3)
-        SimpleTooltip(self.btn_redo, "İleri Al (Ctrl+Y)")
-
-        div_history = ctk.CTkFrame(self.nav_card, fg_color="#CBD5E1", width=1, height=18)
-        div_history.pack(side="left", padx=3, pady=6)
+        self.btn_undo = None
+        self.btn_redo = None
 
         btn_prev = ctk.CTkButton(
             self.nav_card,
-            text="‹",
-            width=28,
-            height=30,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+            text="<",
+            width=30,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
             fg_color="transparent",
             hover_color="#E2E8F0",
             text_color="#0F172A",
@@ -657,27 +633,28 @@ class MainApp(ctk.CTk):
             corner_radius=8,
             command=self.prev_week
         )
-        btn_prev.pack(side="left", padx=(2, 1), pady=3)
+        btn_prev.pack(side="left", padx=(3, 1), pady=3)
         SimpleTooltip(btn_prev, "Önceki Hafta")
 
         self.lbl_week_range = ctk.CTkLabel(
             self.nav_card,
             text="",
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             text_color="#0F172A",
             fg_color="#FFFFFF",
             corner_radius=7,
-            padx=10,
-            pady=4
+            padx=12,
+            pady=0
         )
         self.lbl_week_range.pack(side="left", padx=2, pady=3)
 
         btn_next = ctk.CTkButton(
             self.nav_card,
-            text="›",
-            width=28,
-            height=30,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+            text=">",
+            width=30,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
             fg_color="transparent",
             hover_color="#E2E8F0",
             text_color="#0F172A",
@@ -691,8 +668,8 @@ class MainApp(ctk.CTk):
         btn_today = ctk.CTkButton(
             self.nav_card,
             text="Bugün",
-            width=52,
-            height=30,
+            width=56,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             fg_color="#DBEAFE",
             hover_color="#BFDBFE",
@@ -704,56 +681,11 @@ class MainApp(ctk.CTk):
         btn_today.pack(side="left", padx=(2, 3), pady=3)
         SimpleTooltip(btn_today, "Bu Haftaya Dön")
 
-    # --- 3. İSTATİSTİK (KPI) KARTLARI ---
+    # --- 3. İSTATİSTİK (KPI) KARTLARI (Kullanıcı Talebiyle Kaldırıldı - Dikey Alan Kazanımı) ---
     def _build_kpi_cards(self, parent=None):
-        target = parent if parent is not None else self.main_container
-        self.kpi_cards_frame = ctk.CTkFrame(target, fg_color="transparent")
-        self.kpi_cards_frame.pack(fill="x", padx=16, pady=(6, 6))
-
-        for i in range(5):
-            self.kpi_cards_frame.columnconfigure(i, weight=1, uniform="kpi")
-
+        self.kpi_cards_frame = None
         self.kpi_widgets = {}
         self.kpi_card_frames = {}
-
-        card_defs = [
-            ("teachers", "Aktif Öğretmen", "#0F172A", "0"),
-            ("filled", "Dolu Nöbet", "#2563EB", "0 / 0"),
-            ("missing", "Eksik Nöbet", "#059669", "0"),
-            ("fixed", "Sabit Görev", "#D97706", "0"),
-            ("rate", "Dağılım Oranı", "#059669", "%0"),
-        ]
-
-        for idx, (key, title, val_color, def_val) in enumerate(card_defs):
-            card = ctk.CTkFrame(
-                self.kpi_cards_frame,
-                fg_color="#FFFFFF",
-                corner_radius=8,
-                border_width=1,
-                border_color="#E2E8F0",
-                height=62
-            )
-            card.grid(row=0, column=idx, padx=4, pady=0, sticky="nsew")
-            card.pack_propagate(False)
-
-            lbl_val = ctk.CTkLabel(
-                card,
-                text=def_val,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=20, weight="bold"),
-                text_color=val_color
-            )
-            lbl_val.pack(anchor="w", padx=12, pady=(4, 0))
-
-            lbl_sub = ctk.CTkLabel(
-                card,
-                text=title,
-                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
-                text_color="#334155"
-            )
-            lbl_sub.pack(anchor="w", padx=12, pady=(0, 4))
-
-            self.kpi_widgets[key] = (lbl_val, lbl_sub)
-            self.kpi_card_frames[key] = card
 
     # --- 4. ÜST BAŞLIKLA BİRLEŞTİRİLMİŞ ULTRA-MİNİMALİST İKON & PASTEL KAPSÜL DOCK ---
     def _build_action_bar(self, parent=None):
@@ -770,8 +702,8 @@ class MainApp(ctk.CTk):
         self.btn_distribute = ctk.CTkButton(
             self.action_bar_frame,
             text="⚡ Dağıt",
-            width=76,
-            height=30,
+            width=82,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             fg_color="#DBEAFE",
             hover_color="#BFDBFE",
@@ -783,15 +715,32 @@ class MainApp(ctk.CTk):
         self.btn_distribute.pack(side="left", padx=2, pady=3)
         SimpleTooltip(self.btn_distribute, "Otomatik Nöbet Dağıtım Sihirbazı")
 
+        # 2. 🔄 İkame Sistemi (Öne Çıkan Ana Operasyonel Buton - Belirgin Etiketli)
+        self.btn_substitution = ctk.CTkButton(
+            self.action_bar_frame,
+            text="🔄 İkame Sistemi",
+            width=124,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#EDE9FE",
+            hover_color="#DDD6FE",
+            text_color="#6D28D9",
+            border_width=0,
+            corner_radius=8,
+            command=self.open_substitution_dialog
+        )
+        self.btn_substitution.pack(side="left", padx=2, pady=3)
+        SimpleTooltip(self.btn_substitution, "Boş Ders Doldurma ve Nöbetçi İkame Asistanı")
+
         # 3. ↔ Nöbet Kaydır (Ultra-Minimalist İkon + Tooltip)
         self.btn_shift = ctk.CTkButton(
             self.action_bar_frame,
             text="↔",
             width=32,
-            height=30,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
             fg_color="transparent",
-            hover_color="#FFFFFF",
+            hover_color="#E2E8F0",
             text_color="#0F172A",
             border_width=0,
             corner_radius=8,
@@ -800,32 +749,15 @@ class MainApp(ctk.CTk):
         self.btn_shift.pack(side="left", padx=1, pady=3)
         SimpleTooltip(self.btn_shift, "Nöbet Rotasyonu ve Hafta Kaydırma")
 
-        # 4. 👥 Boş Ders (Ultra-Minimalist İkon + Tooltip)
-        self.btn_substitution = ctk.CTkButton(
-            self.action_bar_frame,
-            text="👥",
-            width=32,
-            height=30,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=14),
-            fg_color="transparent",
-            hover_color="#FFFFFF",
-            text_color="#0F172A",
-            border_width=0,
-            corner_radius=8,
-            command=self.open_substitution_dialog
-        )
-        self.btn_substitution.pack(side="left", padx=1, pady=3)
-        SimpleTooltip(self.btn_substitution, "Boş Ders Doldurma (İkame Görevlendirme)")
-
         # 5. 🖨️ Baskı Önizleme (Ultra-Minimalist İkon + Tooltip)
         self.btn_quick_print = ctk.CTkButton(
             self.action_bar_frame,
             text="🖨️",
             width=32,
-            height=30,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14),
             fg_color="transparent",
-            hover_color="#FFFFFF",
+            hover_color="#E2E8F0",
             text_color="#0F172A",
             border_width=0,
             corner_radius=8,
@@ -838,8 +770,8 @@ class MainApp(ctk.CTk):
         self.btn_actions = ctk.CTkButton(
             self.action_bar_frame,
             text="••• ▾",
-            width=50,
-            height=30,
+            width=52,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             fg_color="#FFFFFF",
             hover_color="#E2E8F0",
@@ -855,14 +787,14 @@ class MainApp(ctk.CTk):
         self.btn_more = self.btn_actions
 
         div_b = ctk.CTkFrame(self.action_bar_frame, fg_color="#CBD5E1", width=1, height=18)
-        div_b.pack(side="left", padx=3, pady=6)
+        div_b.pack(side="left", padx=3, pady=7)
 
         # 7. ✓ Kaydet (Pastel / Soft-Tinted Zümrüt Yeşili Hap Buton)
         self.btn_save = ctk.CTkButton(
             self.action_bar_frame,
             text="✓ Kaydet",
-            width=88,
-            height=30,
+            width=92,
+            height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             fg_color="#D1FAE5",
             hover_color="#A7F3D0",
@@ -909,6 +841,7 @@ class MainApp(ctk.CTk):
         self.export_menu.add_separator()
         self.export_menu.add_command(label="📚 Ders Programı Rapor Merkezi...", command=lambda: self.switch_page("reports"))
         self.export_menu.add_command(label="📅 Personel Devam Takip Çizelgeleri...", command=self.open_attendance_dialog)
+        self.export_menu.add_command(label="💰 Ay Sonu İkame & Ek Ders İcmali...", command=self.open_ek_ders_dialog)
 
         self.tt_menu = tk.Menu(self, tearoff=0)
         self.tt_menu.add_command(label="📚 Ders Programı Çıktı ve Rapor Merkezi...", command=self.open_timetable_exports)
@@ -924,6 +857,7 @@ class MainApp(ctk.CTk):
 
         self.more_menu = tk.Menu(self, tearoff=0)
         self.more_menu.add_command(label="📅 Personel Devam Takip Modülü", command=self.open_attendance_dialog)
+        self.more_menu.add_command(label="💰 Ay Sonu İkame & Ek Ders İcmali", command=self.open_ek_ders_dialog)
         self.more_menu.add_command(label="📚 Ders Programı Rapor Merkezi", command=lambda: self.switch_page("reports"))
         self.more_menu.add_separator()
         self.more_menu.add_command(label="🔄 Nöbet Rotasyon ve Kaydırma Ayarları...", command=self.open_shift_dialog)
@@ -936,14 +870,56 @@ class MainApp(ctk.CTk):
         self.reports_menu.add_separator()
         self.reports_menu.add_command(label="📚 Ders Programı Çıktı ve Rapor Merkezi...", command=lambda: self.switch_page("reports"))
         self.reports_menu.add_command(label="📅 Personel Devam Takip Çizelgeleri...", command=self.open_attendance_dialog)
+        self.reports_menu.add_command(label="💰 Ay Sonu İkame & Ek Ders İcmali...", command=self.open_ek_ders_dialog)
+
+    def _close_actions_popover(self):
+        """Aksiyonlar popover menüsünü güvenli bir şekilde kapatır."""
+        if hasattr(self, "_actions_popover") and self._actions_popover is not None:
+            try:
+                if self._actions_popover.winfo_exists():
+                    self._actions_popover.destroy()
+            except Exception:
+                pass
+            self._actions_popover = None
+
+    def _handle_actions_popover_outside_click(self, event):
+        """Popover dışına tıklandığında menüyü kapatır, içine veya tetikleme butonuna tıklandığında izin verir."""
+        if not hasattr(self, "_actions_popover") or self._actions_popover is None:
+            return
+        try:
+            if not self._actions_popover.winfo_exists():
+                self._actions_popover = None
+                return
+
+            x, y = event.x_root, event.y_root
+
+            # Popover sınırları içindeyse kapatma (tıklamanın çalışmasına izin ver)
+            px = self._actions_popover.winfo_rootx()
+            py = self._actions_popover.winfo_rooty()
+            pw = self._actions_popover.winfo_width()
+            ph = self._actions_popover.winfo_height()
+            if px <= x <= px + pw and py <= y <= py + ph:
+                return
+
+            # Tetikleme butonuna tıklandıysa kapatma (kendi toggle mantığı yönetsin)
+            if hasattr(self, "btn_actions") and self.btn_actions.winfo_exists():
+                bx = self.btn_actions.winfo_rootx()
+                by = self.btn_actions.winfo_rooty()
+                bw = self.btn_actions.winfo_width()
+                bh = self.btn_actions.winfo_height()
+                if bx <= x <= bx + bw and by <= y <= by + bh:
+                    return
+        except Exception:
+            pass
+
+        self._close_actions_popover()
 
     def open_unified_actions_menu(self):
         """Klasik Windows menüsü yerine yuvarlatılmış, kategorili Modern CustomTkinter Popover Menüsü açar."""
         if hasattr(self, "_actions_popover") and self._actions_popover is not None:
             try:
                 if self._actions_popover.winfo_exists():
-                    self._actions_popover.destroy()
-                    self._actions_popover = None
+                    self._close_actions_popover()
                     return
             except Exception:
                 self._actions_popover = None
@@ -954,9 +930,24 @@ class MainApp(ctk.CTk):
         pop.configure(bg="#CBD5E1")
         self._actions_popover = pop
 
+        # Dışarı tıklandığında menüyü kapatmak için global listener (tek seferlik bağlanır)
+        if not getattr(self, "_actions_popover_listener_bound", False):
+            self._actions_popover_listener_bound = True
+            self.bind_all("<Button-1>", self._handle_actions_popover_outside_click, add="+")
+            self.bind_all("<Escape>", lambda e: self._close_actions_popover(), add="+")
+
+        # Butonun hemen altına veya ekrana sığacak şekilde konumlandır
+        self.update_idletasks()
         x = self.btn_actions.winfo_rootx()
         y = self.btn_actions.winfo_rooty() + self.btn_actions.winfo_height() + 4
-        pop.wm_geometry(f"310x415+{x}+{y}")
+        pop_w = 320
+        pop_h = 515
+
+        screen_h = self.winfo_screenheight()
+        if y + pop_h > screen_h - 40:
+            y = max(10, self.btn_actions.winfo_rooty() - pop_h - 4)
+
+        pop.wm_geometry(f"{pop_w}x{pop_h}+{x}+{y}")
 
         card = ctk.CTkFrame(
             pop,
@@ -968,13 +959,15 @@ class MainApp(ctk.CTk):
         card.pack(fill="both", expand=True)
 
         def _run_and_close(cmd):
-            try:
-                if pop.winfo_exists():
-                    pop.destroy()
-            except Exception:
-                pass
-            self._actions_popover = None
-            self.after(20, cmd)
+            self._close_actions_popover()
+            if cmd:
+                def _safe_run():
+                    try:
+                        cmd()
+                    except Exception as e:
+                        logger.error(f"Menü komutu çalıştırılırken hata: {e}", exc_info=True)
+                        messagebox.showerror("Hata", f"İşlem çalıştırılırken hata oluştu:\n{e}", parent=self)
+                self.after(20, _safe_run)
 
         def _add_section_header(title_txt):
             lbl = ctk.CTkLabel(
@@ -1005,6 +998,10 @@ class MainApp(ctk.CTk):
             sep = ctk.CTkFrame(card, fg_color="#E2E8F0", height=1)
             sep.pack(fill="x", padx=10, pady=4)
 
+        _add_section_header("ÖNCELİKLİ OPERASYONLAR")
+        _add_menu_btn("🔄  Boş Ders İkame Sistemi Asistanı", self.open_substitution_dialog, accent=True)
+
+        _add_sep()
         _add_section_header("SONRAKİ HAFTAYA AKTARIM")
         _add_menu_btn("📋  Aynısını Sonraki Haftaya Aktar", self.quick_copy_next_same, accent=True)
         _add_menu_btn("🔄  1 Gün Kaydırarak Aktar (Pzt ➔ Sal)", lambda: self._copy_next_with_mode("shift_day"))
@@ -1018,18 +1015,16 @@ class MainApp(ctk.CTk):
         _add_menu_btn("📝  Nöbet Çizelgesi Word İndir (.docx)", self.export_word)
         _add_menu_btn("📚  Ders Programı Çıktıları (El Programı)", self.open_timetable_exports)
         _add_menu_btn("📅  Personel Devam Takip Çizelgesi", self.open_attendance_dialog)
+        _add_menu_btn("💰  Ay Sonu İkame & Ek Ders İcmali", self.open_ek_ders_dialog)
 
         _add_sep()
         _add_menu_btn("🔤  Görünüm & Yazı Tipi Ayarları...", lambda: self.open_settings("font"))
-
-        pop.bind("<FocusOut>", lambda e: pop.destroy() if pop.winfo_exists() else None)
-        pop.focus_force()
 
     # --- 5. ÇALIŞMA ALANI (GRID + SAĞ DETAY PANELİ) ---
     def _build_workspace(self, parent=None):
         target = parent if parent is not None else self.main_container
         self.workspace_frame = ctk.CTkFrame(target, fg_color="transparent")
-        self.workspace_frame.pack(fill="both", expand=True, padx=16, pady=(0, 6))
+        self.workspace_frame.pack(fill="both", expand=True, padx=16, pady=(10, 8))
 
         # Tablo Izgara Alanı
         self.grid_container = ttk.Frame(self.workspace_frame)
@@ -1312,8 +1307,10 @@ class MainApp(ctk.CTk):
     def update_undo_redo_ui(self):
         can_u = self.undo_manager.can_undo()
         can_r = self.undo_manager.can_redo()
-        self.btn_undo.configure(state="normal" if can_u else "disabled")
-        self.btn_redo.configure(state="normal" if can_r else "disabled")
+        if hasattr(self, "btn_undo") and self.btn_undo:
+            self.btn_undo.configure(state="normal" if can_u else "disabled")
+        if hasattr(self, "btn_redo") and self.btn_redo:
+            self.btn_redo.configure(state="normal" if can_r else "disabled")
 
     def do_undo(self):
         if self.undo_manager.undo():
@@ -1521,6 +1518,19 @@ class MainApp(ctk.CTk):
         AttendanceDialog(
             parent=self,
             db=self.db
+        )
+
+    def open_ek_ders_dialog(self):
+        from ui.ek_ders_dialog import EkDersMonthlySummaryDialog
+        def _go_to_teacher(t_id):
+            self.switch_page("teachers")
+            if "teachers" in self.page_views:
+                self.page_views["teachers"].select_teacher_by_id(t_id)
+
+        EkDersMonthlySummaryDialog(
+            parent=self,
+            db=self.db,
+            on_select_teacher=_go_to_teacher
         )
 
     def open_timetable_exports(self, default_tab: int = 0):

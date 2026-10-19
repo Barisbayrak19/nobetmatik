@@ -285,10 +285,13 @@ class Database:
                   info.school_level, info.education_type, info.daily_periods))
             conn.commit()
 
-    # --- Days ---
-    def get_days(self) -> List[Day]:
+    def get_days(self, active_only: bool = False) -> List[Day]:
         with self.connection() as conn:
-            rows = conn.execute("SELECT * FROM days ORDER BY order_num ASC").fetchall()
+            query = "SELECT * FROM days"
+            if active_only:
+                query += " WHERE is_active = 1"
+            query += " ORDER BY order_num ASC"
+            rows = conn.execute(query).fetchall()
             return [Day(id=r["id"], name=r["name"], order_num=r["order_num"], is_active=bool(r["is_active"])) for r in rows]
 
     def save_day(self, day: Day):
@@ -449,6 +452,25 @@ class Database:
         with self.connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM assignments WHERE week_start = ?", (week_start,)
+            ).fetchall()
+            return [
+                Assignment(
+                    id=r["id"],
+                    week_start=r["week_start"],
+                    day_id=r["day_id"],
+                    location_id=r["location_id"],
+                    slot_index=r["slot_index"],
+                    teacher_id=r["teacher_id"],
+                    fixed=bool(r["fixed"]),
+                    notes=r["notes"] or ""
+                ) for r in rows
+            ]
+
+    def get_assignments_for_teacher(self, teacher_id: str) -> List[Assignment]:
+        with self.connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM assignments WHERE teacher_id = ? ORDER BY week_start DESC",
+                (teacher_id,)
             ).fetchall()
             return [
                 Assignment(
@@ -664,11 +686,32 @@ class Database:
             conn.commit()
 
     def get_substitutions_for_date(self, date_str: str) -> List[SubstitutionAssignment]:
+        return self.get_substitutions(date_str=date_str)
+
+    def get_substitutions(
+        self,
+        date_str: Optional[str] = None,
+        month_str: Optional[str] = None,
+        duty_teacher_id: Optional[str] = None,
+        absent_teacher_id: Optional[str] = None
+    ) -> List[SubstitutionAssignment]:
         with self.connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM substitution_assignments WHERE date_str = ? ORDER BY period ASC",
-                (date_str,)
-            ).fetchall()
+            query = "SELECT * FROM substitution_assignments WHERE 1=1"
+            params = []
+            if date_str:
+                query += " AND date_str = ?"
+                params.append(date_str)
+            if month_str:
+                query += " AND date_str LIKE ? || '%'"
+                params.append(month_str)
+            if duty_teacher_id:
+                query += " AND duty_teacher_id = ?"
+                params.append(duty_teacher_id)
+            if absent_teacher_id:
+                query += " AND absent_teacher_id = ?"
+                params.append(absent_teacher_id)
+            query += " ORDER BY date_str ASC, period ASC"
+            rows = conn.execute(query, tuple(params)).fetchall()
             return [
                 SubstitutionAssignment(
                     id=r["id"],

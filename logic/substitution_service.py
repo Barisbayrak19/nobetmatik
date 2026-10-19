@@ -1892,3 +1892,145 @@ class SubstitutionService:
 
         logger.info(f"Toplu ikame görevlendirme HTML belgesi oluşturuldu: {output_path}")
         return output_path
+
+
+def get_monthly_ek_ders_summary(db: Database, month_str: str) -> Dict[str, Any]:
+    """
+    Belirli bir ay için (YYYY-MM) ikameye giren tüm öğretmenlerin
+    ek ders hak edişlerini ve nöbet nezareti saatlerini hesaplar.
+    """
+    teachers_list = db.get_teachers(active_only=False)
+    teachers_map = {t.id: t for t in teachers_list}
+    subs = db.get_substitutions(month_str=month_str)
+
+    teacher_stats: Dict[str, Dict[str, Any]] = {}
+    total_hours = 0
+    total_ek_ders_hours = 0
+    total_supervision_hours = 0
+
+    for s in subs:
+        if not s.duty_teacher_id:
+            continue
+        total_hours += 1
+        duty_t = teachers_map.get(s.duty_teacher_id)
+        absent_t = teachers_map.get(s.absent_teacher_id) if s.absent_teacher_id else None
+
+        duty_name = duty_t.name if duty_t else "Bilinmeyen Öğretmen"
+        duty_branch = duty_t.branch if duty_t else ""
+
+        is_branch_match = is_same_branch(duty_branch, absent_t.branch) if (duty_t and absent_t) else False
+        is_ek = bool(s.is_ek_ders or is_branch_match)
+
+        if is_ek:
+            total_ek_ders_hours += 1
+            reason = "Branş Uyumu (+1)" if is_branch_match else "İdare Görevlendirmesi (+1)"
+        else:
+            total_supervision_hours += 1
+            reason = "Nöbet Nezareti (Ücretsiz)"
+
+        t_id = s.duty_teacher_id
+        if t_id not in teacher_stats:
+            teacher_stats[t_id] = {
+                "teacher": duty_t,
+                "teacher_id": t_id,
+                "teacher_name": duty_name,
+                "branch": duty_branch,
+                "total_substitutions": 0,
+                "ek_ders_hours": 0,
+                "supervision_hours": 0,
+                "classes_set": set(),
+                "details": []
+            }
+
+        st = teacher_stats[t_id]
+        st["total_substitutions"] += 1
+        if is_ek:
+            st["ek_ders_hours"] += 1
+        else:
+            st["supervision_hours"] += 1
+
+        if s.class_name:
+            st["classes_set"].add(s.class_name)
+
+        st["details"].append({
+            "id": s.id,
+            "date_str": s.date_str,
+            "period": s.period,
+            "class_name": s.class_name,
+            "subject_code": s.subject_code,
+            "absent_teacher_name": absent_t.name if absent_t else "-",
+            "absent_teacher_branch": absent_t.branch if absent_t else "-",
+            "is_ek_ders": is_ek,
+            "reason": reason,
+            "notes": s.notes or ""
+        })
+
+    for st in teacher_stats.values():
+        st["classes_str"] = ", ".join(sorted(list(st["classes_set"]))) if st["classes_set"] else "-"
+        st["details"].sort(key=lambda x: (x["date_str"], x["period"]))
+
+    sorted_teachers = sorted(teacher_stats.values(), key=lambda x: x["teacher_name"].lower())
+
+    return {
+        "month_str": month_str,
+        "total_hours": total_hours,
+        "total_ek_ders_hours": total_ek_ders_hours,
+        "total_supervision_hours": total_supervision_hours,
+        "teachers": sorted_teachers,
+        "eligible_teacher_count": sum(1 for st in sorted_teachers if st["ek_ders_hours"] > 0)
+    }
+
+
+def get_teacher_substitutions_summary(db: Database, teacher_id: str, month_str: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Belirli bir öğretmenin girdiği tüm ikameleri veya seçili aydaki ikamelerini döner.
+    """
+    teachers_list = db.get_teachers(active_only=False)
+    teachers_map = {t.id: t for t in teachers_list}
+    duty_t = teachers_map.get(teacher_id)
+
+    subs = db.get_substitutions(month_str=month_str, duty_teacher_id=teacher_id)
+
+    total_substitutions = 0
+    ek_ders_hours = 0
+    supervision_hours = 0
+    details = []
+
+    for s in subs:
+        total_substitutions += 1
+        absent_t = teachers_map.get(s.absent_teacher_id) if s.absent_teacher_id else None
+        is_branch_match = is_same_branch(duty_t.branch if duty_t else "", absent_t.branch if absent_t else "")
+        is_ek = bool(s.is_ek_ders or is_branch_match)
+
+        if is_ek:
+            ek_ders_hours += 1
+            reason = "Branş Uyumu (+1)" if is_branch_match else "İdare Görevlendirmesi (+1)"
+        else:
+            supervision_hours += 1
+            reason = "Nöbet Nezareti (Ücretsiz)"
+
+        details.append({
+            "id": s.id,
+            "date_str": s.date_str,
+            "period": s.period,
+            "class_name": s.class_name,
+            "subject_code": s.subject_code,
+            "absent_teacher_name": absent_t.name if absent_t else "-",
+            "absent_teacher_branch": absent_t.branch if absent_t else "-",
+            "is_ek_ders": is_ek,
+            "reason": reason,
+            "notes": s.notes or ""
+        })
+
+    details.sort(key=lambda x: (x["date_str"], x["period"]))
+
+    return {
+        "teacher": duty_t,
+        "teacher_id": teacher_id,
+        "month_str": month_str,
+        "total_substitutions": total_substitutions,
+        "ek_ders_hours": ek_ders_hours,
+        "supervision_hours": supervision_hours,
+        "details": details
+    }
+

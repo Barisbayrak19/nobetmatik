@@ -31,6 +31,61 @@ COLOR_HEADER_DAY_BG = "#F1F5F9"  # Slate-100: Gün sütunu açık gri-mavi zemin
 COLOR_HEADER_DAY_TXT = "#0F172A" # Gün sütunu yazı rengi
 COLOR_HEADER_TEXT = "#FFFFFF"
 
+# --- DÜĞME TASARIM SİSTEMİ (BUTTON DESIGN SYSTEM) STANDARTLARI ---
+BTN_RADIUS = 8                   # Standart köşe yuvarlatma (8 px)
+
+# 1. Primary Dark (Kılavuzdaki Koyu Kurumsal Lacivert Butonlar: + Nöbet Ekle, Programı Yayınla)
+COLOR_BTN_PRIMARY_DARK_BG = "#0F172A"
+COLOR_BTN_PRIMARY_DARK_HOVER = "#1E293B"
+COLOR_BTN_PRIMARY_DARK_ACTIVE = "#1E3A8A"
+COLOR_BTN_PRIMARY_DARK_TEXT = "#FFFFFF"
+
+# 2. Primary Blue (Kılavuzdaki Canlı Aksiyon Mavisi Butonlar)
+COLOR_BTN_BLUE_BG = "#1D4ED8"
+COLOR_BTN_BLUE_HOVER = "#2563EB"
+COLOR_BTN_BLUE_ACTIVE = "#172554"
+COLOR_BTN_BLUE_TEXT = "#FFFFFF"
+
+# 3. Secondary / Outline (Kılavuzdaki Beyaz Kart Butonlar: Taslak Kaydet, Excel'e Aktar, Düzenle)
+COLOR_BTN_SECONDARY_BG = "#FFFFFF"
+COLOR_BTN_SECONDARY_BORDER = "#CBD5E1"
+COLOR_BTN_SECONDARY_HOVER = "#EFF6FF"
+COLOR_BTN_SECONDARY_HOVER_BORDER = "#93C5FD"
+COLOR_BTN_SECONDARY_ACTIVE = "#DBEAFE"
+COLOR_BTN_SECONDARY_TEXT = "#0F172A"
+
+# 4. Success (Kılavuzdaki Yeşil: ✓ Onayla)
+COLOR_BTN_SUCCESS_BG = "#059669"
+COLOR_BTN_SUCCESS_HOVER = "#047857"
+COLOR_BTN_SUCCESS_ACTIVE = "#065F46"
+COLOR_BTN_SUCCESS_TEXT = "#FFFFFF"
+
+# 5. Danger (Kılavuzdaki Kırmızı: ✕ Reddet / Sil)
+COLOR_BTN_DANGER_BG = "#DC2626"
+COLOR_BTN_DANGER_HOVER = "#B91C1C"
+COLOR_BTN_DANGER_ACTIVE = "#991B1B"
+COLOR_BTN_DANGER_TEXT = "#FFFFFF"
+
+# 6. Warning / Pending (Kılavuzdaki Amber: ⏱ Beklemede)
+COLOR_BTN_WARNING_BG = "#D97706"
+COLOR_BTN_WARNING_HOVER = "#B45309"
+COLOR_BTN_WARNING_ACTIVE = "#92400E"
+COLOR_BTN_WARNING_TEXT = "#FFFFFF"
+
+# 7. Soft Tinted Pills (Pastel Hap Butonlar)
+COLOR_BTN_SOFT_BLUE_BG = "#DBEAFE"
+COLOR_BTN_SOFT_BLUE_HOVER = "#BFDBFE"
+COLOR_BTN_SOFT_BLUE_TEXT = "#1D4ED8"
+
+COLOR_BTN_SOFT_EMERALD_BG = "#D1FAE5"
+COLOR_BTN_SOFT_EMERALD_HOVER = "#A7F3D0"
+COLOR_BTN_SOFT_EMERALD_TEXT = "#047857"
+
+# 8. Disabled State (Pasif Butonlar)
+COLOR_BTN_DISABLED_BG = "#F8FAFC"
+COLOR_BTN_DISABLED_BORDER = "#E2E8F0"
+COLOR_BTN_DISABLED_TEXT = "#94A3B8"
+
 # Hücre Durum Renkleri (Sadece İstisnalar Renkli)
 COLOR_CELL_BG = "#FFFFFF"        # Normal görev: Sade beyaz kart
 COLOR_CELL_EMPTY = "#F8FAFC"     # Boş slot: Ferah slate-50 zemin
@@ -43,9 +98,10 @@ COLOR_CELL_DRAG = "#DBEAFE"      # Blue-100: Sürükleme vurgusu
 COLOR_CELL_SELECTED = "#EFF6FF"  # Seçili hücre: Hafif mavi zemin
 COLOR_CELL_SELECTED_BORDER = "#2563EB" # Seçili hücre: Canlı mavi ince sınır
 
-# Durum Rozet Renkleri (Geriye Dönük Uyumluluk)
-COLOR_BADGE_FREE = "#DCFCE7"
-COLOR_BADGE_FREE_TXT = "#15803D"
+# Durum Rozet Renkleri (Nötr ve Sade Stil)
+COLOR_BADGE_FREE = "#F1F5F9"         # Slate-100: Nötr bilgilendirme zemini
+COLOR_BADGE_FREE_TXT = "#475569"     # Slate-600: Okunaklı nötr metin
+COLOR_BADGE_FREE_BORDER = "#E2E8F0"  # Slate-200: İnce sınır
 COLOR_BADGE_FIXED = "#FEF3C7"
 COLOR_BADGE_FIXED_TXT = "#B45309"
 COLOR_BADGE_EMPTY = "#FEE2E2"
@@ -267,84 +323,105 @@ def setup_styles(root: tk.Tk, db=None):
     style.configure("TLabelframe", background=COLOR_CARD, bordercolor="#E2E8F0", relief="solid", borderwidth=1)
     style.configure("TLabelframe.Label", background=COLOR_CARD, foreground="#0F172A", font=f_base_bold)
 
-    # Buton Stilleri (Modern Flat & Soft-Surface Aesthetics)
+    # Buton Stilleri (Düğme Tasarım Sistemi Standartları: Solid & Outline)
     style.configure(
         "TButton",
-        background="#E2E8F0",
-        foreground=COLOR_TEXT_MAIN,
+        background="#FFFFFF",
+        foreground=COLOR_BTN_SECONDARY_TEXT,
+        bordercolor=COLOR_BTN_SECONDARY_BORDER,
         font=f_ui_bold,
-        borderwidth=0,
-        relief="flat",
+        borderwidth=1,
+        relief="solid",
         focuscolor="none",
-        padding=(12, 5)
+        padding=(14, 6)
     )
     style.map(
         "TButton",
-        background=[("active", "#CBD5E1"), ("pressed", "#94A3B8"), ("disabled", "#F8FAFC")],
-        foreground=[("disabled", "#94A3B8")]
+        background=[("active", COLOR_BTN_SECONDARY_HOVER), ("pressed", COLOR_BTN_SECONDARY_ACTIVE), ("disabled", COLOR_BTN_DISABLED_BG)],
+        foreground=[("active", "#1D4ED8"), ("disabled", COLOR_BTN_DISABLED_TEXT)],
+        bordercolor=[("active", COLOR_BTN_SECONDARY_HOVER_BORDER), ("disabled", COLOR_BTN_DISABLED_BORDER)]
     )
 
     style.configure(
         "Primary.TButton",
-        background="#DBEAFE",
-        foreground="#1D4ED8",
+        background=COLOR_BTN_PRIMARY_DARK_BG,
+        foreground=COLOR_BTN_PRIMARY_DARK_TEXT,
         font=f_ui_bold,
         borderwidth=0,
         relief="flat",
         focuscolor="none",
-        padding=(14, 5)
+        padding=(16, 6)
     )
     style.map(
         "Primary.TButton",
-        background=[("active", "#BFDBFE"), ("pressed", "#93C5FD"), ("disabled", "#F1F5F9")],
-        foreground=[("active", "#1E40AF"), ("disabled", "#94A3B8")]
+        background=[("active", COLOR_BTN_PRIMARY_DARK_HOVER), ("pressed", COLOR_BTN_PRIMARY_DARK_ACTIVE), ("disabled", COLOR_BTN_DISABLED_BG)],
+        foreground=[("disabled", COLOR_BTN_DISABLED_TEXT)]
+    )
+
+    style.configure(
+        "PrimaryBlue.TButton",
+        background=COLOR_BTN_BLUE_BG,
+        foreground=COLOR_BTN_BLUE_TEXT,
+        font=f_ui_bold,
+        borderwidth=0,
+        relief="flat",
+        focuscolor="none",
+        padding=(16, 6)
+    )
+    style.map(
+        "PrimaryBlue.TButton",
+        background=[("active", COLOR_BTN_BLUE_HOVER), ("pressed", COLOR_BTN_BLUE_ACTIVE), ("disabled", COLOR_BTN_DISABLED_BG)],
+        foreground=[("disabled", COLOR_BTN_DISABLED_TEXT)]
     )
 
     style.configure(
         "Secondary.TButton",
-        background="#EFF6FF",
-        foreground=COLOR_PRIMARY,
+        background=COLOR_BTN_SECONDARY_BG,
+        foreground=COLOR_BTN_SECONDARY_TEXT,
+        bordercolor=COLOR_BTN_SECONDARY_BORDER,
         font=f_ui_bold,
-        borderwidth=0,
-        relief="flat",
+        borderwidth=1,
+        relief="solid",
         focuscolor="none",
-        padding=(12, 5)
+        padding=(14, 6)
     )
     style.map(
         "Secondary.TButton",
-        background=[("active", "#DBEAFE"), ("pressed", "#BFDBFE")]
+        background=[("active", COLOR_BTN_SECONDARY_HOVER), ("pressed", COLOR_BTN_SECONDARY_ACTIVE), ("disabled", COLOR_BTN_DISABLED_BG)],
+        foreground=[("active", "#1D4ED8"), ("disabled", COLOR_BTN_DISABLED_TEXT)],
+        bordercolor=[("active", COLOR_BTN_SECONDARY_HOVER_BORDER), ("disabled", COLOR_BTN_DISABLED_BORDER)]
     )
 
     style.configure(
         "Success.TButton",
-        background="#D1FAE5",
-        foreground="#047857",
+        background=COLOR_BTN_SUCCESS_BG,
+        foreground=COLOR_BTN_SUCCESS_TEXT,
         font=f_ui_bold,
         borderwidth=0,
         relief="flat",
         focuscolor="none",
-        padding=(14, 5)
+        padding=(16, 6)
     )
     style.map(
         "Success.TButton",
-        background=[("active", "#A7F3D0"), ("pressed", "#6EE7B7")],
-        foreground=[("active", "#065F46")]
+        background=[("active", COLOR_BTN_SUCCESS_HOVER), ("pressed", COLOR_BTN_SUCCESS_ACTIVE), ("disabled", COLOR_BTN_DISABLED_BG)],
+        foreground=[("disabled", COLOR_BTN_DISABLED_TEXT)]
     )
 
     style.configure(
         "Danger.TButton",
-        background="#FEE2E2",
-        foreground=COLOR_DANGER,
+        background=COLOR_BTN_DANGER_BG,
+        foreground=COLOR_BTN_DANGER_TEXT,
         font=f_ui_bold,
         borderwidth=0,
         relief="flat",
         focuscolor="none",
-        padding=(12, 5)
+        padding=(14, 6)
     )
     style.map(
         "Danger.TButton",
-        background=[("active", "#FECACA"), ("pressed", "#FCA5A5")],
-        foreground=[("active", "#B91C1C")]
+        background=[("active", COLOR_BTN_DANGER_HOVER), ("pressed", COLOR_BTN_DANGER_ACTIVE), ("disabled", COLOR_BTN_DISABLED_BG)],
+        foreground=[("disabled", COLOR_BTN_DISABLED_TEXT)]
     )
 
     # Menubutton (Açılır Menüler)
@@ -444,23 +521,99 @@ def create_modern_button(
     command=None,
     variant: str = "default",
     width: int = 0,
-    height: int = 32,
-    corner_radius: int = 8
+    height: int = 34,
+    corner_radius: int = BTN_RADIUS,
+    state: str = "normal",
+    font_size: int = None,
+    font_weight: str = "bold",
+    **extra_kwargs
 ):
     """
-    Alt sayfalarda eski köşeli ttk.Button yerine kullanılan yuvarlatılmış,
-    Pastel / Soft-Tinted Modern CustomTkinter butonu üretir.
-    variant: 'primary' | 'success' | 'danger' | 'default'
+    Design System kılavuzuna tam uyumlu, modern CustomTkinter butonu üretir.
+    variant seçenekleri:
+      - 'primary' | 'primary_dark': Koyu Kurumsal Lacivert (#0F172A, hover: #1E293B, text: #FFFFFF)
+      - 'primary_blue': Canlı Aksiyon Mavisi (#1D4ED8, hover: #2563EB, text: #FFFFFF)
+      - 'default' | 'secondary' | 'outline': Beyaz zemin (#FFFFFF), ince sınır (#CBD5E1), koyu metin (#0F172A), açık mavi hover (#EFF6FF)
+      - 'success': Zümrüt Yeşili (#059669, hover: #047857, text: #FFFFFF)
+      - 'danger': Reddet / Sil Kırmızı (#DC2626, hover: #B91C1C, text: #FFFFFF)
+      - 'warning' | 'pending': Beklemede Amber (#D97706, hover: #B45309, text: #FFFFFF)
+      - 'warning_outline': Beyaz zemin, turuncu sınır (#F59E0B) ve metin (#D97706)
+      - 'soft_blue' | 'pastel_blue': Pastel Mavi (#DBEAFE, hover: #BFDBFE, text: #1D4ED8)
+      - 'soft_success' | 'pastel_success': Pastel Yeşil (#D1FAE5, hover: #A7F3D0, text: #047857)
+      - 'soft_danger' | 'pastel_danger': Pastel Kırmızı (#FEE2E2, hover: #FECACA, text: #DC2626)
+      - 'segmented_active': Koyu Lacivert aktif filtre/sekme (#0F172A, text: #FFFFFF)
+      - 'segmented_inactive': Beyaz pasif filtre/sekme (#FFFFFF, border: #CBD5E1, text: #475569)
     """
     import customtkinter as ctk
 
-    palettes = {
-        "primary": ("#DBEAFE", "#BFDBFE", "#1D4ED8"),
-        "success": ("#D1FAE5", "#A7F3D0", "#047857"),
-        "danger":  ("#FEE2E2", "#FECACA", "#DC2626"),
-        "default": ("#E2E8F0", "#CBD5E1", "#0F172A"),
-    }
-    fg_col, hov_col, txt_col = palettes.get(variant, palettes["default"])
+    border_w = 0
+    border_col = None
+
+    v = variant.lower() if variant else "default"
+
+    if v in ("primary", "primary_dark"):
+        fg_col = COLOR_BTN_PRIMARY_DARK_BG
+        hov_col = COLOR_BTN_PRIMARY_DARK_HOVER
+        txt_col = COLOR_BTN_PRIMARY_DARK_TEXT
+    elif v == "primary_blue":
+        fg_col = COLOR_BTN_BLUE_BG
+        hov_col = COLOR_BTN_BLUE_HOVER
+        txt_col = COLOR_BTN_BLUE_TEXT
+    elif v in ("default", "secondary", "outline"):
+        fg_col = COLOR_BTN_SECONDARY_BG
+        hov_col = COLOR_BTN_SECONDARY_HOVER
+        txt_col = COLOR_BTN_SECONDARY_TEXT
+        border_w = 1
+        border_col = COLOR_BTN_SECONDARY_BORDER
+    elif v == "success":
+        fg_col = COLOR_BTN_SUCCESS_BG
+        hov_col = COLOR_BTN_SUCCESS_HOVER
+        txt_col = COLOR_BTN_SUCCESS_TEXT
+    elif v == "danger":
+        fg_col = COLOR_BTN_DANGER_BG
+        hov_col = COLOR_BTN_DANGER_HOVER
+        txt_col = COLOR_BTN_DANGER_TEXT
+    elif v in ("warning", "pending"):
+        fg_col = COLOR_BTN_WARNING_BG
+        hov_col = COLOR_BTN_WARNING_HOVER
+        txt_col = COLOR_BTN_WARNING_TEXT
+    elif v == "warning_outline":
+        fg_col = "#FFFFFF"
+        hov_col = "#FFFBEB"
+        txt_col = "#D97706"
+        border_w = 1
+        border_col = "#F59E0B"
+    elif v in ("soft_blue", "pastel_blue"):
+        fg_col = COLOR_BTN_SOFT_BLUE_BG
+        hov_col = COLOR_BTN_SOFT_BLUE_HOVER
+        txt_col = COLOR_BTN_SOFT_BLUE_TEXT
+    elif v in ("soft_success", "pastel_success"):
+        fg_col = COLOR_BTN_SOFT_EMERALD_BG
+        hov_col = COLOR_BTN_SOFT_EMERALD_HOVER
+        txt_col = COLOR_BTN_SOFT_EMERALD_TEXT
+    elif v in ("soft_danger", "pastel_danger"):
+        fg_col = "#FEE2E2"
+        hov_col = "#FECACA"
+        txt_col = "#DC2626"
+    elif v == "segmented_active":
+        fg_col = COLOR_BTN_PRIMARY_DARK_BG
+        hov_col = COLOR_BTN_PRIMARY_DARK_HOVER
+        txt_col = COLOR_BTN_PRIMARY_DARK_TEXT
+    elif v == "segmented_inactive":
+        fg_col = "#FFFFFF"
+        hov_col = "#F1F5F9"
+        txt_col = "#475569"
+        border_w = 1
+        border_col = "#CBD5E1"
+    else:
+        fg_col = COLOR_BTN_SECONDARY_BG
+        hov_col = COLOR_BTN_SECONDARY_HOVER
+        txt_col = COLOR_BTN_SECONDARY_TEXT
+        border_w = 1
+        border_col = COLOR_BTN_SECONDARY_BORDER
+
+    f_sz = font_size if font_size is not None else FONT_SIZE_UI
+    btn_font = ctk.CTkFont(family=FONT_FAMILY, size=f_sz, weight=font_weight)
 
     kwargs = {
         "text": text,
@@ -469,11 +622,17 @@ def create_modern_button(
         "fg_color": fg_col,
         "hover_color": hov_col,
         "text_color": txt_col,
-        "border_width": 0,
-        "font": ctk.CTkFont(family=FONT_FAMILY, size=FONT_SIZE_UI, weight="bold"),
+        "border_width": border_w,
+        "font": btn_font,
         "command": command,
+        "state": state,
+        "text_color_disabled": COLOR_BTN_DISABLED_TEXT,
     }
+    if border_col:
+        kwargs["border_color"] = border_col
     if width > 0:
         kwargs["width"] = width
+
+    kwargs.update(extra_kwargs)
     return ctk.CTkButton(parent, **kwargs)
 

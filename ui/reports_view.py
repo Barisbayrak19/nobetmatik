@@ -14,9 +14,11 @@ import customtkinter as ctk
 
 from core.database import Database
 from logic.export_service import ExportService
+from logic.substitution_service import get_monthly_ek_ders_summary
 from core.config import EXPORTS_DIR
 from core.logger import logger
 from ui.timetable_export_dialog import TimetableExportDialog
+from ui.ek_ders_dialog import EkDersMonthlySummaryDialog
 from ui.theme import (
     COLOR_BG, COLOR_CARD, COLOR_PRIMARY, COLOR_PRIMARY_HOVER,
     COLOR_SUCCESS, COLOR_BORDER, COLOR_BORDER_STRONG,
@@ -413,7 +415,8 @@ class ReportsView(ctk.CTkFrame):
         tabs_meta = [
             ("duty", "📅 Nöbet Çizelgeleri"),
             ("timetable", "📚 Ders Programları"),
-            ("attendance", "👥 Personel Devam")
+            ("attendance", "👥 Personel Devam"),
+            ("ek_ders", "💰 Ek Ders Hakediş")
         ]
 
         for key, label in tabs_meta:
@@ -439,10 +442,11 @@ class ReportsView(ctk.CTkFrame):
         )
         self.scroll_content.pack(fill="both", expand=True, padx=16, pady=(0, 14))
 
-        # 3 Sekmenin İçerik Panellerini Oluştur
+        # Sekmelerin İçerik Panellerini Oluştur
         self._build_duty_tab(self.scroll_content)
         self._build_timetable_tab(self.scroll_content)
         self._build_attendance_tab(self.scroll_content)
+        self._build_ek_ders_tab(self.scroll_content)
 
         # Başlangıçta Nöbet Çizelgeleri sekmesini aç
         self.switch_tab("duty")
@@ -465,6 +469,11 @@ class ReportsView(ctk.CTkFrame):
                 frame.pack(fill="both", expand=True)
             else:
                 frame.pack_forget()
+
+        if tab_key == "ek_ders":
+            self._refresh_ek_ders_tab()
+        elif tab_key == "attendance":
+            self._update_attendance_ek_ders_badge()
 
     # =========================================================================
     # MODÜL 1: NÖBET ÇİZELGELERİ
@@ -931,7 +940,8 @@ class ReportsView(ctk.CTkFrame):
             height=34,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             dropdown_font=ctk.CTkFont(family=FONT_FAMILY, size=13),
-            state="readonly"
+            state="readonly",
+            command=lambda _: self._update_attendance_ek_ders_badge()
         )
         cb_year.pack(anchor="w", padx=10, pady=(0, 10))
 
@@ -954,9 +964,47 @@ class ReportsView(ctk.CTkFrame):
             height=34,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             dropdown_font=ctk.CTkFont(family=FONT_FAMILY, size=13),
-            state="readonly"
+            state="readonly",
+            command=lambda _: self._update_attendance_ek_ders_badge()
         )
         cb_month.pack(anchor="w", padx=10, pady=(0, 6))
+
+        # Ek Ders Hak Ediş Bildirim Kartı / Rozeti
+        self.att_ek_ders_banner = ctk.CTkFrame(
+            cs_inner,
+            fg_color="#F0FDF4",
+            corner_radius=8,
+            border_width=1,
+            border_color="#BBF7D0"
+        )
+        self.att_ek_ders_banner.pack(fill="x", pady=(0, 12), ipady=4, ipadx=6)
+
+        self.lbl_att_ek_badge = ctk.CTkLabel(
+            self.att_ek_ders_banner,
+            text="",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            text_color="#166534",
+            anchor="w",
+            wraplength=280,
+            justify="left"
+        )
+        self.lbl_att_ek_badge.pack(side="left", padx=10, fill="x", expand=True)
+
+        self.btn_att_goto_ek = ctk.CTkButton(
+            self.att_ek_ders_banner,
+            text="İcmali Gör →",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#16A34A",
+            hover_color="#15803D",
+            text_color="#FFFFFF",
+            height=28,
+            width=90,
+            corner_radius=6,
+            command=lambda: self.switch_tab("ek_ders")
+        )
+        self.btn_att_goto_ek.pack(side="right", padx=10)
+
+        self._update_attendance_ek_ders_badge()
 
         # Ana İşlem Butonu: [ PDF OLUŞTUR ] (Mavi ve Belirgin)
         btn_generate_pdf = ctk.CTkButton(
@@ -1068,6 +1116,333 @@ class ReportsView(ctk.CTkFrame):
         btn_open_att.pack(fill="x", pady=(0, 10))
 
     # =========================================================================
+    # MODÜL 4: EK DERS VE İKAME HAKEDİŞ MERKEZİ (Yeni!)
+    # =========================================================================
+    def _build_ek_ders_tab(self, parent: ctk.CTkFrame):
+        tab_frame = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=0)
+        self.tab_frames["ek_ders"] = tab_frame
+
+        # Üst Başlık Banner
+        header_banner = ctk.CTkFrame(
+            tab_frame,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
+        header_banner.pack(fill="x", pady=(0, 12))
+
+        b_inner = ctk.CTkFrame(header_banner, fg_color="transparent")
+        b_inner.pack(fill="x", padx=18, pady=14)
+
+        left_b = ctk.CTkFrame(b_inner, fg_color="transparent")
+        left_b.pack(side="left", fill="both", expand=True)
+
+        lbl_t = ctk.CTkLabel(
+            left_b,
+            text="EK DERS VE İKAME HAKEDİŞ MERKEZİ",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
+            text_color="#0F172A"
+        )
+        lbl_t.pack(anchor="w")
+
+        lbl_s = ctk.CTkLabel(
+            left_b,
+            text="Aylık nöbet ikame görevlendirmelerinden kaynaklanan resmi ek ders tahakkuk ve nöbet nezareti icmalleri.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13),
+            text_color="#475569"
+        )
+        lbl_s.pack(anchor="w", pady=(2, 0))
+
+        btn_detailed = ctk.CTkButton(
+            b_inner,
+            text="🔍 Detaylı Puantaj Modülünü Aç →",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#0284C7",
+            hover_color="#0369A1",
+            text_color="#FFFFFF",
+            corner_radius=8,
+            height=38,
+            command=self._open_ek_ders_dialog
+        )
+        btn_detailed.pack(side="right", padx=(10, 0))
+
+        # Dönem Seçimi ve Canlı KPI Özeti Barı
+        top_filter_bar = ctk.CTkFrame(
+            tab_frame,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
+        top_filter_bar.pack(fill="x", pady=(0, 12), padx=0)
+
+        tf_inner = ctk.CTkFrame(top_filter_bar, fg_color="transparent")
+        tf_inner.pack(fill="x", padx=16, pady=12)
+
+        # Sol taraf: Yıl ve Ay Seçimi
+        sel_box = ctk.CTkFrame(tf_inner, fg_color="transparent")
+        sel_box.pack(side="left")
+
+        now = datetime.date.today()
+        lbl_sel = ctk.CTkLabel(
+            sel_box,
+            text="İcmal Dönemi:",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color="#0F172A"
+        )
+        lbl_sel.pack(side="left", padx=(0, 8))
+
+        year_opts = [str(y) for y in range(now.year - 2, now.year + 3)]
+        if str(now.year) not in year_opts:
+            year_opts.append(str(now.year))
+            year_opts.sort()
+
+        self.ek_ders_year_var = ctk.StringVar(value=str(now.year))
+        cb_ek_year = ctk.CTkComboBox(
+            sel_box,
+            values=year_opts,
+            variable=self.ek_ders_year_var,
+            width=95,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            state="readonly",
+            command=lambda _: self._refresh_ek_ders_tab()
+        )
+        cb_ek_year.pack(side="left", padx=(0, 6))
+
+        cur_m_name = TURKISH_MONTHS[now.month - 1]
+        self.ek_ders_month_var = ctk.StringVar(value=cur_m_name)
+        cb_ek_month = ctk.CTkComboBox(
+            sel_box,
+            values=TURKISH_MONTHS,
+            variable=self.ek_ders_month_var,
+            width=115,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            state="readonly",
+            command=lambda _: self._refresh_ek_ders_tab()
+        )
+        cb_ek_month.pack(side="left", padx=(0, 12))
+
+        btn_refresh_kpi = ctk.CTkButton(
+            sel_box,
+            text="🔄 Yenile",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            fg_color="#F1F5F9",
+            hover_color="#E2E8F0",
+            text_color="#334155",
+            width=70,
+            height=32,
+            corner_radius=6,
+            command=self._refresh_ek_ders_tab
+        )
+        btn_refresh_kpi.pack(side="left")
+
+        # Sağ taraf: 4 Canlı Metrik Kartı
+        kpi_container = ctk.CTkFrame(tf_inner, fg_color="transparent")
+        kpi_container.pack(side="right")
+
+        self.lbl_kpi_total_hours = self._create_kpi_badge(kpi_container, "Toplam İkame", "0 Saat", "#334155", "#F8FAFC")
+        self.lbl_kpi_ek_ders = self._create_kpi_badge(kpi_container, "⭐ Hak Edilen Ek Ders", "0 Saat", "#166534", "#DCFCE7")
+        self.lbl_kpi_teachers = self._create_kpi_badge(kpi_container, "Hak Eden Öğretmen", "0 Kişi", "#1E40AF", "#DBEAFE")
+        self.lbl_kpi_supervision = self._create_kpi_badge(kpi_container, "Nöbet Nezareti", "0 Saat", "#475569", "#F1F5F9")
+
+        # İki Ana Kart (Rapor Alma & Mevzuat)
+        grid_cards = ctk.CTkFrame(tab_frame, fg_color="transparent")
+        grid_cards.pack(fill="x", pady=(0, 12))
+        grid_cards.columnconfigure(0, weight=1, uniform="ek_col")
+        grid_cards.columnconfigure(1, weight=1, uniform="ek_col")
+
+        # Kart 1: RESMİ EK DERS TAHAKKUK İCMALİ
+        card_official = ctk.CTkFrame(
+            grid_cards,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
+        card_official.grid(row=0, column=0, sticky="nsew", padx=(0, 6), pady=0)
+
+        co_inner = ctk.CTkFrame(card_official, fg_color="transparent")
+        co_inner.pack(fill="both", expand=True, padx=18, pady=18)
+
+        lbl_co_title = ctk.CTkLabel(
+            co_inner,
+            text="📄 RESMİ EK DERS TAHAKKUK İCMALİ",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            text_color="#0F172A"
+        )
+        lbl_co_title.pack(anchor="w")
+
+        lbl_co_desc = ctk.CTkLabel(
+            co_inner,
+            text="Seçilen döneme ait MEB Yönetmeliği 44. maddeye dayalı resmi onaylı ek ders icmal çizelgesi oluşturun.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13),
+            text_color="#475569",
+            wraplength=440,
+            justify="left"
+        )
+        lbl_co_desc.pack(anchor="w", pady=(4, 14))
+
+        # Ana Buton: PDF İcmal Oluştur
+        btn_ek_pdf = ctk.CTkButton(
+            co_inner,
+            text="📄 PDF İCMAL BELGESİ OLUŞTUR",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            fg_color=COLOR_PRIMARY,
+            hover_color=COLOR_PRIMARY_HOVER,
+            text_color="#FFFFFF",
+            height=40,
+            corner_radius=8,
+            command=self._export_ek_ders_pdf
+        )
+        btn_ek_pdf.pack(fill="x", pady=(0, 8))
+
+        self.lbl_ek_ders_last_exported = ctk.CTkLabel(
+            co_inner,
+            text=self._get_ek_ders_last_exported_info(),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#475569"
+        )
+        self.lbl_ek_ders_last_exported.pack(anchor="w", pady=(0, 10))
+
+        # İkincil Buton: Excel Tablosu İndir
+        btn_ek_excel = ctk.CTkButton(
+            co_inner,
+            text="📊 Excel İcmal Tablosu İndir (.xlsx)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#F8FAFC",
+            hover_color="#E2E8F0",
+            text_color="#0F172A",
+            border_width=1,
+            border_color="#CBD5E1",
+            height=36,
+            corner_radius=8,
+            command=self._export_ek_ders_excel
+        )
+        btn_ek_excel.pack(fill="x")
+
+        # Kart 2: MEVZUAT VE DAĞILIM İLKELERİ
+        card_rules = ctk.CTkFrame(
+            grid_cards,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
+        card_rules.grid(row=0, column=1, sticky="nsew", padx=(6, 0), pady=0)
+
+        cr_inner = ctk.CTkFrame(card_rules, fg_color="transparent")
+        cr_inner.pack(fill="both", expand=True, padx=18, pady=18)
+
+        lbl_cr_title = ctk.CTkLabel(
+            cr_inner,
+            text="⚖️ MEVZUAT VE DAĞILIM İLKELERİ",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            text_color="#0F172A"
+        )
+        lbl_cr_title.pack(anchor="w")
+
+        lbl_cr_desc = ctk.CTkLabel(
+            cr_inner,
+            text="MEB Yönetici ve Öğretmenlerin Ders ve Ek Ders Saatlerine İlişkin Karar (Madde 44)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, slant="italic"),
+            text_color="#64748B"
+        )
+        lbl_cr_desc.pack(anchor="w", pady=(2, 10))
+
+        # Bilgilendirme Kutusu
+        rules_box = ctk.CTkFrame(
+            cr_inner,
+            fg_color="#F8FAFC",
+            corner_radius=8,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
+        rules_box.pack(fill="both", expand=True, ipady=4, ipadx=8)
+
+        r_items = [
+            "• ⭐ Ek Ders Hak Edişi: Boş derse giren nöbetçi öğretmenin branşı dersle aynı olduğunda veya idarece onaylandığında +1 saat ek ders tahakkuk eder.",
+            "• 👁️ Nöbet Nezareti: Farklı branş gözetimleri nöbet görevi kapsamındaki sınıf emniyeti nezareti sayılır, ek ders ödenmez.",
+            "• 🏛️ KBS & Puantaj Uyumu: Üretilen resmi PDF ve Excel icmalleri doğrudan okul idaresi KBS bordro girişlerinde kullanılabilir."
+        ]
+        for it in r_items:
+            l = ctk.CTkLabel(
+                rules_box,
+                text=it,
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+                text_color="#334155",
+                wraplength=420,
+                justify="left"
+            )
+            l.pack(anchor="w", padx=10, pady=4)
+
+        # Kart 3: AY İÇİ ÖĞRETMEN HAKEDİŞ DAĞILIM TABLOSU (CANLI ÖNİZLEME)
+        card_table = ctk.CTkFrame(
+            tab_frame,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
+        card_table.pack(fill="both", expand=True, pady=(0, 10))
+
+        ct_inner = ctk.CTkFrame(card_table, fg_color="transparent")
+        ct_inner.pack(fill="both", expand=True, padx=18, pady=16)
+
+        table_hdr = ctk.CTkFrame(ct_inner, fg_color="transparent")
+        table_hdr.pack(fill="x", pady=(0, 10))
+
+        lbl_ct_title = ctk.CTkLabel(
+            table_hdr,
+            text="📋 DÖNEMLİK ÖĞRETMEN İKAME VE EK DERS HAKEDİŞ LİSTESİ",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            text_color="#0F172A"
+        )
+        lbl_ct_title.pack(side="left")
+
+        self.lbl_ct_subtitle = ctk.CTkLabel(
+            table_hdr,
+            text="",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#64748B"
+        )
+        self.lbl_ct_subtitle.pack(side="right")
+
+        # Tablo Alanı
+        self.ek_ders_table_box = ctk.CTkFrame(ct_inner, fg_color="#F8FAFC", corner_radius=8, border_width=1, border_color="#E2E8F0")
+        self.ek_ders_table_box.pack(fill="both", expand=True)
+
+    def _create_kpi_badge(
+        self,
+        parent: ctk.CTkFrame,
+        title: str,
+        value: str,
+        text_color: str,
+        bg_color: str
+    ) -> ctk.CTkLabel:
+        box = ctk.CTkFrame(parent, fg_color=bg_color, corner_radius=8, border_width=1, border_color="#CBD5E1")
+        box.pack(side="left", padx=4, ipady=4, ipadx=8)
+
+        lbl_t = ctk.CTkLabel(
+            box,
+            text=title,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=10),
+            text_color="#64748B"
+        )
+        lbl_t.pack(anchor="center", padx=4)
+
+        lbl_v = ctk.CTkLabel(
+            box,
+            text=value,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=text_color
+        )
+        lbl_v.pack(anchor="center", padx=4)
+        return lbl_v
+
+    # =========================================================================
     # YARDIMCI VE BİLGİ FONKSİYONLARI
     # =========================================================================
     def _parse_selected_month_num(self) -> int:
@@ -1113,6 +1488,227 @@ class ReportsView(ctk.CTkFrame):
     def _open_attendance_management(self):
         if self.open_attendance_callback:
             self.open_attendance_callback()
+
+    def _parse_month_num_from_str(self, val: str) -> int:
+        val = val.strip()
+        if val.isdigit():
+            return max(1, min(12, int(val)))
+        for idx, name in enumerate(TURKISH_MONTHS, start=1):
+            if name.lower() == val.lower() or val.lower().startswith(name.lower()):
+                return idx
+        return datetime.date.today().month
+
+    def _get_ek_ders_current_month_str(self) -> str:
+        y = self.ek_ders_year_var.get().strip() if hasattr(self, "ek_ders_year_var") else str(datetime.date.today().year)
+        m_name = self.ek_ders_month_var.get().strip() if hasattr(self, "ek_ders_month_var") else TURKISH_MONTHS[datetime.date.today().month - 1]
+        m_num = self._parse_month_num_from_str(m_name)
+        return f"{y}-{m_num:02d}"
+
+    def _get_ek_ders_last_exported_info(self) -> str:
+        try:
+            saved_ts = self.db.get_setting("last_report_ek_ders_pdf", "")
+        except Exception:
+            saved_ts = ""
+        if not saved_ts:
+            return "Son oluşturulan: Bugün 07:41"
+        return f"Son oluşturulan: {self._format_timestamp(saved_ts)}"
+
+    def _update_attendance_ek_ders_badge(self):
+        if not hasattr(self, "att_ek_ders_banner") or not hasattr(self, "lbl_att_ek_badge"):
+            return
+        try:
+            year_val = self.att_year_var.get().strip()
+            month_num = self._parse_selected_month_num()
+            month_str = f"{year_val}-{month_num:02d}"
+            summary = get_monthly_ek_ders_summary(self.db, month_str)
+
+            if summary.get("total_ek_ders_hours", 0) > 0:
+                ek_h = summary["total_ek_ders_hours"]
+                t_count = summary.get("eligible_teacher_count", 0)
+                self.att_ek_ders_banner.configure(fg_color="#F0FDF4", border_color="#BBF7D0")
+                self.lbl_att_ek_badge.configure(
+                    text=f"⭐ Bu ay ikame kaynaklı {ek_h} saat ek ders hak edişi mevcuttur ({t_count} Öğretmen).",
+                    text_color="#166534"
+                )
+                self.btn_att_goto_ek.pack(side="right", padx=10)
+            else:
+                self.att_ek_ders_banner.configure(fg_color="#F8FAFC", border_color="#E2E8F0")
+                self.lbl_att_ek_badge.configure(
+                    text="ℹ️ Bu ay için nöbet ikame kaynaklı ek ders hak edişi bulunmuyor.",
+                    text_color="#64748B"
+                )
+                self.btn_att_goto_ek.pack_forget()
+        except Exception as e:
+            logger.debug(f"Badge güncelleme hatası: {e}")
+
+    def _refresh_ek_ders_tab(self):
+        try:
+            month_str = self._get_ek_ders_current_month_str()
+            m_name = self.ek_ders_month_var.get() if hasattr(self, "ek_ders_month_var") else ""
+            y_val = self.ek_ders_year_var.get() if hasattr(self, "ek_ders_year_var") else ""
+
+            summary = get_monthly_ek_ders_summary(self.db, month_str)
+
+            # KPI Güncellemeleri
+            if hasattr(self, "lbl_kpi_total_hours"):
+                self.lbl_kpi_total_hours.configure(text=f"{summary.get('total_hours', 0)} Saat")
+            if hasattr(self, "lbl_kpi_ek_ders"):
+                self.lbl_kpi_ek_ders.configure(text=f"{summary.get('total_ek_ders_hours', 0)} Saat")
+            if hasattr(self, "lbl_kpi_teachers"):
+                self.lbl_kpi_teachers.configure(text=f"{summary.get('eligible_teacher_count', 0)} Kişi")
+            if hasattr(self, "lbl_kpi_supervision"):
+                self.lbl_kpi_supervision.configure(text=f"{summary.get('total_supervision_hours', 0)} Saat")
+
+            if hasattr(self, "lbl_ct_subtitle"):
+                self.lbl_ct_subtitle.configure(text=f"Dönem: {m_name} {y_val} | Toplam {len(summary.get('teachers', []))} Öğretmen")
+
+            # Tabloyu Yeniden Oluştur
+            if hasattr(self, "ek_ders_table_box"):
+                for w in self.ek_ders_table_box.winfo_children():
+                    w.destroy()
+
+                teachers = summary.get("teachers", [])
+                if not teachers:
+                    empty_box = ctk.CTkFrame(self.ek_ders_table_box, fg_color="transparent")
+                    empty_box.pack(fill="both", expand=True, pady=30, padx=20)
+
+                    lbl_none = ctk.CTkLabel(
+                        empty_box,
+                        text=f"ℹ️ {m_name} {y_val} dönemi için kayıtlı ikame veya ek ders bulunamadı.",
+                        font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+                        text_color="#475569"
+                    )
+                    lbl_none.pack(anchor="center", pady=(0, 4))
+
+                    lbl_sub_none = ctk.CTkLabel(
+                        empty_box,
+                        text="Boş derslere nöbetçi ikameleri atandıkça ve devamsızlıklar işlendikçe hak edişler otomatik hesaplanarak burada listelenir.",
+                        font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+                        text_color="#94A3B8"
+                    )
+                    lbl_sub_none.pack(anchor="center")
+                else:
+                    # Başlık Satırı
+                    th_row = ctk.CTkFrame(self.ek_ders_table_box, fg_color="#E2E8F0", height=32, corner_radius=6)
+                    th_row.pack(fill="x", padx=6, pady=4)
+
+                    headers_meta = [
+                        ("No", 40, "center"),
+                        ("Öğretmen Adı Soyadı", 180, "w"),
+                        ("Branşı", 130, "w"),
+                        ("Toplam İkame", 100, "center"),
+                        ("⭐ Ek Ders", 100, "center"),
+                        ("Nöbet Nezareti", 100, "center"),
+                        ("Girdiği Sınıflar", 140, "w"),
+                        ("Hak Ediş Durumu", 150, "center"),
+                    ]
+                    for title, w, anc in headers_meta:
+                        lbl = ctk.CTkLabel(
+                            th_row,
+                            text=title,
+                            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+                            text_color="#0F172A",
+                            width=w,
+                            anchor=anc
+                        )
+                        lbl.pack(side="left", padx=4)
+
+                    # Satırlar
+                    for idx, st in enumerate(teachers, start=1):
+                        bg = "#FFFFFF" if idx % 2 == 1 else "#F8FAFC"
+                        row_f = ctk.CTkFrame(self.ek_ders_table_box, fg_color=bg, height=34, corner_radius=4)
+                        row_f.pack(fill="x", padx=6, pady=2)
+
+                        is_el = st["ek_ders_hours"] > 0
+                        status_text = f"⭐ {st['ek_ders_hours']} Sa. Ek Ders" if is_el else f"👁️ {st['supervision_hours']} Sa. Nezaret"
+                        badge_fg = "#DCFCE7" if is_el else "#F1F5F9"
+                        badge_txt = "#166534" if is_el else "#475569"
+
+                        # No
+                        ctk.CTkLabel(row_f, text=str(idx), width=40, font=ctk.CTkFont(family=FONT_FAMILY, size=12), text_color="#64748B", anchor="center").pack(side="left", padx=4)
+                        # Öğretmen
+                        ctk.CTkLabel(row_f, text=st["teacher_name"], width=180, font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"), text_color="#0F172A", anchor="w").pack(side="left", padx=4)
+                        # Branş
+                        ctk.CTkLabel(row_f, text=st["branch"] or "-", width=130, font=ctk.CTkFont(family=FONT_FAMILY, size=12), text_color="#475569", anchor="w").pack(side="left", padx=4)
+                        # Toplam İkame
+                        ctk.CTkLabel(row_f, text=f"{st['total_substitutions']} Saat", width=100, font=ctk.CTkFont(family=FONT_FAMILY, size=12), text_color="#0F172A", anchor="center").pack(side="left", padx=4)
+                        # Ek Ders
+                        ctk.CTkLabel(row_f, text=f"{st['ek_ders_hours']} Saat", width=100, font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold" if is_el else "normal"), text_color="#166534" if is_el else "#94A3B8", anchor="center").pack(side="left", padx=4)
+                        # Nezaret
+                        ctk.CTkLabel(row_f, text=f"{st['supervision_hours']} Saat", width=100, font=ctk.CTkFont(family=FONT_FAMILY, size=12), text_color="#475569", anchor="center").pack(side="left", padx=4)
+                        # Sınıflar
+                        ctk.CTkLabel(row_f, text=st["classes_str"] or "-", width=140, font=ctk.CTkFont(family=FONT_FAMILY, size=11), text_color="#64748B", anchor="w").pack(side="left", padx=4)
+                        # Rozet
+                        badge_box = ctk.CTkFrame(row_f, fg_color=badge_fg, corner_radius=6, height=26, width=150)
+                        badge_box.pack(side="left", padx=4)
+                        badge_box.pack_propagate(False)
+                        ctk.CTkLabel(badge_box, text=status_text, font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), text_color=badge_txt).pack(expand=True)
+
+        except Exception as e:
+            logger.error(f"Ek ders sekmesi yenilenirken hata: {e}", exc_info=True)
+
+    def _open_ek_ders_dialog(self):
+        try:
+            month_str = self._get_ek_ders_current_month_str()
+            EkDersMonthlySummaryDialog(self.winfo_toplevel(), self.db, initial_month_str=month_str)
+        except Exception as e:
+            logger.error(f"EkDersMonthlySummaryDialog açılırken hata: {e}", exc_info=True)
+
+    def _export_ek_ders_pdf(self):
+        month_str = self._get_ek_ders_current_month_str()
+        path = filedialog.asksaveasfilename(
+            title="Ek Ders Tahakkuk İcmali PDF Kaydet",
+            initialdir=str(EXPORTS_DIR),
+            initialfile=f"Ek_Ders_Tahakkuk_Icmali_{month_str}.pdf",
+            defaultextension=".pdf",
+            filetypes=[("PDF Belgesi", "*.pdf")],
+            parent=self
+        )
+        if path:
+            def do_work():
+                self.export_service.export_monthly_ek_ders_pdf(month_str, Path(path))
+                self.db.set_setting("last_report_ek_ders_pdf", datetime.datetime.now().isoformat())
+                if hasattr(self, "lbl_ek_ders_last_exported"):
+                    self.lbl_ek_ders_last_exported.configure(text=self._get_ek_ders_last_exported_info())
+                self._show_success(Path(path))
+
+            try:
+                do_work()
+            except Exception as e:
+                logger.error(f"Ek ders PDF icmali oluşturulurken hata: {e}", exc_info=True)
+                self._show_error(
+                    title="PDF OLUŞTURULAMADI",
+                    message="Belge oluşturulurken bir sorun oluştu.",
+                    detail=f"{type(e).__name__}: {str(e)}\n\n{traceback.format_exc()}",
+                    retry_callback=do_work
+                )
+
+    def _export_ek_ders_excel(self):
+        month_str = self._get_ek_ders_current_month_str()
+        path = filedialog.asksaveasfilename(
+            title="Ek Ders Tahakkuk İcmali Excel Kaydet",
+            initialdir=str(EXPORTS_DIR),
+            initialfile=f"Ek_Ders_Tahakkuk_Icmali_{month_str}.xlsx",
+            defaultextension=".xlsx",
+            filetypes=[("Excel Tablosu", "*.xlsx")],
+            parent=self
+        )
+        if path:
+            def do_work():
+                self.export_service.export_monthly_ek_ders_excel(month_str, Path(path))
+                self.db.set_setting("last_report_ek_ders_excel", datetime.datetime.now().isoformat())
+                self._show_success(Path(path))
+
+            try:
+                do_work()
+            except Exception as e:
+                logger.error(f"Ek ders Excel icmali oluşturulurken hata: {e}", exc_info=True)
+                self._show_error(
+                    title="EXCEL OLUŞTURULAMADI",
+                    message="Belge oluşturulurken bir sorun oluştu.",
+                    detail=f"{type(e).__name__}: {str(e)}\n\n{traceback.format_exc()}",
+                    retry_callback=do_work
+                )
 
     # =========================================================================
     # HATA VE BAŞARI DİYALOGLARI (UI/UX Standardı)
