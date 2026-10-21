@@ -585,7 +585,8 @@ class ScheduleGrid(ttk.Frame):
         duty_service: DutyService,
         get_current_week: Callable[[], str],
         on_data_changed: Callable[[], None],
-        on_cell_selected: Optional[Callable[[CellWidget], None]] = None
+        on_cell_selected: Optional[Callable[[CellWidget], None]] = None,
+        on_open_whatsapp: Optional[Callable[[Any], None]] = None
     ):
         super().__init__(parent)
         self.db = db
@@ -594,7 +595,9 @@ class ScheduleGrid(ttk.Frame):
         self.get_current_week = get_current_week
         self.on_data_changed = on_data_changed
         self.on_cell_selected = on_cell_selected
+        self.on_open_whatsapp = on_open_whatsapp
 
+        self.cell_widgets: List[CellWidget] = []
         self.selected_cell: Optional[CellWidget] = None
         self.drag_source_cell: Optional[CellWidget] = None
         self.drag_state: Optional[DragState] = None
@@ -824,6 +827,7 @@ class ScheduleGrid(ttk.Frame):
         # Mevcut çizelgeyi temizle
         for widget in self.table_frame.winfo_children():
             widget.destroy()
+        self.cell_widgets.clear()
 
         self.selected_cell = None
         week_start = self.get_current_week()
@@ -954,6 +958,7 @@ class ScheduleGrid(ttk.Frame):
                         grid_controller=self
                     )
                     cell.grid(row=row_idx, column=col, sticky="nsew", padx=3, pady=3)
+                    self.cell_widgets.append(cell)
 
         # Izgara boyutlandırma ağırlıkları: sütunlar eşit genişlikte dağıtılır, satırlar pencereye göre esner
         self.table_frame.columnconfigure(0, weight=0, minsize=88)
@@ -1123,6 +1128,29 @@ class ScheduleGrid(ttk.Frame):
         return None
 
     # --- Sağ Tık Menüsü & Alternatif Taşıma İşlemleri ---
+    def highlight_teacher(self, teacher_id: str) -> bool:
+        """Belirtilen öğretmenin nöbet hücresini seçer ve öne çıkarır."""
+        found_cell = None
+        for cell in self.cell_widgets:
+            if cell.teacher and cell.teacher.id == teacher_id:
+                cell.set_selected(True)
+                if not found_cell:
+                    found_cell = cell
+            else:
+                cell.set_selected(False)
+        if found_cell:
+            self.selected_cell = found_cell
+            if self.on_cell_selected:
+                self.on_cell_selected(found_cell)
+        return found_cell is not None
+
+    def open_whatsapp_for_teacher(self, teacher: Any):
+        """Öğretmen için WhatsApp bildirim modalini tetikler."""
+        if hasattr(self, "on_open_whatsapp") and self.on_open_whatsapp:
+            self.on_open_whatsapp(teacher)
+        elif hasattr(self.master, "open_whatsapp_notice"):
+            self.master.open_whatsapp_notice(teacher)
+
     def show_context_menu(self, cell: CellWidget, event):
         menu = tk.Menu(self, tearoff=0)
 
@@ -1130,6 +1158,10 @@ class ScheduleGrid(ttk.Frame):
             menu.add_command(
                 label=f"📋 '{cell.teacher.name}' Nöbet ve Ders Kartı",
                 command=lambda: self.on_cell_selected(cell) if self.on_cell_selected else None
+            )
+            menu.add_command(
+                label=f"💬 '{cell.teacher.name}' WhatsApp Nöbet Bildirimi...",
+                command=lambda: self.open_whatsapp_for_teacher(cell.teacher)
             )
             menu.add_separator()
             menu.add_command(

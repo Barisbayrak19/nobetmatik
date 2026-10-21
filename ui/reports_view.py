@@ -416,7 +416,8 @@ class ReportsView(ctk.CTkFrame):
             ("duty", "📅 Nöbet Çizelgeleri"),
             ("timetable", "📚 Ders Programları"),
             ("attendance", "👥 Personel Devam"),
-            ("ek_ders", "💰 Ek Ders Hakediş")
+            ("ek_ders", "💰 Ek Ders Hakediş"),
+            ("analytics", "⚖️ Adalet ve Dağılım")
         ]
 
         for key, label in tabs_meta:
@@ -447,6 +448,7 @@ class ReportsView(ctk.CTkFrame):
         self._build_timetable_tab(self.scroll_content)
         self._build_attendance_tab(self.scroll_content)
         self._build_ek_ders_tab(self.scroll_content)
+        self._build_analytics_tab(self.scroll_content)
 
         # Başlangıçta Nöbet Çizelgeleri sekmesini aç
         self.switch_tab("duty")
@@ -674,6 +676,21 @@ class ReportsView(ctk.CTkFrame):
             command=self._open_duty_log_dialog
         )
         btn_duty_log.pack(fill="x", pady=(10, 4))
+
+        btn_kbs = ctk.CTkButton(
+            f_inner,
+            text="📊 Aylık Nöbet Puantajı & Ek Ders Çizelgesi (KBS .xlsx)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#1D4ED8",
+            hover_color="#1E40AF",
+            text_color="#FFFFFF",
+            border_width=0,
+            height=38,
+            corner_radius=8,
+            anchor="w",
+            command=self._open_kbs_puantaj_dialog
+        )
+        btn_kbs.pack(fill="x", pady=4)
 
         self.lbl_duty_last_info = ctk.CTkLabel(
             f_inner,
@@ -1456,6 +1473,307 @@ class ReportsView(ctk.CTkFrame):
         )
         lbl_v.pack(anchor="center", padx=4)
         return lbl_v
+
+    def _open_kbs_puantaj_dialog(self):
+        """KBS Uyumlu Aylık Nöbet Puantajı Excel Dışa Aktarımı."""
+        now = datetime.datetime.now()
+        year = now.year
+        month = now.month
+
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Aylık KBS Nöbet Puantajı Çıktısı")
+        dialog.geometry("460x280")
+        dialog.resizable(False, False)
+        dialog.transient(self.winfo_toplevel())
+        dialog.grab_set()
+
+        try:
+            dialog.update_idletasks()
+            pw = self.winfo_width()
+            ph = self.winfo_height()
+            px = self.winfo_rootx()
+            py = self.winfo_rooty()
+            dialog.geometry(f"+{px + max(0, (pw - 460) // 2)}+{py + max(0, (ph - 280) // 2)}")
+        except Exception:
+            pass
+
+        box = ctk.CTkFrame(dialog, fg_color="#FFFFFF", corner_radius=0)
+        box.pack(fill="both", expand=True, padx=22, pady=20)
+
+        ctk.CTkLabel(
+            box,
+            text="📊 Aylık Nöbet ve Ek Ders Puantajı (KBS)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
+            text_color="#0F172A"
+        ).pack(anchor="w", pady=(0, 4))
+
+        ctk.CTkLabel(
+            box,
+            text="Seçilen ay için tüm fiili nöbet tutulma günlerini (1-31) ve haftalık 3 saat nöbet ek ders ücret icmalini MEB/KBS formatında hazırlar.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#475569",
+            wraplength=410,
+            justify="left"
+        ).pack(anchor="w", pady=(0, 16))
+
+        row_pick = ctk.CTkFrame(box, fg_color="transparent")
+        row_pick.pack(fill="x", pady=(0, 20))
+
+        ctk.CTkLabel(row_pick, text="Yıl:", font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold")).pack(side="left", padx=(0, 6))
+        cmb_year = ctk.CTkComboBox(row_pick, values=[str(year - 1), str(year), str(year + 1)], width=90)
+        cmb_year.set(str(year))
+        cmb_year.pack(side="left", padx=(0, 16))
+
+        ctk.CTkLabel(row_pick, text="Ay:", font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold")).pack(side="left", padx=(0, 6))
+        cmb_month = ctk.CTkComboBox(row_pick, values=TURKISH_MONTHS, width=130)
+        cmb_month.set(TURKISH_MONTHS[month - 1])
+        cmb_month.pack(side="left")
+
+        def do_export():
+            sel_year = int(cmb_year.get())
+            m_idx = TURKISH_MONTHS.index(cmb_month.get()) + 1
+            default_name = f"Nobet_Puantaji_KBS_{sel_year}_{m_idx:02d}.xlsx"
+            out_path = filedialog.asksaveasfilename(
+                title="KBS Nöbet Puantajını Kaydet",
+                initialdir=str(EXPORTS_DIR),
+                initialfile=default_name,
+                defaultextension=".xlsx",
+                filetypes=[("Excel Tablosu", "*.xlsx")]
+            )
+            if not out_path:
+                return
+
+            dialog.destroy()
+            try:
+                self.export_service.export_monthly_kbs_duty_sheet(sel_year, m_idx, Path(out_path))
+                self._show_success(Path(out_path))
+            except Exception as e:
+                logger.error(f"KBS Puantaj Excel çıktısı hatası: {e}")
+                ModernReportErrorDialog(
+                    self,
+                    title="PUANTAJ OLUŞTURULAMADI",
+                    message="KBS nöbet puantajı oluşturulurken bir hata oluştu.",
+                    detail=str(e)
+                )
+
+        btn_row = ctk.CTkFrame(box, fg_color="transparent")
+        btn_row.pack(fill="x", side="bottom")
+
+        btn_cancel = ctk.CTkButton(btn_row, text="İptal", width=80, fg_color="#F1F5F9", hover_color="#E2E8F0", text_color="#0F172A", command=dialog.destroy)
+        btn_cancel.pack(side="right", padx=(8, 0))
+
+        btn_go = ctk.CTkButton(btn_row, text="Excel Olarak İndir", font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"), fg_color=COLOR_PRIMARY, hover_color=COLOR_PRIMARY_HOVER, command=do_export)
+        btn_go.pack(side="right")
+
+    # =========================================================================
+    # MODÜL 5: ADALET VE DAĞILIM ANALİZİ
+    # =========================================================================
+    def _build_analytics_tab(self, parent: ctk.CTkFrame):
+        tab_frame = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=0)
+        self.tab_frames["analytics"] = tab_frame
+
+        header_banner = ctk.CTkFrame(
+            tab_frame,
+            fg_color="#FFFFFF",
+            corner_radius=10,
+            border_width=1,
+            border_color="#E2E8F0"
+        )
+        header_banner.pack(fill="x", pady=(0, 12))
+
+        b_inner = ctk.CTkFrame(header_banner, fg_color="transparent")
+        b_inner.pack(fill="x", padx=18, pady=14)
+
+        left_b = ctk.CTkFrame(b_inner, fg_color="transparent")
+        left_b.pack(side="left", fill="y")
+
+        lbl_t = ctk.CTkLabel(
+            left_b,
+            text="⚖️ NÖBET ADALET VE DAĞILIM ANALİZİ",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
+            text_color="#0F172A"
+        )
+        lbl_t.pack(anchor="w")
+
+        lbl_d = ctk.CTkLabel(
+            left_b,
+            text="Öğretmen nöbet yükleri, yer dengesi ve haftalık görev dağılım istatistikleri.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#475569"
+        )
+        lbl_d.pack(anchor="w", pady=(2, 0))
+
+        btn_ref = ctk.CTkButton(
+            b_inner,
+            text="🔄 Analizi Yenile",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            fg_color="#F1F5F9",
+            hover_color="#E2E8F0",
+            text_color="#0F172A",
+            height=34,
+            corner_radius=8,
+            command=self._refresh_analytics_view
+        )
+        btn_ref.pack(side="right")
+
+        self.analytics_content_frame = ctk.CTkFrame(tab_frame, fg_color="transparent")
+        self.analytics_content_frame.pack(fill="both", expand=True)
+        self._refresh_analytics_view()
+
+    def _refresh_analytics_view(self):
+        if not hasattr(self, "analytics_content_frame"):
+            return
+        for w in self.analytics_content_frame.winfo_children():
+            w.destroy()
+
+        cur_week = self.get_current_week() if self.get_current_week else ""
+        teachers = sorted(self.db.get_teachers(active_only=True), key=lambda x: x.name)
+        locations = sorted(self.db.get_locations(), key=lambda l: l.order_num)
+        assignments = self.db.get_assignments_for_week(cur_week) if cur_week else []
+
+        # İstatistik Hesaplama
+        duty_counts = {t.id: 0 for t in teachers}
+        duty_locations = {t.id: [] for t in teachers}
+        loc_map = {loc.id: loc.name for loc in locations}
+        loc_counts = {loc.id: 0 for loc in locations}
+
+        for a in assignments:
+            if a.teacher_id in duty_counts:
+                duty_counts[a.teacher_id] += 1
+                duty_locations[a.teacher_id].append(loc_map.get(a.location_id, "Nöbet"))
+            if a.location_id in loc_counts:
+                loc_counts[a.location_id] += 1
+
+        total_teachers = len(teachers)
+        total_assignments = len(assignments)
+        outdoor_count = sum(1 for a in assignments if "bahçe" in loc_map.get(a.location_id, "").lower())
+
+        teachers_with_duty = sum(1 for c in duty_counts.values() if c > 0)
+        teachers_multi_duty = sum(1 for c in duty_counts.values() if c > 1)
+        teachers_zero_duty = sum(1 for c in duty_counts.values() if c == 0)
+
+        # Adalet Skoru (Varyans/Dağılım Temelli)
+        fairness_score = 100
+        if total_teachers > 0:
+            penalty = (teachers_multi_duty * 10) + (teachers_zero_duty * 2)
+            fairness_score = max(50, 100 - penalty)
+
+        # 1. KPI Kartları (4'lü sıra)
+        kpi_row = ctk.CTkFrame(self.analytics_content_frame, fg_color="transparent")
+        kpi_row.pack(fill="x", pady=(0, 14))
+
+        kpis = [
+            ("👥 Toplam Öğretmen", f"{total_teachers} Kişi", "#1E293B", "#F8FAFC"),
+            ("📅 Dağıtılan Nöbet", f"{total_assignments} Görev", "#007AFF", "#EBF5FF"),
+            ("⚖️ Dağılım Adalet Oranı", f"%{fairness_score}", "#15803D", "#DCFCE7"),
+            ("🌿 Bahçe / Dış Alan", f"{outdoor_count} Görev", "#D97706", "#FEF3C7")
+        ]
+
+        for idx, (title, val, fg_col, bg_col) in enumerate(kpis):
+            box = ctk.CTkFrame(
+                kpi_row,
+                fg_color=bg_col,
+                corner_radius=12,
+                border_width=1,
+                border_color="#CBD5E1"
+            )
+            box.pack(side="left", fill="both", expand=True, padx=4 if idx > 0 else (0, 4), ipady=8)
+
+            lbl_k_t = ctk.CTkLabel(box, text=title, font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), text_color="#64748B")
+            lbl_k_t.pack(anchor="w", padx=14, pady=(6, 2))
+
+            lbl_k_v = ctk.CTkLabel(box, text=val, font=ctk.CTkFont(family=FONT_FAMILY, size=18, weight="bold"), text_color=fg_col)
+            lbl_k_v.pack(anchor="w", padx=14, pady=(0, 6))
+
+        # 2. İki Sütunlu Detay Paneli
+        cols_frame = ctk.CTkFrame(self.analytics_content_frame, fg_color="transparent")
+        cols_frame.pack(fill="both", expand=True)
+
+        cols_frame.columnconfigure(0, weight=3)
+        cols_frame.columnconfigure(1, weight=2)
+
+        # Sol Kart: Öğretmen Bazlı Yük
+        left_card = ctk.CTkFrame(cols_frame, fg_color="#FFFFFF", corner_radius=12, border_width=1, border_color="#E2E8F0")
+        left_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=0)
+
+        ctk.CTkLabel(
+            left_card,
+            text="👤 Öğretmen Nöbet Dağılımı ve Görev Sayıları",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color="#0F172A"
+        ).pack(anchor="w", padx=16, pady=(14, 8))
+
+        scroll_t = ctk.CTkScrollableFrame(left_card, fg_color="transparent", height=320)
+        scroll_t.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        for t in teachers:
+            c = duty_counts.get(t.id, 0)
+            locs = duty_locations.get(t.id, [])
+            locs_text = " • ".join(locs) if locs else "Bu hafta nöbeti yok"
+
+            row_f = ctk.CTkFrame(scroll_t, fg_color="#F8FAFC", corner_radius=8, height=36)
+            row_f.pack(fill="x", pady=2)
+
+            lbl_name = ctk.CTkLabel(row_f, text=t.name, font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), text_color="#1E293B", width=160, anchor="w")
+            lbl_name.pack(side="left", padx=(10, 6), pady=6)
+
+            lbl_loc = ctk.CTkLabel(row_f, text=locs_text, font=ctk.CTkFont(family=FONT_FAMILY, size=10), text_color="#64748B", anchor="w")
+            lbl_loc.pack(side="left", fill="x", expand=True, padx=6)
+
+            # Rozet
+            badge_bg = "#DCFCE7" if c == 1 else ("#FEF3C7" if c > 1 else "#F1F5F9")
+            badge_fg = "#15803D" if c == 1 else ("#B45309" if c > 1 else "#64748B")
+            badge_text = f"{c} Nöbet" if c > 0 else "0 Nöbet"
+
+            lbl_badge = ctk.CTkLabel(
+                row_f,
+                text=badge_text,
+                font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"),
+                fg_color=badge_bg,
+                text_color=badge_fg,
+                corner_radius=6,
+                padx=8,
+                pady=2
+            )
+            lbl_badge.pack(side="right", padx=(6, 10))
+
+        # Sağ Kart: Nöbet Yerleri Doluluk Analizi
+        right_card = ctk.CTkFrame(cols_frame, fg_color="#FFFFFF", corner_radius=12, border_width=1, border_color="#E2E8F0")
+        right_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=0)
+
+        ctk.CTkLabel(
+            right_card,
+            text="📍 Nöbet Yerleri ve Alan Yükü",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color="#0F172A"
+        ).pack(anchor="w", padx=16, pady=(14, 8))
+
+        scroll_l = ctk.CTkScrollableFrame(right_card, fg_color="transparent", height=320)
+        scroll_l.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+
+        for loc in locations:
+            filled = loc_counts.get(loc.id, 0)
+            needed = loc.capacity * 5  # Haftalık 5 gün
+            pct = int((filled / max(1, needed)) * 100)
+
+            row_l = ctk.CTkFrame(scroll_l, fg_color="#F8FAFC", corner_radius=8, height=44)
+            row_l.pack(fill="x", pady=3)
+
+            top_l = ctk.CTkFrame(row_l, fg_color="transparent")
+            top_l.pack(fill="x", padx=10, pady=(6, 2))
+
+            lbl_ln = ctk.CTkLabel(top_l, text=loc.name, font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), text_color="#1E293B")
+            lbl_ln.pack(side="left")
+
+            lbl_lp = ctk.CTkLabel(top_l, text=f"{filled}/{needed} ({pct}%)", font=ctk.CTkFont(family=FONT_FAMILY, size=10, weight="bold"), text_color="#0284C7")
+            lbl_lp.pack(side="right")
+
+            # Mini Progress Bar
+            prog = ctk.CTkProgressBar(row_l, height=6, corner_radius=3)
+            prog.pack(fill="x", padx=10, pady=(0, 6))
+            prog.set(min(1.0, filled / max(1, needed)))
+            prog.configure(progress_color="#007AFF" if pct >= 100 else "#38BDF8")
+
 
     # =========================================================================
     # YARDIMCI VE BİLGİ FONKSİYONLARI

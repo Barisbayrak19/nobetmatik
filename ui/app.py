@@ -136,6 +136,12 @@ class MainApp(ctk.CTk):
         self.bind("<Control-z>", lambda e: self.do_undo())
         self.bind("<Control-y>", lambda e: self.do_redo())
         self.bind("<Control-s>", lambda e: self.save_changes())
+        self.bind("<Control-k>", lambda e: self.open_spotlight_dialog())
+        self.bind("<Control-K>", lambda e: self.open_spotlight_dialog())
+        self.bind("<F11>", lambda e: self.open_kiosk_view())
+
+        # UndoManager Dinleyicisi
+        self.undo_manager.register_callback(self.update_undo_redo_ui)
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -729,6 +735,40 @@ class MainApp(ctk.CTk):
         self.btn_announcements.pack(side="right", padx=(3, 1), pady=3)
         SimpleTooltip(self.btn_announcements, "Sistem Duyuruları")
 
+        # Kiosk Canlı TV Panosu Butonu
+        self.btn_kiosk = ctk.CTkButton(
+            self.header_actions_box,
+            text="📺 Canlı Pano",
+            width=96,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#F2F2F7",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
+            border_width=0,
+            corner_radius=8,
+            command=self.open_kiosk_view
+        )
+        self.btn_kiosk.pack(side="right", padx=(2, 2), pady=3)
+        SimpleTooltip(self.btn_kiosk, "Öğretmenler Odası Canlı Nöbet Panosu (F11)")
+
+        # Spotlight Arama Butonu
+        self.btn_spotlight = ctk.CTkButton(
+            self.header_actions_box,
+            text="🔍 Ara (Ctrl+K)",
+            width=110,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#F2F2F7",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
+            border_width=0,
+            corner_radius=8,
+            command=self.open_spotlight_dialog
+        )
+        self.btn_spotlight.pack(side="right", padx=(2, 4), pady=3)
+        SimpleTooltip(self.btn_spotlight, "Spotlight Hızlı Arama ve Komut Merkezi (Ctrl + K)")
+
         # Üst Sol Hafta Gezinme Kapsülü (Apple Segmented Control Stili)
         self.nav_card = ctk.CTkFrame(
             self.top_header_frame,
@@ -802,6 +842,43 @@ class MainApp(ctk.CTk):
         )
         btn_today.pack(side="left", padx=(2, 3), pady=3)
         SimpleTooltip(btn_today, "Bu Haftaya Dön")
+
+        div_nav = ctk.CTkFrame(self.nav_card, fg_color="#E5E5EA", width=1, height=18)
+        div_nav.pack(side="left", padx=4, pady=7)
+
+        self.btn_undo = ctk.CTkButton(
+            self.nav_card,
+            text="↶",
+            width=28,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
+            fg_color="transparent",
+            hover_color="#E5E5EA",
+            text_color="#8E8E93",
+            state="disabled",
+            border_width=0,
+            corner_radius=8,
+            command=self.do_undo
+        )
+        self.btn_undo.pack(side="left", padx=1, pady=3)
+        self.tip_undo = SimpleTooltip(self.btn_undo, "Geri Al (Ctrl+Z)")
+
+        self.btn_redo = ctk.CTkButton(
+            self.nav_card,
+            text="↷",
+            width=28,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
+            fg_color="transparent",
+            hover_color="#E5E5EA",
+            text_color="#8E8E93",
+            state="disabled",
+            border_width=0,
+            corner_radius=8,
+            command=self.do_redo
+        )
+        self.btn_redo.pack(side="left", padx=(1, 3), pady=3)
+        self.tip_redo = SimpleTooltip(self.btn_redo, "İleri Al (Ctrl+Y)")
 
         # Apple Toolbar Durum Özeti (Orta Alan Dolgusu)
         self.lbl_toolbar_summary = ctk.CTkLabel(
@@ -1171,7 +1248,8 @@ class MainApp(ctk.CTk):
             duty_service=self.duty_service,
             get_current_week=self.get_current_week_str,
             on_data_changed=self.on_duty_data_changed,
-            on_cell_selected=self.on_cell_selected
+            on_cell_selected=self.on_cell_selected,
+            on_open_whatsapp=self.open_whatsapp_notice
         )
         self.schedule_grid.pack(fill="both", expand=True)
 
@@ -1460,9 +1538,62 @@ class MainApp(ctk.CTk):
         can_u = self.undo_manager.can_undo()
         can_r = self.undo_manager.can_redo()
         if hasattr(self, "btn_undo") and self.btn_undo:
-            self.btn_undo.configure(state="normal" if can_u else "disabled")
+            self.btn_undo.configure(
+                state="normal" if can_u else "disabled",
+                text_color="#1D1D1F" if can_u else "#8E8E93"
+            )
+            desc_u = self.undo_manager.get_undo_description()
+            if hasattr(self, "tip_undo") and self.tip_undo:
+                self.tip_undo.text = f"Geri Al: {desc_u} (Ctrl+Z)" if desc_u else "Geri Al (Ctrl+Z)"
+
         if hasattr(self, "btn_redo") and self.btn_redo:
-            self.btn_redo.configure(state="normal" if can_r else "disabled")
+            self.btn_redo.configure(
+                state="normal" if can_r else "disabled",
+                text_color="#1D1D1F" if can_r else "#8E8E93"
+            )
+            desc_r = self.undo_manager.get_redo_description()
+            if hasattr(self, "tip_redo") and self.tip_redo:
+                self.tip_redo.text = f"İleri Al: {desc_r} (Ctrl+Y)" if desc_r else "İleri Al (Ctrl+Y)" 
+
+    # --- Akıllı Fonksiyonlar: Spotlight, Kiosk & WhatsApp ---
+    def open_spotlight_dialog(self):
+        """Spotlight tarzı hızlı arama ve komut merkezini açar (Ctrl + K)."""
+        from ui.spotlight_dialog import SpotlightDialog
+        SpotlightDialog(
+            parent=self,
+            db=self.db,
+            duty_service=self.duty_service,
+            current_week_start=self.get_current_week_str(),
+            on_navigate_teacher=self.navigate_to_teacher,
+            on_open_whatsapp=self.open_whatsapp_notice,
+            on_open_kiosk=self.open_kiosk_view,
+            on_open_kbs=self.open_kbs_puantaj_export,
+            on_run_distribution=self.open_auto_distribution
+        )
+
+    def open_kiosk_view(self):
+        """Öğretmenler odası için tam ekran canlı nöbet panosunu açar (F11)."""
+        from ui.kiosk_view import KioskView
+        KioskView(self, self.db, self.get_current_week_str())
+
+    def open_whatsapp_notice(self, teacher=None, week_start=None):
+        """Haftalık nöbet WhatsApp bildirim merkezini açar."""
+        from ui.whatsapp_dialog import WhatsAppDutyNoticeDialog
+        wk = week_start or self.get_current_week_str()
+        t_id = teacher.id if hasattr(teacher, "id") else (teacher if isinstance(teacher, str) else None)
+        WhatsAppDutyNoticeDialog(self, self.db, wk, initial_teacher_id=t_id)
+
+    def open_kbs_puantaj_export(self):
+        """Aylık KBS nöbet ek ders puantajı diyalogunu açar."""
+        self.show_reports_view()
+        if hasattr(self, "reports_view"):
+            self.reports_view._open_kbs_puantaj_dialog()
+
+    def navigate_to_teacher(self, teacher_id: str):
+        """Çizelgeye gidip öğretmenin bulunduğu nöbet hücresini seçer."""
+        self.show_weekly_view()
+        if hasattr(self, "schedule_grid"):
+            self.schedule_grid.highlight_teacher(teacher_id)
 
     def do_undo(self):
         if self.undo_manager.undo():

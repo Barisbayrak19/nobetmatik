@@ -2380,3 +2380,293 @@ class ExportService:
         logger.info(f"Resmi Nöbet Defteri PDF çıktısı oluşturuldu: {output_path}")
         return output_path
 
+    def export_monthly_kbs_duty_sheet(self, year: int, month: int, output_path: Path) -> Path:
+        """
+        Ay sonu öğretmenlerin fiili nöbet günlerini ve KBS sistemine girilecek
+        3 saatlik nöbet ek ders tahakkukunu hesaplayıp resmi Excel (.xlsx) puantajı üretir.
+        """
+        import calendar
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        month_names = [
+            "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+            "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+        ]
+        month_name = month_names[month] if 1 <= month <= 12 else str(month)
+        ws.title = f"Nöbet Puantaj {month_name}"
+        ws.views.sheetView[0].showGridLines = True
+
+        school = self.db.get_school_info()
+        teachers = sorted(self.db.get_teachers(active_only=True), key=lambda x: x.name)
+        num_days = calendar.monthrange(year, month)[1]
+
+        # Gün Haritası
+        day_id_map = {0: "monday", 1: "tuesday", 2: "wednesday", 3: "thursday", 4: "friday"}
+        day_abbr_tr = {0: "Pzt", 1: "Sal", 2: "Çar", 3: "Per", 4: "Cum", 5: "Cmt", 6: "Paz"}
+
+        # Haftalık atama önbelleği (week_start -> assignments)
+        week_assignments_cache = {}
+
+        for d in range(1, num_days + 1):
+            c_date = datetime.date(year, month, d)
+            w_day = c_date.weekday()
+            w_monday = c_date - datetime.timedelta(days=w_day)
+            w_start_str = w_monday.strftime("%Y-%m-%d")
+            if w_start_str not in week_assignments_cache:
+                week_assignments_cache[w_start_str] = self.db.get_assignments_for_week(w_start_str)
+
+        # Stiller
+        font_title = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+        font_sub = Font(name="Calibri", size=11, bold=True, color="334155")
+        font_desc = Font(name="Calibri", size=9, italic=True, color="64748B")
+        font_hdr = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+        font_subhdr = Font(name="Calibri", size=8, bold=True, color="475569")
+        font_cell = Font(name="Calibri", size=9)
+        font_duty = Font(name="Calibri", size=10, bold=True, color="15803D")
+        font_total = Font(name="Calibri", size=9, bold=True, color="1E293B")
+
+        fill_hdr = PatternFill("solid", fgColor="1E3A8A")
+        fill_weekend = PatternFill("solid", fgColor="E2E8F0")
+        fill_duty = PatternFill("solid", fgColor="DCFCE7")  # Hafif yeşil nöbet hücresi
+        fill_zebra = PatternFill("solid", fgColor="F8FAFC")
+        fill_total = PatternFill("solid", fgColor="FEF08A")  # Hafif sarı ek ders vurgusu
+
+        thin_side = Side(style='thin', color='CBD5E1')
+        thin_border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+        double_bottom = Border(left=thin_side, right=thin_side, top=thin_side, bottom=Side(style='double', color='1E3A8A'))
+
+        align_center = Alignment(horizontal="center", vertical="center")
+        align_left = Alignment(horizontal="left", vertical="center")
+        align_right = Alignment(horizontal="right", vertical="center")
+
+        total_cols = 3 + num_days + 4  # Sıra, İsim, Branş + Günler + Nöbet Günü, Ek Ders Saati, KBS Kodu, İmza
+        last_col_letter = get_column_letter(total_cols)
+
+        # 1. Başlıklar
+        ws.merge_cells(f"A1:{last_col_letter}1")
+        ws["A1"] = f"T.C. {school.district.upper() if school.district else ''} {school.name.upper()} MÜDÜRLÜĞÜ"
+        ws["A1"].font = font_title
+        ws["A1"].alignment = align_center
+
+        ws.merge_cells(f"A2:{last_col_letter}2")
+        ws["A2"] = f"{month_name.upper()} {year} NÖBET GÖREVİ VE EK DERS PUANTAJ ÇİZELGESİ (KBS UYUMLU)"
+        ws["A2"].font = font_sub
+        ws["A2"].alignment = align_center
+
+        ws.merge_cells(f"A3:{last_col_letter}3")
+        ws["A3"] = "MEB Yönetici ve Öğretmenlerinin Ders ve Ek Ders Saatlerine İlişkin Karar (Md. 44/2) gereğince fiilen tutulan nöbet karşılığı haftalık 3 saat ek ders tahakkuku."
+        ws["A3"].font = font_desc
+        ws["A3"].alignment = align_center
+
+        # 2. Tablo Başlık Satırı (Satır 5 ve 6)
+        ws.row_dimensions[5].height = 20
+        ws.row_dimensions[6].height = 18
+
+        ws.merge_cells("A5:A6")
+        ws["A5"] = "Sıra"
+        ws.merge_cells("B5:B6")
+        ws["B5"] = "Öğretmen Adı Soyadı"
+        ws.merge_cells("C5:C6")
+        ws["C5"] = "Branşı"
+
+        for c_idx in [1, 2, 3]:
+            cell = ws.cell(row=5, column=c_idx)
+            cell.font = font_hdr
+            cell.fill = fill_hdr
+            cell.alignment = align_center
+            cell.border = thin_border
+
+        # Gün Sütunları
+        for d in range(1, num_days + 1):
+            col_idx = 3 + d
+            c_date = datetime.date(year, month, d)
+            w_day = c_date.weekday()
+            is_wknd = w_day >= 5
+
+            # Gün Sayısı
+            cell_num = ws.cell(row=5, column=col_idx, value=d)
+            cell_num.font = font_hdr
+            cell_num.fill = PatternFill("solid", fgColor="475569") if is_wknd else fill_hdr
+            cell_num.alignment = align_center
+            cell_num.border = thin_border
+
+            # Gün Adı
+            cell_name = ws.cell(row=6, column=col_idx, value=day_abbr_tr[w_day])
+            cell_name.font = font_subhdr
+            cell_name.fill = fill_weekend if is_wknd else PatternFill("solid", fgColor="F1F5F9")
+            cell_name.alignment = align_center
+            cell_name.border = thin_border
+            ws.column_dimensions[get_column_letter(col_idx)].width = 3.6
+
+        # Sağ Toplam Sütunları
+        c_tot_duty = 3 + num_days + 1
+        c_tot_hrs = 3 + num_days + 2
+        c_kbs = 3 + num_days + 3
+        c_sign = 3 + num_days + 4
+
+        ws.merge_cells(start_row=5, start_column=c_tot_duty, end_row=6, end_column=c_tot_duty)
+        ws.cell(row=5, column=c_tot_duty, value="Fiili Nöbet\n(Gün)").alignment = align_center
+
+        ws.merge_cells(start_row=5, start_column=c_tot_hrs, end_row=6, end_column=c_tot_hrs)
+        ws.cell(row=5, column=c_tot_hrs, value="Ek Ders\n(x3 Saat)").alignment = align_center
+
+        ws.merge_cells(start_row=5, start_column=c_kbs, end_row=6, end_column=c_kbs)
+        ws.cell(row=5, column=c_kbs, value="KBS Nöbet\nKodu (110)").alignment = align_center
+
+        ws.merge_cells(start_row=5, start_column=c_sign, end_row=6, end_column=c_sign)
+        ws.cell(row=5, column=c_sign, value="Öğretmen\nİmzası").alignment = align_center
+
+        for col_idx in [c_tot_duty, c_tot_hrs, c_kbs, c_sign]:
+            cell = ws.cell(row=5, column=col_idx)
+            cell.font = font_hdr
+            cell.fill = fill_hdr
+            cell.border = thin_border
+
+        ws.column_dimensions["A"].width = 5
+        ws.column_dimensions["B"].width = 24
+        ws.column_dimensions["C"].width = 15
+        ws.column_dimensions[get_column_letter(c_tot_duty)].width = 11
+        ws.column_dimensions[get_column_letter(c_tot_hrs)].width = 12
+        ws.column_dimensions[get_column_letter(c_kbs)].width = 12
+        ws.column_dimensions[get_column_letter(c_sign)].width = 14
+
+        # 3. Öğretmen Veri Satırları
+        cur_row = 7
+        for idx, t in enumerate(teachers, start=1):
+            ws.row_dimensions[cur_row].height = 20
+            row_fill = fill_zebra if idx % 2 == 0 else PatternFill(fill_type=None)
+
+            c_idx_cell = ws.cell(row=cur_row, column=1, value=idx)
+            c_idx_cell.font = font_cell
+            c_idx_cell.alignment = align_center
+            c_idx_cell.border = thin_border
+            if row_fill.fill_type:
+                c_idx_cell.fill = row_fill
+
+            c_name_cell = ws.cell(row=cur_row, column=2, value=t.name)
+            c_name_cell.font = font_cell
+            c_name_cell.alignment = align_left
+            c_name_cell.border = thin_border
+            if row_fill.fill_type:
+                c_name_cell.fill = row_fill
+
+            c_br_cell = ws.cell(row=cur_row, column=3, value=t.branch or "-")
+            c_br_cell.font = font_cell
+            c_br_cell.alignment = align_left
+            c_br_cell.border = thin_border
+            if row_fill.fill_type:
+                c_br_cell.fill = row_fill
+
+            # Günlük Nöbet Kontrolleri
+            first_day_col = 4
+            last_day_col = 3 + num_days
+
+            for d in range(1, num_days + 1):
+                col_idx = 3 + d
+                c_date = datetime.date(year, month, d)
+                w_day = c_date.weekday()
+                cell = ws.cell(row=cur_row, column=col_idx)
+                cell.border = thin_border
+                cell.alignment = align_center
+
+                if w_day >= 5:  # Hafta sonu
+                    cell.fill = fill_weekend
+                    cell.value = ""
+                else:
+                    # Hafta içi: Nöbet kontrolü
+                    w_monday = c_date - datetime.timedelta(days=w_day)
+                    w_start_str = w_monday.strftime("%Y-%m-%d")
+                    day_id = day_id_map.get(w_day, "monday")
+                    assignments = week_assignments_cache.get(w_start_str, [])
+
+                    has_duty = any(a.teacher_id == t.id and a.day_id == day_id for a in assignments)
+                    if has_duty:
+                        cell.value = "N"
+                        cell.font = font_duty
+                        cell.fill = fill_duty
+                    else:
+                        cell.value = ""
+                        if row_fill.fill_type:
+                            cell.fill = row_fill
+
+            # Formüller
+            first_let = get_column_letter(first_day_col)
+            last_let = get_column_letter(last_day_col)
+
+            # Fiili Nöbet Gün Sayısı: =COUNTIF(D7:AH7, "N")
+            cell_tot = ws.cell(row=cur_row, column=c_tot_duty)
+            cell_tot.value = f'=COUNTIF({first_let}{cur_row}:{last_let}{cur_row}, "N")'
+            cell_tot.font = font_total
+            cell_tot.alignment = align_center
+            cell_tot.border = thin_border
+            cell_tot.fill = fill_zebra
+
+            # Ek Ders Saati (Haftalık Nöbet x 3 Saat):
+            # Fiilen tutulan her nöbet günü haftalık 3 saat ek ders olarak değerlendirilir
+            tot_let = get_column_letter(c_tot_duty)
+            cell_hrs = ws.cell(row=cur_row, column=c_tot_hrs)
+            cell_hrs.value = f'={tot_let}{cur_row}*3'
+            cell_hrs.font = font_total
+            cell_hrs.alignment = align_center
+            cell_hrs.border = thin_border
+            cell_hrs.fill = fill_total
+
+            # KBS Kodu (Sabit 110 Nöbet Ücreti)
+            cell_kbs = ws.cell(row=cur_row, column=c_kbs, value="110")
+            cell_kbs.font = font_cell
+            cell_kbs.alignment = align_center
+            cell_kbs.border = thin_border
+
+            # İmza hücresi boş
+            cell_sign = ws.cell(row=cur_row, column=c_sign, value="")
+            cell_sign.border = thin_border
+
+            cur_row += 1
+
+        # 4. Genel Toplam Satırı
+        ws.row_dimensions[cur_row].height = 22
+        ws.merge_cells(f"A{cur_row}:C{cur_row}")
+        c_lbl = ws.cell(row=cur_row, column=1, value="GENEL TOPLAM")
+        c_lbl.font = font_total
+        c_lbl.alignment = align_right
+        c_lbl.fill = PatternFill("solid", fgColor="E2E8F0")
+        c_lbl.border = double_bottom
+
+        for c in range(1, total_cols + 1):
+            ws.cell(row=cur_row, column=c).border = double_bottom
+            ws.cell(row=cur_row, column=c).fill = PatternFill("solid", fgColor="E2E8F0")
+
+        # Toplam Nöbet ve Saat Formülleri
+        start_r = 7
+        end_r = cur_row - 1
+        tot_duty_let = get_column_letter(c_tot_duty)
+        tot_hrs_let = get_column_letter(c_tot_hrs)
+
+        cell_sum_duty = ws.cell(row=cur_row, column=c_tot_duty, value=f"=SUM({tot_duty_let}{start_r}:{tot_duty_let}{end_r})")
+        cell_sum_duty.font = font_total
+        cell_sum_duty.alignment = align_center
+
+        cell_sum_hrs = ws.cell(row=cur_row, column=c_tot_hrs, value=f"=SUM({tot_hrs_let}{start_r}:{tot_hrs_let}{end_r})")
+        cell_sum_hrs.font = font_total
+        cell_sum_hrs.alignment = align_center
+
+        # 5. İmza ve Onay Blokları
+        cur_row += 3
+        ws.merge_cells(f"B{cur_row}:E{cur_row}")
+        ws.merge_cells(f"{get_column_letter(c_tot_duty - 2)}{cur_row}:{last_col_letter}{cur_row}")
+
+        ws[f"B{cur_row}"] = "DÜZENLEYEN\nNöbetten Sorumlu Müdür Yardımcısı\n\n\nİmza"
+        ws[f"B{cur_row}"].font = font_cell
+        ws[f"B{cur_row}"].alignment = align_center
+
+        principal_name = school.principal_name or "Okul Müdürü"
+        ws[f"{get_column_letter(c_tot_duty - 2)}{cur_row}"] = f"UYGUNDUR\n{principal_name}\nOkul Müdürü\n\n\nİmza - Mühür"
+        ws[f"{get_column_letter(c_tot_duty - 2)}{cur_row}"].font = font_cell
+        ws[f"{get_column_letter(c_tot_duty - 2)}{cur_row}"].alignment = align_center
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        wb.save(output_path)
+        logger.info(f"Aylık KBS Nöbet Puantaj Excel çıktısı oluşturuldu: {output_path}")
+        return output_path
+
+

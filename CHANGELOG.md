@@ -13,6 +13,31 @@ Bu dosya, NöbetMatik projesinde yapılan tüm yenilikleri, geliştirmeleri ve h
   - **macOS Toolbar & Apple Segmented Control:** Üst araç çubuğu saf beyaz macOS Toolbar formuna, hafta geçişi Apple Segmented Control pill yapısına kavuşturuldu; hızlı eylem butonları Apple yumuşak pastel tonlarıyla (Soft Blue `#007AFF`, Soft Indigo `#5856D6`, Soft Emerald `#34C759`) revize edildi.
   - **Numbers / Calendar Çizelge Tipografisi & Izgara Uyumu:** Tablo başlıkları, boş slotlar, sürükle-bırak animasyonları ve rozetler Apple HIG tipografi standartlarıyla (antrasit `#1D1D1F`, ikincil `#86868B`, ince 1px `#E5E5EA` pürüzsüz sınırlar) harmonize edildi.
 
+- **🔍 Apple Spotlight Hızlı Arama ve Komut Merkezi (Ctrl + K):**
+  - **Evrensel Arama:** Klavyeden `Ctrl + K` veya üst araç çubuğundaki `🔍 Ara` butonuyla anında açılan, macOS Spotlight tarzı hızlı arama paneli.
+  - **Canlı Durum ve Hızlı Eylemler:** Öğretmen adı, branş veya nöbet yeri yazıldığında haftalık nöbeti, bugünün görev durumu, boş dersleri anında filtrelenir; tek tıkla çizelgedeki hücresine gidilebilir (`🎯`), WhatsApp mesajı oluşturulabilir (`💬`) veya ders programına ulaşılabilir.
+
+- **📊 Aylık Nöbet Puantajı & Ek Ders Çizelgesi (KBS Uyumlu Excel):**
+  - **Otomatik Nöbet Puantajı:** Ay sonlarında idarecilerin nöbet defterini tek tek inceleme zahmetini kaldıran, her ayın 1'inden 31'ine kadar fiili nöbet tutulan günleri (`N`), resmi tatilleri ve hafta sonlarını ayırt eden resmi puantaj tablosu (`.xlsx`).
+  - **KBS Ek Ders Hesaplama:** MEB mevzuatı (Madde 44/2) uyarınca haftalık 3 saatlik nöbet ek ders tahakkukunu ve KBS Nöbet Kodunu (110) otomatik formülleyen, okul müdürü ve müdür yardımcısı onay bloklu resmi Excel dökümü.
+
+- **📱 WhatsApp Nöbet & İkame Bildirim Merkezi:**
+  - **Bireysel & Toplu Mesaj Şablonları:** Öğretmenlere haftalık resmi nöbet gününü ve nöbet alanını veya ani gelişen boş ders ikame görevlerini tek tıkla WhatsApp Web/Masaüstü üzerinden gönderme.
+  - **Okul Grubu Haftalık Nöbet Çizelgesi:** Tüm haftanın gün gün nöbetçi öğretmen listesini emojili ve düzenli formatta okul WhatsApp grubuna tek tıkla gönderme / kopyalama.
+
+- **📺 Canlı Nöbet Panosu (Kiosk / Öğretmenler Odası TV Modu - F11):**
+  - **Büyük Ekran TV Deneyimi:** Öğretmenler odası akıllı tahtası veya giriş holü monitörlerine tam ekran (`F11`) yansıtılan, uzaktan rahatça okunabilen dinamik canlı nöbet panosu.
+  - **Gerçek Zamanlı Ders/Teneffüs Takibi:** Okul ders zili saatlerine göre o anki aktif dersi (`🔔 3. Ders Devam Ediyor`) veya teneffüs süresini (`☕ Teneffüs Vakti`) canlı dijital saat ve tarih eşliğinde gösterir; yer bazlı nöbetçileri ve nöbetçi idareciyi canlı listeler.
+  - **Karanlık & Aydınlık TV Teması:** `☀️ / 🌙` butonuyla televizyon ışığına göre koyu veya aydınlık mod seçeneği.
+
+- **↶ Görsel Geri Al / İleri Al Toolbar Butonları (Ctrl + Z / Ctrl + Y):**
+  - **Görsel Kontrol Butonları:** Üst araç çubuğundaki hafta navigasyon kapsülüne entegre edilen `↶` (Geri Al) ve `↷` (İleri Al) butonları.
+  - **Akıllı Durum Takibi:** Yapılan işlemin adını (ör. *"Geri Al: Ahmet Yılmaz ataması"*) canlı ipucu olarak gösterir; geçmiş boşaldığında butonlar otomatik pasifleşir.
+
+- **⚖️ Nöbet Adalet ve Dağılım Analizi Gösterge Paneli:**
+  - **Adalet Metrikleri:** Raporlar sekmesine eklenen analiz paneliyle toplam nöbet yükü, dengeli öğretmenler, nöbeti olmayanlar ve çoklu nöbet tutanlar üzerinden 100 puanlık Adalet Katsayısı hesabı.
+  - **Alan ve Yük Dengesi:** Zorlu dış alan (Bahçe vb.) nöbetlerinin öğretmenler arasındaki dağılımı ve nöbet yerlerinin haftalık doluluk oranlarını görsel renkli progress barlar ile sunar.
+
 - **📖 Resmi MEB Günlük Nöbet Defteri ve Kontrol Raporu Modülü:**
   - **A4 Resmi Günlük Nöbet Sayfası:** MEB mevzuatına uygun olarak o günün görevli nöbetçi öğretmenleri, nöbet yerleri, nöbet görev saatleri ve imza teslim alanlarını içeren profesyonel sayfa çıktısı (`.pdf`).
   - **Devamsızlık ve İkame Senkronizasyonu:** O gün gelmeyen öğretmenler ve yerlerine görevlendirilen nöbetçiler (ek ders hak ediş durumlarıyla birlikte) defter sayfasına otomatik yansıtılır; gelmeyen yoksa *"Tüm dersler eksiksiz işlenmiştir"* onay rozeti eklenir.
