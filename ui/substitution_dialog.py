@@ -923,7 +923,8 @@ class SubstitutionDialog(ctk.CTkToplevel):
             row_f.pack(fill="x", pady=3, padx=4, ipady=4)
 
             ctk.CTkLabel(row_f, text=f"{l.period}. Ders", font=(FONT_FAMILY, 10, "bold"), text_color=COLOR_TEXT_MAIN, width=75, anchor="w").pack(side="left", padx=(10, 0))
-            time_str = PERIOD_TIMES.get(l.period, "")
+            period_times = self.db.get_period_times() if hasattr(self.db, "get_period_times") else PERIOD_TIMES
+            time_str = period_times.get(l.period, "")
             ctk.CTkLabel(row_f, text=time_str, font=(FONT_FAMILY, 10), text_color=COLOR_TEXT_MAIN, width=100, anchor="w").pack(side="left")
             ctk.CTkLabel(row_f, text=l.class_name, font=(FONT_FAMILY, 10, "bold"), text_color="#2563EB", width=65, anchor="w").pack(side="left")
             subj_disp = l.subject_code if len(l.subject_code) <= 22 else l.subject_code[:20] + ".."

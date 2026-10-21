@@ -142,6 +142,12 @@ class SubstitutionService:
     def __init__(self, db: Database):
         self.db = db
 
+    def get_period_times(self) -> Dict[int, str]:
+        """Kayıtlı veya hesaplanmış ders saatlerini döndürür."""
+        if hasattr(self.db, "get_period_times"):
+            return self.db.get_period_times()
+        return PERIOD_TIMES
+
     @staticmethod
     def parse_eokul_timetable_pdf(pdf_path: str) -> Dict[str, Any]:
         """
@@ -1333,6 +1339,7 @@ class SubstitutionService:
         table_data = [[Paragraph(h, cell_bold) for h in headers]]
 
         # Ders saatlerine göre grupla (bir derste birden fazla nöbetçi olabilir)
+        period_times = self.get_period_times()
         period_groups: Dict[int, List[SubstitutionAssignment]] = {}
         for a in assignments:
             if a.period not in period_groups:
@@ -1342,7 +1349,7 @@ class SubstitutionService:
         for period in sorted(period_groups.keys()):
             subs = period_groups[period]
             first_sub = subs[0]
-            time_interval = PERIOD_TIMES.get(period, "")
+            time_interval = period_times.get(period, "")
 
             duty_lines = []
             loc_lines = []
@@ -1435,6 +1442,7 @@ class SubstitutionService:
         today_date = datetime.date.today().strftime("%d.%m.%Y")
 
         rows_html = ""
+        period_times = self.get_period_times()
         period_groups: Dict[int, List[SubstitutionAssignment]] = {}
         for a in assignments:
             if a.period not in period_groups:
@@ -1444,7 +1452,7 @@ class SubstitutionService:
         for period in sorted(period_groups.keys()):
             subs = period_groups[period]
             first_sub = subs[0]
-            time_interval = PERIOD_TIMES.get(period, "")
+            time_interval = period_times.get(period, "")
 
             duty_lines = []
             loc_lines = []
@@ -1712,8 +1720,9 @@ class SubstitutionService:
             key=lambda x: (x.period, teachers.get(x.absent_teacher_id).name if teachers.get(x.absent_teacher_id) else "")
         )
 
+        period_times = self.get_period_times()
         for a in sorted_assignments:
-            time_interval = PERIOD_TIMES.get(a.period, "")
+            time_interval = period_times.get(a.period, "")
             absent_t = teachers.get(a.absent_teacher_id)
             absent_str = f"<b>{absent_t.name}</b>" if absent_t else "—"
             if absent_t and absent_t.branch:
@@ -1800,8 +1809,9 @@ class SubstitutionService:
         )
 
         rows_html = ""
+        period_times = self.get_period_times()
         for a in sorted_assignments:
-            time_interval = PERIOD_TIMES.get(a.period, "")
+            time_interval = period_times.get(a.period, "")
             absent_t = teachers.get(a.absent_teacher_id)
             absent_str = absent_t.name if absent_t else "—"
             if absent_t and absent_t.branch:

@@ -559,6 +559,66 @@ class Database:
             """, (key, value))
             conn.commit()
 
+    def get_period_times(self) -> Dict[int, str]:
+        """
+        Kayıtlı veya hesaplanmış ders saatlerini döndürür {period: 'HH:MM - HH:MM'}.
+        """
+        val = self.get_setting("period_times")
+        if val:
+            try:
+                data = json.loads(val)
+                res = {int(k): str(v) for k, v in data.items()}
+                if res:
+                    return res
+            except Exception:
+                pass
+
+        daily_count_str = self.get_setting("daily_lesson_count", "7")
+        try:
+            daily_count = int(daily_count_str)
+        except ValueError:
+            daily_count = 7
+
+        start_time_str = self.get_setting("first_lesson_start", "08:30")
+        lesson_duration = 40
+        try:
+            lesson_duration = int(self.get_setting("lesson_duration_minutes", "40") or 40)
+        except ValueError:
+            lesson_duration = 40
+
+        break_duration = 10
+        try:
+            break_duration = int(self.get_setting("break_duration_minutes", "10") or 10)
+        except ValueError:
+            break_duration = 10
+
+        return self.calculate_period_times(start_time_str, daily_count, lesson_duration, break_duration)
+
+    @staticmethod
+    def calculate_period_times(start_time_str: str, period_count: int = 7, lesson_min: int = 40, break_min: int = 10) -> Dict[int, str]:
+        """Başlangıç saati ve sürelere göre ders saat aralıklarını hesaplar."""
+        res = {}
+        try:
+            parts = (start_time_str or "08:30").strip().split(":")
+            curr_h = int(parts[0])
+            curr_m = int(parts[1])
+        except Exception:
+            curr_h, curr_m = 8, 30
+
+        curr_total_min = curr_h * 60 + curr_m
+        for p in range(1, period_count + 1):
+            end_total_min = curr_total_min + lesson_min
+            s_str = f"{(curr_total_min // 60) % 24:02d}:{curr_total_min % 60:02d}"
+            e_str = f"{(end_total_min // 60) % 24:02d}:{end_total_min % 60:02d}"
+            res[p] = f"{s_str} - {e_str}"
+            curr_total_min = end_total_min + break_min
+        return res
+
+    def set_period_times(self, period_times: Dict[int, str]):
+        """Ders saatleri sözlüğünü JSON olarak kaydeder."""
+        data = {str(k): v for k, v in period_times.items()}
+        self.set_setting("period_times", json.dumps(data, ensure_ascii=False))
+
     # --- Timetables ---
     def save_teacher_lesson(self, lesson: TeacherLesson):
         with self.connection() as conn:

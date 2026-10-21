@@ -181,8 +181,10 @@ class TeacherInfoPopover:
             parent_for_rows = list_container
 
         if lessons:
+            ctrl_db = getattr(self.cell.controller, "db", None) if (self.cell and hasattr(self.cell, "controller")) else None
+            period_times = ctrl_db.get_period_times() if (ctrl_db and hasattr(ctrl_db, "get_period_times")) else PERIOD_TIMES
             for l in lessons:
-                time_str = PERIOD_TIMES.get(l.period, "")
+                time_str = period_times.get(l.period, "")
                 r_item = tk.Frame(parent_for_rows, bg="#FFFFFF")
                 r_item.pack(fill="x", pady=1)
 

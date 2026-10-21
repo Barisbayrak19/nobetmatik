@@ -172,10 +172,15 @@ class TimetableExportDialog(tk.Toplevel):
         lessons = self.db.get_teacher_lessons(t_id)
         l_map = {(l.day_name, l.period): l for l in lessons}
 
+        school = self.db.get_school_info()
+        daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+        period_times = self.db.get_period_times()
+        total_weekly = daily_periods * 5
+
         days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
         active_count = 0
-        for p in range(1, 8):
-            time_str = PERIOD_TIMES.get(p, "")
+        for p in range(1, daily_periods + 1):
+            time_str = period_times.get(p, "")
             row = [f"{p}. Ders ({time_str})"]
             for d in days:
                 item = l_map.get((d, p))
@@ -186,7 +191,7 @@ class TimetableExportDialog(tk.Toplevel):
                     row.append("— Boş —")
             self.tree_teacher_prev.insert("", "end", values=tuple(row))
 
-        self.lbl_teacher_stats.configure(text=f"Toplam Haftalık Ders: {active_count} Saat | Boş Saat: {35 - active_count} Saat")
+        self.lbl_teacher_stats.configure(text=f"Toplam Haftalık Ders: {active_count} Saat | Boş Saat: {max(0, total_weekly - active_count)} Saat")
 
     def _export_teacher_pdf(self):
         is_all = (self.teacher_scope_var.get() == "all")
@@ -331,10 +336,14 @@ class TimetableExportDialog(tk.Toplevel):
         l_map = {(l.day_name, l.period): l for l in lessons}
         teachers_map = {t.id: t.name for t in self.db.get_teachers()}
 
+        school = self.db.get_school_info()
+        daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+        period_times = self.db.get_period_times()
+
         days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
         active_count = 0
-        for p in range(1, 8):
-            time_str = PERIOD_TIMES.get(p, "")
+        for p in range(1, daily_periods + 1):
+            time_str = period_times.get(p, "")
             row = [f"{p}. Ders ({time_str})"]
             for d in days:
                 item = l_map.get((d, p))
@@ -408,12 +417,16 @@ class TimetableExportDialog(tk.Toplevel):
             foreground=COLOR_PRIMARY
         ).pack(anchor="w", pady=(0, 10))
 
+        school = self.db.get_school_info()
+        dp = school.daily_periods if (school and school.daily_periods) else 7
+        total_p = dp * 5
+
         desc = (
-            "Genel Çarşaf Program, okuldaki tüm öğretmenlerin haftanın 5 günü boyunca 7 ders saatindeki "
+            f"Genel Çarşaf Program, okuldaki tüm öğretmenlerin haftanın 5 günü boyunca {dp} ders saatindeki "
             "tüm görev dağılımını (hangi sınıfta hangi derse girdiğini) tek bir ana matriste gösterir.\n\n"
             "Özellikler:\n"
             "• Tüm öğretmenler, branşları ve haftalık toplam ders saatleri\n"
-            "• Pazartesi'den Cuma'ya kadar 35 ders saatinin tamamı\n"
+            f"• Pazartesi'den Cuma'ya kadar {total_p} ders saatinin tamamı\n"
             "• Resmi okul idaresi onay formatında renkli ve net hücreler\n"
             "• Excel formatında filtreleme ve yazdırmaya hazır düzen"
         )

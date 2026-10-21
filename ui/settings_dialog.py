@@ -78,8 +78,12 @@ class SettingsView(ctk.CTkFrame):
         self.lesson_count_var = tk.StringVar(value=self.db.get_setting("daily_lesson_count", "7"))
         self.lesson_start_var = tk.StringVar(value=self.db.get_setting("first_lesson_start", "08:30"))
         self.lesson_end_var = tk.StringVar(value=self.db.get_setting("last_lesson_end", "15:00"))
+        self.lesson_duration_var = tk.StringVar(value=self.db.get_setting("lesson_duration_minutes", "40"))
+        self.break_duration_var = tk.StringVar(value=self.db.get_setting("break_duration_minutes", "10"))
         self.duty_start_offset_var = tk.StringVar(value=self.db.get_setting("duty_start_offset", "30"))
         self.duty_end_offset_var = tk.StringVar(value=self.db.get_setting("duty_end_offset", "30"))
+        self.period_time_vars: Dict[int, Tuple[tk.StringVar, tk.StringVar]] = {}
+        self._init_period_time_vars()
 
         # 3. Kaydırma Tercihleri
         self.shift_mode_var = tk.StringVar(value=self.db.get_setting("last_shift_mode", "day_forward"))
@@ -511,6 +515,79 @@ class SettingsView(ctk.CTkFrame):
     # =========================================================================
     # SEKME 2: DERS VE NÖBET SAATLERİ
     # =========================================================================
+    def _init_period_time_vars(self):
+        curr_periods = self.db.get_period_times()
+        for p in range(1, 11):
+            t_str = curr_periods.get(p, "")
+            parts = t_str.split(" - ") if " - " in t_str else ["", ""]
+            s_val = parts[0].strip()
+            e_val = parts[1].strip() if len(parts) > 1 else ""
+            self.period_time_vars[p] = (tk.StringVar(value=s_val), tk.StringVar(value=e_val))
+
+    def _auto_calculate_periods(self):
+        try:
+            start_str = self.lesson_start_var.get().strip() or "08:30"
+            count = int(self.lesson_count_var.get().strip() or "7")
+            l_dur = int(self.lesson_duration_var.get().strip() or "40")
+            b_dur = int(self.break_duration_var.get().strip() or "10")
+            calculated = self.db.calculate_period_times(start_str, count, l_dur, b_dur)
+            for p, val in calculated.items():
+                if p in self.period_time_vars:
+                    parts = val.split(" - ")
+                    self.period_time_vars[p][0].set(parts[0].strip())
+                    self.period_time_vars[p][1].set(parts[1].strip() if len(parts) > 1 else "")
+            if count in calculated:
+                last_end = calculated[count].split(" - ")[-1].strip()
+                self.lesson_end_var.set(last_end)
+        except Exception as e:
+            logger.warning(f"Ders saatleri otomatik hesaplama hatası: {e}")
+
+    def _on_lesson_count_changed(self):
+        self._render_period_rows()
+
+    def _render_period_rows(self):
+        if not hasattr(self, "period_container") or not self.period_container:
+            return
+        for w in self.period_container.winfo_children():
+            w.destroy()
+
+        try:
+            count = int(self.lesson_count_var.get().strip() or "7")
+        except ValueError:
+            count = 7
+
+        half = (count + 1) // 2
+        for col_idx in (0, 1):
+            self.period_container.columnconfigure(col_idx, weight=1, uniform="col")
+
+        for i in range(1, count + 1):
+            col = 0 if i <= half else 1
+            row = (i - 1) if col == 0 else (i - 1 - half)
+
+            cell_frame = ctk.CTkFrame(self.period_container, fg_color="#F8FAFC", corner_radius=6, border_width=1, border_color="#E2E8F0")
+            cell_frame.grid(row=row, column=col, sticky="ew", padx=6, pady=4, ipady=3)
+
+            ctk.CTkLabel(
+                cell_frame,
+                text=f"{i}. Ders:",
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+                text_color="#1E293B",
+                width=65,
+                anchor="w"
+            ).pack(side="left", padx=(10, 6))
+
+            s_var, e_var = self.period_time_vars.get(i, (tk.StringVar(), tk.StringVar()))
+            self.period_time_vars[i] = (s_var, e_var)
+
+            self._create_entry(cell_frame, s_var, width=70).pack(side="left")
+            ctk.CTkLabel(
+                cell_frame,
+                text="—",
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+                text_color="#64748B"
+            ).pack(side="left", padx=4)
+            self._create_entry(cell_frame, e_var, width=70).pack(side="left")
+
     def _build_tab_schedule(self):
         tab = ctk.CTkFrame(self.scroll_container, fg_color="transparent")
         self.tab_frames["schedule"] = tab
@@ -518,7 +595,7 @@ class SettingsView(ctk.CTkFrame):
         body_time = self._create_section_card(
             tab,
             "⏰ Günlük Ders Zaman Çizelgesi",
-            "Okuldaki günlük ders saati sayısı ile ilk ve son ders saatlerini yapılandırın."
+            "Okuldaki günlük ders saati sayısı, başlama/bitiş saatleri ve ders/teneffüs sürelerini belirleyin."
         )
         body_time.columnconfigure(0, weight=0, minsize=185)
         body_time.columnconfigure(1, weight=1)
@@ -529,9 +606,10 @@ class SettingsView(ctk.CTkFrame):
             body_time, text="Günlük Ders Sayısı:",
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0F172A"
         ).grid(row=0, column=0, sticky="w", pady=5)
-        self._create_combobox(body_time, self.lesson_count_var, ["6", "7", "8", "9", "10"], width=120).grid(
-            row=0, column=1, sticky="w", padx=(8, 0), pady=5
-        )
+        self._create_combobox(
+            body_time, self.lesson_count_var, ["6", "7", "8", "9", "10"],
+            width=120, command=lambda _: self._on_lesson_count_changed()
+        ).grid(row=0, column=1, sticky="w", padx=(8, 0), pady=5)
 
         ctk.CTkLabel(
             body_time, text="İlk Ders Başlama Saati:",
@@ -548,6 +626,46 @@ class SettingsView(ctk.CTkFrame):
         self._create_entry(body_time, self.lesson_end_var, width=120).grid(
             row=1, column=3, sticky="w", padx=(8, 0), pady=5
         )
+
+        # Ders Süresi & Teneffüs & Hesapla Butonu
+        ctk.CTkLabel(
+            body_time, text="Ders Süresi (Dakika):",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0F172A"
+        ).grid(row=2, column=0, sticky="w", pady=5)
+        self._create_entry(body_time, self.lesson_duration_var, width=120).grid(
+            row=2, column=1, sticky="w", padx=(8, 20), pady=5
+        )
+
+        ctk.CTkLabel(
+            body_time, text="Teneffüs Süresi (Dakika):",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0F172A"
+        ).grid(row=2, column=2, sticky="w", pady=5)
+        f_break = ctk.CTkFrame(body_time, fg_color="transparent")
+        f_break.grid(row=2, column=3, sticky="w", padx=(8, 0), pady=5)
+        self._create_entry(f_break, self.break_duration_var, width=65).pack(side="left")
+
+        btn_calc = ctk.CTkButton(
+            f_break,
+            text="⚡ Saatleri Dağıt",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#0284C7",
+            hover_color="#0369A1",
+            text_color="#FFFFFF",
+            width=110,
+            height=32,
+            command=self._auto_calculate_periods
+        )
+        btn_calc.pack(side="left", padx=(10, 0))
+
+        # Detaylı Ders Saatleri Kartı
+        body_periods = self._create_section_card(
+            tab,
+            "📋 Ders Saatleri Çizelgesi (Tüm Çıktılara Yansır)",
+            "Her dersin başlangıç ve bitiş saatini doğrudan düzenleyebilirsiniz. '⚡ Saatleri Dağıt' ile otomatik doldurabilirsiniz."
+        )
+        self.period_container = ctk.CTkFrame(body_periods, fg_color="transparent")
+        self.period_container.pack(fill="x", pady=4)
+        self._render_period_rows()
 
         body_duty = self._create_section_card(
             tab,
@@ -1622,19 +1740,39 @@ class SettingsView(ctk.CTkFrame):
             self.school.duty_rules = self.txt_rules.get("1.0", tk.END).strip()
             self.school.school_level = self.school_level_var.get().strip()
             self.school.education_type = self.education_type_var.get().strip()
+            count = 7
             try:
-                self.school.daily_periods = int(self.lesson_count_var.get().strip())
+                count = int(self.lesson_count_var.get().strip())
             except ValueError:
-                self.school.daily_periods = 7
+                count = 7
+            self.school.daily_periods = count
             self.db.save_school_info(self.school)
 
             # 2. Ayarlar (Key-Value)
             self.db.set_setting("vice_principal_name", self.vice_principal_var.get().strip())
-            self.db.set_setting("daily_lesson_count", self.lesson_count_var.get().strip())
+            self.db.set_setting("daily_lesson_count", str(count))
             self.db.set_setting("first_lesson_start", self.lesson_start_var.get().strip())
             self.db.set_setting("last_lesson_end", self.lesson_end_var.get().strip())
+            self.db.set_setting("lesson_duration_minutes", self.lesson_duration_var.get().strip())
+            self.db.set_setting("break_duration_minutes", self.break_duration_var.get().strip())
             self.db.set_setting("duty_start_offset", self.duty_start_offset_var.get().strip())
             self.db.set_setting("duty_end_offset", self.duty_end_offset_var.get().strip())
+
+            # 2.1 Detaylı Ders Saatleri Sözlüğü
+            period_dict = {}
+            for p in range(1, count + 1):
+                if p in self.period_time_vars:
+                    s_v, e_v = self.period_time_vars[p]
+                    s = s_v.get().strip()
+                    e = e_v.get().strip()
+                    if s and e:
+                        period_dict[p] = f"{s} - {e}"
+            if period_dict:
+                self.db.set_period_times(period_dict)
+                if 1 in period_dict:
+                    self.db.set_setting("first_lesson_start", period_dict[1].split(" - ")[0].strip())
+                if count in period_dict:
+                    self.db.set_setting("last_lesson_end", period_dict[count].split(" - ")[-1].strip())
 
             self.db.set_setting("last_shift_mode", self.shift_mode_var.get().strip())
             self.db.set_setting("last_shift_preserve", "1" if self.shift_preserve_var.get() else "0")

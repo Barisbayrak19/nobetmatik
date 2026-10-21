@@ -64,6 +64,12 @@ class ExportService:
     def __init__(self, db: Database):
         self.db = db
 
+    def get_period_times(self) -> Dict[int, str]:
+        """Kayıtlı veya ayarlanmış ders saatlerini döndürür."""
+        if hasattr(self.db, "get_period_times"):
+            return self.db.get_period_times()
+        return PERIOD_TIMES
+
     def _prepare_table_data(self, week_start: str) -> Dict[str, Any]:
         school = self.db.get_school_info()
         days = self.db.get_days()
@@ -1078,12 +1084,14 @@ class ExportService:
             story.append(Spacer(1, 4))
 
             # Tablo: Günler (Sütunlar) x Saatler (Satırlar)
+            daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+            period_times = self.get_period_times()
             col_widths = [75] + [94] * 5
             headers = [Paragraph("Ders Saati", hdr_style)] + [Paragraph(d, hdr_style) for d in days]
             table_data = [headers]
 
-            for p in range(1, 8):
-                time_range = PERIOD_TIMES.get(p, "")
+            for p in range(1, daily_periods + 1):
+                time_range = period_times.get(p, "")
                 row = [Paragraph(f"<b>{p}. Ders</b><br/><font size=6.5 color='#64748B'>{time_range}</font>", day_hdr_style)]
                 for d in days:
                     item = l_map.get((d, p))
@@ -1100,15 +1108,16 @@ class ExportService:
                 table_data.append(row)
 
             tbl = Table(table_data, colWidths=col_widths)
+            row_pad = 4 if daily_periods <= 7 else (3 if daily_periods <= 8 else 2)
             tbl_style = [
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E293B")),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), row_pad),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), row_pad),
             ]
-            for r in range(1, 8):
+            for r in range(1, daily_periods + 1):
                 # Birinci sütun zemin rengi
                 tbl_style.append(('BACKGROUND', (0, r), (0, r), colors.HexColor("#F1F5F9")))
                 if r % 2 == 0:
@@ -1192,10 +1201,14 @@ class ExportService:
             cell.alignment = align_center
             cell.border = thin_border
 
+        daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+        period_times = self.get_period_times()
+        total_weekly_periods = daily_periods * len(days)
+
         for idx, t in enumerate(teachers_list, start=1):
             lessons = self.db.get_teacher_lessons(t.id)
             active_h = sum(1 for l in lessons if not l.is_free and (l.class_name or l.subject_code))
-            free_h = 35 - active_h
+            free_h = max(0, total_weekly_periods - active_h)
             r_idx = idx + 3
             row_vals = [idx, t.name, t.branch or "-", active_h, free_h]
             ws_summary.append(row_vals)
@@ -1242,8 +1255,8 @@ class ExportService:
             lessons = self.db.get_teacher_lessons(t.id)
             l_map = {(l.day_name, l.period): l for l in lessons}
 
-            for p in range(1, 8):
-                time_str = PERIOD_TIMES.get(p, "")
+            for p in range(1, daily_periods + 1):
+                time_str = period_times.get(p, "")
                 row = [f"{p}. Ders\n({time_str})"]
                 for d in days:
                     item = l_map.get((d, p))
@@ -1346,12 +1359,14 @@ class ExportService:
             story.append(t_info)
             story.append(Spacer(1, 4))
 
+            daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+            period_times = self.get_period_times()
             col_widths = [75] + [94] * 5
             headers = [Paragraph("Ders Saati", hdr_style)] + [Paragraph(d, hdr_style) for d in days]
             table_data = [headers]
 
-            for p in range(1, 8):
-                time_range = PERIOD_TIMES.get(p, "")
+            for p in range(1, daily_periods + 1):
+                time_range = period_times.get(p, "")
                 row = [Paragraph(f"<b>{p}. Ders</b><br/><font size=6.5 color='#64748B'>{time_range}</font>", day_hdr_style)]
                 for d in days:
                     item = l_map.get((d, p))
@@ -1367,15 +1382,16 @@ class ExportService:
                 table_data.append(row)
 
             tbl = Table(table_data, colWidths=col_widths)
+            row_pad = 4 if daily_periods <= 7 else (3 if daily_periods <= 8 else 2)
             tbl_style = [
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#0D9488")),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
-                ('TOPPADDING', (0, 0), (-1, -1), 4),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('TOPPADDING', (0, 0), (-1, -1), row_pad),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), row_pad),
             ]
-            for r in range(1, 8):
+            for r in range(1, daily_periods + 1):
                 tbl_style.append(('BACKGROUND', (0, r), (0, r), colors.HexColor("#F0FDFA")))
                 if r % 2 == 0:
                     tbl_style.append(('BACKGROUND', (1, r), (-1, r), colors.HexColor("#F8FAFC")))
@@ -1453,8 +1469,11 @@ class ExportService:
             lessons = self.db.get_class_lessons(c_name)
             l_map = {(l.day_name, l.period): l for l in lessons}
 
-            for p in range(1, 8):
-                time_str = PERIOD_TIMES.get(p, "")
+            daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+            period_times = self.get_period_times()
+
+            for p in range(1, daily_periods + 1):
+                time_str = period_times.get(p, "")
                 row = [f"{p}. Ders\n({time_str})"]
                 for d in days:
                     item = l_map.get((d, p))
@@ -1516,7 +1535,8 @@ class ExportService:
         align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
         # Başlık
-        total_cols = 3 + (len(days) * 7) + 1  # No, Ad Soyad, Branş, 35 saat, Toplam
+        daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+        total_cols = 3 + (len(days) * daily_periods) + 1  # No, Ad Soyad, Branş, haftalık dersler, Toplam
         ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_cols)
         ws["A1"] = f"{school.name} - GENEL HAFTALIK ÇARŞAF DERS PROGRAMI ({school.academic_year})"
         ws["A1"].font = title_font
@@ -1547,7 +1567,7 @@ class ExportService:
         col_pointer = 4
         for d in days:
             start_c = col_pointer
-            end_c = col_pointer + 6
+            end_c = col_pointer + daily_periods - 1
             ws.merge_cells(start_row=2, start_column=start_c, end_row=2, end_column=end_c)
             top_cell = ws.cell(row=2, column=start_c, value=d)
             top_cell.fill = day_fill
@@ -1561,7 +1581,7 @@ class ExportService:
                 p_cell.font = period_font
                 p_cell.alignment = align_center
                 p_cell.border = thin_border
-            col_pointer += 7
+            col_pointer += daily_periods
 
         ws.merge_cells(start_row=2, start_column=col_pointer, end_row=3, end_column=col_pointer)
         tot_cell = ws.cell(row=2, column=col_pointer, value="Toplam\nDers")
@@ -1587,7 +1607,7 @@ class ExportService:
 
             c_pointer = 4
             for d in days:
-                for p in range(1, 8):
+                for p in range(1, daily_periods + 1):
                     item = l_map.get((d, p))
                     val_str = ""
                     if item and not item.is_free and (item.class_name or item.subject_code):
@@ -1663,14 +1683,16 @@ class ExportService:
             cell.alignment = align_center
             cell.border = thin_border
 
+        daily_periods = school.daily_periods if (school and school.daily_periods) else 7
+
         for idx, t in enumerate(teachers, start=1):
             lessons = self.db.get_teacher_lessons(t.id)
             l_map = {(l.day_name, l.period): l for l in lessons}
 
             row_vals = [idx, t.name, t.branch or "-"]
             for d in days:
-                free_periods = [p for p in range(1, 8) if l_map.get((d, p)) is None or l_map[(d, p)].is_free or not (l_map[(d, p)].class_name or l_map[(d, p)].subject_code)]
-                if len(free_periods) == 7:
+                free_periods = [p for p in range(1, daily_periods + 1) if l_map.get((d, p)) is None or l_map[(d, p)].is_free or not (l_map[(d, p)].class_name or l_map[(d, p)].subject_code)]
+                if len(free_periods) == daily_periods:
                     row_vals.append("Tüm Gün Boş 🟢")
                 elif free_periods:
                     row_vals.append(f"{', '.join(map(str, free_periods))}. Ders")
