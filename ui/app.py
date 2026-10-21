@@ -128,6 +128,7 @@ class MainApp(ctk.CTk):
         today = datetime.date.today()
         self.current_week_start = today - datetime.timedelta(days=today.weekday())
         self.has_unsaved_changes = False
+        self.sidebar_theme_mode = self.db.get_setting("sidebar_theme", "dark")
 
         setup_styles(self, self.db)
 
@@ -213,6 +214,7 @@ class MainApp(ctk.CTk):
             font=ctk.CTkFont(family=FONT_FAMILY, size=17, weight="bold"),
             text_color="#FFFFFF"
         )
+        self.lbl_sidebar_logo = lbl_logo
         lbl_logo.pack(anchor="w", pady=(0, 8))
 
         self.lbl_sidebar_school = ctk.CTkLabel(
@@ -362,13 +364,103 @@ class MainApp(ctk.CTk):
         self.btn_sidebar_check.pack(side="right")
         SimpleTooltip(self.btn_sidebar_check, "Güncellemeleri Denetle")
 
+        # Sol Menü Açık/Koyu Tema Değiştirme Butonu (☀️ / 🌙)
+        self.btn_sidebar_theme = ctk.CTkButton(
+            self.sidebar_ver_box,
+            text="☀️" if self.sidebar_theme_mode == "dark" else "🌙",
+            width=26,
+            height=24,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            fg_color="transparent",
+            hover_color=COLOR_SIDEBAR_HOVER,
+            text_color="#A1A1AA",
+            corner_radius=6,
+            command=self.toggle_sidebar_theme
+        )
+        self.btn_sidebar_theme.pack(side="right", padx=(0, 4))
+        SimpleTooltip(self.btn_sidebar_theme, "Menü Teması: Açık / Koyu Değiştir")
+
+        self.sidebar_divs = [div1, div2, div3]
+        self.sidebar_section_titles = [lbl_main_title, lbl_sys_title]
+        self.apply_sidebar_theme(self.sidebar_theme_mode)
+
+    def apply_sidebar_theme(self, mode: str):
+        """Sol menünün açık (Light / Saf Beyaz) veya koyu (Dark / Antrasit) temasını dinamik uygular."""
+        self.sidebar_theme_mode = mode
+        is_light = (mode == "light")
+
+        if hasattr(self, "sidebar_frame"):
+            self.sidebar_frame.configure(
+                fg_color="#FFFFFF" if is_light else COLOR_SIDEBAR_BG,
+                border_width=1 if is_light else 0,
+                border_color="#E5E5EA" if is_light else COLOR_SIDEBAR_BG
+            )
+
+        if hasattr(self, "lbl_sidebar_logo"):
+            self.lbl_sidebar_logo.configure(text_color="#1D1D1F" if is_light else "#FFFFFF")
+
+        if hasattr(self, "lbl_sidebar_school"):
+            self.lbl_sidebar_school.configure(text_color="#1D1D1F" if is_light else "#FFFFFF")
+
+        if hasattr(self, "lbl_sidebar_year"):
+            self.lbl_sidebar_year.configure(
+                fg_color="#F5F5F7" if is_light else "#27272A",
+                text_color=COLOR_PRIMARY
+            )
+
+        if hasattr(self, "lbl_sidebar_principal"):
+            self.lbl_sidebar_principal.configure(text_color="#86868B" if is_light else COLOR_SIDEBAR_MUTED)
+
+        if hasattr(self, "sidebar_divs"):
+            for div in self.sidebar_divs:
+                try:
+                    div.configure(fg_color="#E5E5EA" if is_light else "#27272A")
+                except Exception:
+                    pass
+
+        if hasattr(self, "sidebar_section_titles"):
+            for title_lbl in self.sidebar_section_titles:
+                try:
+                    title_lbl.configure(text_color="#86868B" if is_light else "#71717A")
+                except Exception:
+                    pass
+
+        cur_key = getattr(self, "current_page_key", "weekly")
+        self._update_sidebar_active(cur_key)
+
+        if hasattr(self, "lbl_sidebar_version"):
+            self.lbl_sidebar_version.configure(text_color="#86868B" if is_light else COLOR_SIDEBAR_MUTED)
+
+        if hasattr(self, "btn_sidebar_check"):
+            self.btn_sidebar_check.configure(
+                hover_color="#F5F5F7" if is_light else COLOR_SIDEBAR_HOVER,
+                text_color="#86868B" if is_light else "#A1A1AA"
+            )
+
+        if hasattr(self, "btn_sidebar_theme"):
+            self.btn_sidebar_theme.configure(
+                text="🌙" if is_light else "☀️",
+                hover_color="#F5F5F7" if is_light else COLOR_SIDEBAR_HOVER,
+                text_color="#1D1D1F" if is_light else "#A1A1AA"
+            )
+
+    def toggle_sidebar_theme(self):
+        """Sol menü temasını Açık / Koyu arasında tek tıkla değiştirir ve kaydeder."""
+        cur = getattr(self, "sidebar_theme_mode", "dark")
+        new_mode = "light" if cur == "dark" else "dark"
+        self.db.set_setting("sidebar_theme", new_mode)
+        self.apply_sidebar_theme(new_mode)
+
     def _update_sidebar_active(self, active_key: str):
+        is_light = (getattr(self, "sidebar_theme_mode", "dark") == "light")
+        inactive_hover = "#F5F5F7" if is_light else COLOR_SIDEBAR_HOVER
+        inactive_text = "#1D1D1F" if is_light else "#D4D4D8"
         for key, btn in self.sidebar_buttons.items():
             is_active = (key == active_key)
             btn.configure(
                 fg_color=COLOR_PRIMARY if is_active else "transparent",
-                hover_color=COLOR_PRIMARY if is_active else COLOR_SIDEBAR_HOVER,
-                text_color="#FFFFFF" if is_active else "#D4D4D8",
+                hover_color=COLOR_PRIMARY if is_active else inactive_hover,
+                text_color="#FFFFFF" if is_active else inactive_text,
                 font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if is_active else "normal")
             )
             if hasattr(self, "sidebar_indicators") and key in self.sidebar_indicators:
@@ -1456,6 +1548,8 @@ class MainApp(ctk.CTk):
             self.update_header_info()
             self.schedule_grid.build_grid()
             self.schedule_grid.refresh()
+            sb_mode = self.db.get_setting("sidebar_theme", "dark")
+            self.apply_sidebar_theme(sb_mode)
         except Exception as e:
             logger.error(f"Arayüz güncellenirken hata: {e}", exc_info=True)
 

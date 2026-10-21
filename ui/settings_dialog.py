@@ -111,6 +111,9 @@ class SettingsView(ctk.CTkFrame):
         self.ui_font_size_var = tk.StringVar(value=str(self.db.get_setting("ui_font_size", "13") or "13"))
         self.font_size_title_var = tk.StringVar(value=str(self.db.get_setting("font_size_page_title", "18") or "18"))
         self.font_size_kpi_var = tk.StringVar(value=str(self.db.get_setting("font_size_kpi_value", "22") or "22"))
+        saved_sb_mode = self.db.get_setting("sidebar_theme", "dark")
+        sb_display = "Saf Beyaz / Açık Gri (macOS Light)" if saved_sb_mode == "light" else "Koyu Antrasit (macOS Pro Dark)"
+        self.sidebar_theme_var = tk.StringVar(value=sb_display)
 
         w_val = self.db.get_setting("font_weight_teacher", "bold")
         self.font_weight_teacher_var = tk.StringVar(value="Normal" if "normal" in w_val.lower() else "Kalın (Bold)")
@@ -817,6 +820,30 @@ class SettingsView(ctk.CTkFrame):
     def _build_tab_appearance(self):
         tab = ctk.CTkFrame(self.scroll_container, fg_color="transparent")
         self.tab_frames["appearance"] = tab
+
+        # 0. SOL MENÜ TEMASI (AÇIK / KOYU)
+        body_theme = self._create_section_card(
+            tab,
+            "🎨 Sol Menü Teması (Sidebar Style)",
+            "Sol navigasyon menüsünün açık veya koyu görünümünü seçin."
+        )
+        body_theme.columnconfigure(0, weight=0, minsize=170)
+        body_theme.columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            body_theme,
+            text="Sol Menü Rengi:",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color="#0F172A"
+        ).grid(row=0, column=0, sticky="w", pady=5)
+
+        cb_sb_theme = self._create_combobox(
+            body_theme,
+            variable=self.sidebar_theme_var,
+            values=["Koyu Antrasit (macOS Pro Dark)", "Saf Beyaz / Açık Gri (macOS Light)"],
+            width=280
+        )
+        cb_sb_theme.grid(row=0, column=1, sticky="w", padx=(8, 0), pady=5)
 
         # 1. HIZLI FONT BOYUT ÖNAYARI VE YAZI TİPİ AİLESİ
         body_preset = self._create_section_card(
@@ -1783,6 +1810,9 @@ class SettingsView(ctk.CTkFrame):
             self.db.set_setting("default_duty_per_lesson", self.default_duty_per_lesson_var.get().strip())
 
             # 3. Görünüm, Yazı Tipi ve Sistem Font Ayarları
+            sb_choice = self.sidebar_theme_var.get().lower()
+            new_sb_val = "light" if "açık" in sb_choice or "light" in sb_choice or "beyaz" in sb_choice else "dark"
+            self.db.set_setting("sidebar_theme", new_sb_val)
             self.db.set_setting("font_family", self.font_family_var.get().strip())
             self.db.set_setting("font_scale_preset", self.font_preset_var.get().strip())
             self.db.set_setting("font_size_teacher", self.font_size_teacher_var.get().strip())
