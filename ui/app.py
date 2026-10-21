@@ -202,18 +202,10 @@ class MainApp(ctk.CTk):
         self.sidebar_frame.pack(side="left", fill="y")
         self.sidebar_frame.pack_propagate(False)
 
-        # macOS Pencere Trafik Işıkları (Traffic Lights - Red, Yellow, Green)
-        traffic_box = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        traffic_box.pack(anchor="w", padx=18, pady=(16, 6))
-        for col in (COLOR_TRAFFIC_RED, COLOR_TRAFFIC_YELLOW, COLOR_TRAFFIC_GREEN):
-            dot = ctk.CTkFrame(traffic_box, width=12, height=12, corner_radius=6, fg_color=col)
-            dot.pack(side="left", padx=(0, 6))
-            dot.pack_propagate(False)
-
-        # Üst Okul & Yönetici Bilgi Kartı
+        # Üst Okul & Yönetici Bilgi Kartı (Temiz Apple Sidebar Header)
         school = self.db.get_school_info()
         brand_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        brand_frame.pack(fill="x", padx=16, pady=(10, 12))
+        brand_frame.pack(fill="x", padx=16, pady=(18, 12))
 
         lbl_logo = ctk.CTkLabel(
             brand_frame,
@@ -283,7 +275,7 @@ class MainApp(ctk.CTk):
 
         def _create_sidebar_pill(key: str, text: str, is_active: bool = False):
             row = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent", height=36)
-            row.pack(fill="x", padx=(0, 8), pady=2)
+            row.pack(fill="x", padx=(6, 10), pady=2)
             row.pack_propagate(False)
 
             ind = ctk.CTkFrame(
@@ -712,6 +704,15 @@ class MainApp(ctk.CTk):
         )
         btn_today.pack(side="left", padx=(2, 3), pady=3)
         SimpleTooltip(btn_today, "Bu Haftaya Dön")
+
+        # Apple Toolbar Durum Özeti (Orta Alan Dolgusu)
+        self.lbl_toolbar_summary = ctk.CTkLabel(
+            self.top_header_frame,
+            text="",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            text_color="#86868B"
+        )
+        self.lbl_toolbar_summary.pack(side="left", padx=16, pady=10)
 
     # --- 3. İSTATİSTİK (KPI) KARTLARI (Kullanıcı Talebiyle Kaldırıldı - Dikey Alan Kazanımı) ---
     def _build_kpi_cards(self, parent=None):
@@ -1203,6 +1204,23 @@ class MainApp(ctk.CTk):
         missing_count = max(0, total_slots - filled_count)
         fixed_count = sum(1 for a in assign_map.values() if a.fixed and a.teacher_id)
         rate_pct = int(filled_count / total_slots * 100) if total_slots > 0 else 0
+
+        if hasattr(self, "lbl_toolbar_summary"):
+            if getattr(self, "current_page_key", "weekly") == "weekly":
+                if total_slots > 0 and filled_count == total_slots:
+                    self.lbl_toolbar_summary.configure(
+                        text=f"✓ Tüm Nöbetler Dağıtıldı ({filled_count} Görev)",
+                        text_color="#34C759"
+                    )
+                elif missing_count > 0:
+                    self.lbl_toolbar_summary.configure(
+                        text=f"⚠️ {missing_count} Nöbet Boşta ({filled_count}/{total_slots} Görev)",
+                        text_color="#FF9500"
+                    )
+                else:
+                    self.lbl_toolbar_summary.configure(text="")
+            else:
+                self.lbl_toolbar_summary.configure(text="")
 
         if hasattr(self, "kpi_widgets"):
             if "teachers" in self.kpi_widgets:
@@ -1773,19 +1791,21 @@ class MainApp(ctk.CTk):
                 self.btn_announcements.configure(
                     text=f"🔔 {unread_count}",
                     width=48,
-                    fg_color="#FEF3C7",
-                    hover_color="#FDE68A",
-                    text_color="#B45309",
-                    border_width=0
+                    fg_color="#FEE2E2",
+                    hover_color="#FECACA",
+                    text_color="#FF3B30",
+                    border_width=0,
+                    corner_radius=8
                 )
             else:
                 self.btn_announcements.configure(
                     text="🔔",
                     width=34,
                     fg_color="transparent",
-                    hover_color="#E2E8F0",
-                    text_color="#334155",
-                    border_width=0
+                    hover_color="#E5E5EA",
+                    text_color="#1D1D1F",
+                    border_width=0,
+                    corner_radius=8
                 )
 
     def _update_announcements_badge(self):

@@ -44,19 +44,8 @@ def format_branch_display(branch: str) -> str:
     return branch.strip()
 
 def get_location_icon(name: str) -> str:
-    """Nöbet yeri adına uygun modern sembol döndürür."""
-    lower = name.lower()
-    if "bahçe" in lower or "bahce" in lower:
-        return "🌳 "
-    if "zemin" in lower or "kat" in lower or "blok" in lower or "koridor" in lower:
-        return "🏢 "
-    if "salon" in lower or "spor" in lower:
-        return "🏀 "
-    if "kantin" in lower or "yemek" in lower:
-        return "☕ "
-    if "kütüphane" in lower or "kutuphane" in lower or "laboratuvar" in lower:
-        return "🔬 "
-    return "📍 "
+    """Apple HIG minimalizm: temiz tipografi için ikon önekini kaldırır."""
+    return ""
 
 
 class TeacherInfoPopover:
@@ -401,7 +390,7 @@ class CellWidget(ctk.CTkFrame):
         if self.assignment.fixed:
             # Üst Küçük Rozet (Sadece Sabit Kilitliyse göster - ferah aralıklarla)
             self.top_bar = ctk.CTkFrame(self, fg_color="transparent")
-            self.top_bar.pack(fill="x", padx=6, pady=(4, 2))
+            self.top_bar.pack(fill="x", padx=6, pady=(3, 1))
             self.badge_lock = ctk.CTkFrame(
                 self.top_bar,
                 fg_color="#FFF8ED",
@@ -906,9 +895,10 @@ class ScheduleGrid(ttk.Frame):
                     border_width=1,
                     border_color="#E5E5EA"
                 )
+                loc_display = to_title_case(slot_label)
                 lbl_loc = ctk.CTkLabel(
                     loc_frame,
-                    text=f"{icon}{slot_label}",
+                    text=loc_display,
                     font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
                     text_color="#1D1D1F"
                 )
@@ -971,7 +961,7 @@ class ScheduleGrid(ttk.Frame):
             self.table_frame.columnconfigure(c, weight=1, uniform="duty_col")
         self.table_frame.rowconfigure(0, weight=0, minsize=34)
         for r in range(1, len(days) + 1):
-            self.table_frame.rowconfigure(r, weight=1, uniform="day_row", minsize=68)
+            self.table_frame.rowconfigure(r, weight=1, uniform="day_row", minsize=86)
 
     # --- Sürükle ve Bırak (Drag & Drop) Mekanizması ---
     def is_valid_drop_target(self, source_cell: CellWidget, target_cell: CellWidget) -> Tuple[bool, str]:
