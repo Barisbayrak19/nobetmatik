@@ -136,10 +136,6 @@ class MainApp(ctk.CTk):
         self.bind("<Control-z>", lambda e: self.do_undo())
         self.bind("<Control-y>", lambda e: self.do_redo())
         self.bind("<Control-s>", lambda e: self.save_changes())
-        self.bind("<Control-k>", lambda e: self.open_spotlight_dialog())
-        self.bind("<Control-K>", lambda e: self.open_spotlight_dialog())
-        self.bind("<F11>", lambda e: self.open_kiosk_view())
-
         # UndoManager Dinleyicisi
         self.undo_manager.register_callback(self.update_undo_redo_ui)
 
@@ -734,40 +730,6 @@ class MainApp(ctk.CTk):
         )
         self.btn_announcements.pack(side="right", padx=(3, 1), pady=3)
         SimpleTooltip(self.btn_announcements, "Sistem Duyuruları")
-
-        # Kiosk Canlı TV Panosu Butonu
-        self.btn_kiosk = ctk.CTkButton(
-            self.header_actions_box,
-            text="📺 Canlı Pano",
-            width=96,
-            height=32,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            fg_color="#F2F2F7",
-            hover_color="#E5E5EA",
-            text_color="#1D1D1F",
-            border_width=0,
-            corner_radius=8,
-            command=self.open_kiosk_view
-        )
-        self.btn_kiosk.pack(side="right", padx=(2, 2), pady=3)
-        SimpleTooltip(self.btn_kiosk, "Öğretmenler Odası Canlı Nöbet Panosu (F11)")
-
-        # Spotlight Arama Butonu
-        self.btn_spotlight = ctk.CTkButton(
-            self.header_actions_box,
-            text="🔍 Ara (Ctrl+K)",
-            width=110,
-            height=32,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            fg_color="#F2F2F7",
-            hover_color="#E5E5EA",
-            text_color="#1D1D1F",
-            border_width=0,
-            corner_radius=8,
-            command=self.open_spotlight_dialog
-        )
-        self.btn_spotlight.pack(side="right", padx=(2, 4), pady=3)
-        SimpleTooltip(self.btn_spotlight, "Spotlight Hızlı Arama ve Komut Merkezi (Ctrl + K)")
 
         # Üst Sol Hafta Gezinme Kapsülü (Apple Segmented Control Stili)
         self.nav_card = ctk.CTkFrame(
@@ -1555,27 +1517,7 @@ class MainApp(ctk.CTk):
             if hasattr(self, "tip_redo") and self.tip_redo:
                 self.tip_redo.text = f"İleri Al: {desc_r} (Ctrl+Y)" if desc_r else "İleri Al (Ctrl+Y)" 
 
-    # --- Akıllı Fonksiyonlar: Spotlight, Kiosk & WhatsApp ---
-    def open_spotlight_dialog(self):
-        """Spotlight tarzı hızlı arama ve komut merkezini açar (Ctrl + K)."""
-        from ui.spotlight_dialog import SpotlightDialog
-        SpotlightDialog(
-            parent=self,
-            db=self.db,
-            duty_service=self.duty_service,
-            current_week_start=self.get_current_week_str(),
-            on_navigate_teacher=self.navigate_to_teacher,
-            on_open_whatsapp=self.open_whatsapp_notice,
-            on_open_kiosk=self.open_kiosk_view,
-            on_open_kbs=self.open_kbs_puantaj_export,
-            on_run_distribution=self.open_auto_distribution
-        )
-
-    def open_kiosk_view(self):
-        """Öğretmenler odası için tam ekran canlı nöbet panosunu açar (F11)."""
-        from ui.kiosk_view import KioskView
-        KioskView(self, self.db, self.get_current_week_str())
-
+    # --- Akıllı Fonksiyonlar: WhatsApp & Puantaj ---
     def open_whatsapp_notice(self, teacher=None, week_start=None):
         """Haftalık nöbet WhatsApp bildirim merkezini açar."""
         from ui.whatsapp_dialog import WhatsAppDutyNoticeDialog

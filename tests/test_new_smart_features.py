@@ -156,58 +156,6 @@ class TestNewSmartFeatures(unittest.TestCase):
         redo_success = self.undo_mgr.redo()
         self.assertTrue(redo_success)
 
-    def test_spotlight_dialog_search(self):
-        from ui.spotlight_dialog import SpotlightDialog
-        import tkinter as tk
-
-        root = tk.Tk()
-        root.withdraw()
-        try:
-            dlg = SpotlightDialog(
-                parent=root,
-                db=self.db,
-                duty_service=self.duty_service,
-                current_week_start=self.week_start
-            )
-            # Arama filtresi: Ahmet
-            dlg.search_var.set("Ahmet")
-            dlg._search()
-            titles = [r.get("title") for r in dlg.filtered_results]
-            self.assertIn("Ahmet Yılmaz", titles)
-
-            # Arama filtresi: Bahçe
-            dlg.search_var.set("Bahçe")
-            dlg._search()
-            loc_titles = [r.get("title") for r in dlg.filtered_results]
-            self.assertTrue(any("Bahçe" in t for t in loc_titles))
-
-            dlg.destroy()
-        finally:
-            root.destroy()
-
-    def test_kiosk_view_period_calculation(self):
-        from ui.kiosk_view import KioskView
-        import tkinter as tk
-
-        root = tk.Tk()
-        root.withdraw()
-        try:
-            kiosk = KioskView(root, self.db, self.week_start)
-            # Saat 08:45 -> 1. Ders içinde
-            t_during = datetime.time(8, 45)
-            status_during = kiosk._get_current_period_status(t_during)
-            self.assertIn("1. DERS", status_during)
-
-            # Saat 09:15 -> Teneffüste (09:10 - 09:25 arası)
-            t_break = datetime.time(9, 15)
-            status_break = kiosk._get_current_period_status(t_break)
-            self.assertIn("TENEFFÜS", status_break)
-            self.assertIn("2. Ders", status_break)
-
-            kiosk.destroy()
-        finally:
-            root.destroy()
-
 
 if __name__ == "__main__":
     unittest.main()
