@@ -660,6 +660,21 @@ class ReportsView(ctk.CTkFrame):
             )
             b.pack(fill="x", pady=4)
 
+        btn_duty_log = ctk.CTkButton(
+            f_inner,
+            text="📖 Resmi Günlük Nöbet Defteri / Rapor Sayfası (.pdf)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color="#0F766E",
+            hover_color="#115E59",
+            text_color="#FFFFFF",
+            border_width=0,
+            height=38,
+            corner_radius=8,
+            anchor="w",
+            command=self._open_duty_log_dialog
+        )
+        btn_duty_log.pack(fill="x", pady=(10, 4))
+
         self.lbl_duty_last_info = ctk.CTkLabel(
             f_inner,
             text=self._get_duty_last_exported_info(),
@@ -2013,3 +2028,10 @@ class ReportsView(ctk.CTkFrame):
             TimetableExportDialog(self, self.db)
         except Exception as e:
             logger.error(f"TimetableExportDialog hatası: {e}", exc_info=True)
+
+    def _open_duty_log_dialog(self):
+        try:
+            from ui.duty_log_dialog import DutyLogDialog
+            DutyLogDialog(self, self.db)
+        except Exception as e:
+            logger.error(f"DutyLogDialog hatası: {e}", exc_info=True)

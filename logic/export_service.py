@@ -2080,3 +2080,303 @@ class ExportService:
         logger.info(f"Ay sonu ek ders PDF icmali oluşturuldu: {output_path}")
         return output_path
 
+    # =========================================================================
+    # 16. RESMİ MEB GÜNLÜK NÖBET DEFTERİ VE KONTROL RAPORU PDF
+    # =========================================================================
+    def export_daily_duty_log_pdf(
+        self,
+        date_str: str,
+        output_path: Path,
+        custom_notes: str = "",
+        include_full_week: bool = False
+    ) -> Path:
+        """
+        Resmi MEB Günlük Nöbet Defteri ve Olay Çizelgesi PDF çıktısı üretir.
+        include_full_week=True ise haftanın 5 gününü sayfa sayfa (kitapçık) basar.
+        """
+        _register_pdf_fonts()
+        font_family = "CustomArial"
+        font_bold = "CustomArial-Bold"
+
+        school = self.db.get_school_info()
+        days_all = self.db.get_days()
+        day_map = {d.name: d.id for d in days_all}
+        locations_all = self.db.get_locations(active_only=True)
+        loc_map = {loc.id: loc for loc in locations_all}
+        teachers_all = {t.id: t for t in self.db.get_teachers()}
+        period_times = self.get_period_times()
+        daily_periods = school.daily_periods or 7
+
+        start_offset = 30
+        end_offset = 30
+        try:
+            start_offset = int(self.db.get_setting("duty_start_offset", "30") or 30)
+            end_offset = int(self.db.get_setting("duty_end_offset", "30") or 30)
+        except Exception:
+            pass
+
+        first_t = period_times.get(1, "08:30 - 09:10")
+        last_t = period_times.get(daily_periods, "15:00 - 15:40")
+        first_s = first_t.split(" - ")[0].strip() if " - " in first_t else "08:30"
+        last_e = last_t.split(" - ")[-1].strip() if " - " in last_t else "15:00"
+
+        try:
+            f_h, f_m = map(int, first_s.split(":"))
+            l_h, l_m = map(int, last_e.split(":"))
+            duty_start_min = max(0, f_h * 60 + f_m - start_offset)
+            duty_end_min = min(24 * 60 - 1, l_h * 60 + l_m + end_offset)
+            duty_hours_str = f"{(duty_start_min // 60):02d}:{(duty_start_min % 60):02d} - {(duty_end_min // 60):02d}:{(duty_end_min % 60):02d}"
+        except Exception:
+            duty_hours_str = f"{first_s} - {last_e}"
+
+        vp_name = self.db.get_setting("vice_principal_name", "Nöbetten Sorumlu Md. Yrd.")
+
+        try:
+            base_dt = datetime.date.fromisoformat(date_str)
+        except Exception:
+            base_dt = datetime.date.today()
+
+        if include_full_week:
+            monday_dt = base_dt - datetime.timedelta(days=base_dt.weekday())
+            target_dates = [monday_dt + datetime.timedelta(days=i) for i in range(5)]
+        else:
+            target_dates = [base_dt]
+
+        doc = SimpleDocTemplate(
+            str(output_path),
+            pagesize=A4,
+            rightMargin=25,
+            leftMargin=25,
+            topMargin=18,
+            bottomMargin=18
+        )
+
+        title_style = ParagraphStyle("DLTitle", fontName=font_bold, fontSize=10.5, alignment=1, leading=13, textColor=colors.HexColor("#0F172A"))
+        subtitle_style = ParagraphStyle("DLSubtitle", fontName=font_bold, fontSize=9.5, alignment=1, leading=12, textColor=colors.HexColor("#1E293B"))
+        doc_heading = ParagraphStyle("DLDocHeading", fontName=font_bold, fontSize=11, alignment=1, leading=14, textColor=colors.HexColor("#1E3A8A"))
+        meta_style = ParagraphStyle("DLMeta", fontName=font_family, fontSize=8, alignment=0, leading=10, textColor=colors.HexColor("#334155"))
+        meta_right = ParagraphStyle("DLMetaRight", fontName=font_family, fontSize=8, alignment=2, leading=10, textColor=colors.HexColor("#334155"))
+
+        sec_hdr_style = ParagraphStyle("DLSecHdr", fontName=font_bold, fontSize=8.5, alignment=0, leading=10, textColor=colors.HexColor("#0F172A"))
+        tbl_hdr_style = ParagraphStyle("DLTblHdr", fontName=font_bold, fontSize=7.5, alignment=1, leading=9, textColor=colors.white)
+        tbl_cell_center = ParagraphStyle("DLTblCellC", fontName=font_family, fontSize=7.5, alignment=1, leading=9, textColor=colors.HexColor("#1E293B"))
+        tbl_cell_left = ParagraphStyle("DLTblCellL", fontName=font_family, fontSize=7.5, alignment=0, leading=9, textColor=colors.HexColor("#1E293B"))
+        tbl_cell_bold_left = ParagraphStyle("DLTblCellBL", fontName=font_bold, fontSize=7.5, alignment=0, leading=9, textColor=colors.HexColor("#0F172A"))
+
+        item_chk_style = ParagraphStyle("DLChkItem", fontName=font_family, fontSize=7.5, alignment=0, leading=9.5, textColor=colors.HexColor("#1E293B"))
+        note_text_style = ParagraphStyle("DLNoteText", fontName=font_family, fontSize=7.5, alignment=0, leading=10, textColor=colors.HexColor("#334155"))
+        sign_style = ParagraphStyle("DLSign", fontName=font_bold, fontSize=8, alignment=1, leading=10, textColor=colors.HexColor("#0F172A"))
+
+        day_names_tr = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+        story = []
+
+        for p_idx, d_dt in enumerate(target_dates):
+            if p_idx > 0:
+                story.append(PageBreak())
+
+            iso_date = d_dt.isoformat()
+            tr_date_str = d_dt.strftime("%d.%m.%Y")
+            day_name = day_names_tr[d_dt.weekday()]
+            week_start = (d_dt - datetime.timedelta(days=d_dt.weekday())).isoformat()
+            cur_day_id = day_map.get(day_name)
+
+            all_w_assigns = self.db.get_assignments_for_week(week_start)
+            cur_assigns = [a for a in all_w_assigns if a.day_id == cur_day_id and a.teacher_id]
+            cur_assigns.sort(key=lambda a: (getattr(loc_map.get(a.location_id), 'order_num', 99) if a.location_id in loc_map else 99, a.slot_index))
+
+            att_records = self.db.get_attendance_records(date_str=iso_date)
+            subs = self.db.get_substitutions_for_date(date_str=iso_date)
+
+            # 1. Başlık Bloğu
+            story.append(Paragraph("T.C.", title_style))
+            story.append(Paragraph(f"{school.district.upper()} KAYMAKAMLIĞI", title_style))
+            story.append(Paragraph(f"{school.name} Müdürlüğü", subtitle_style))
+            story.append(Spacer(1, 2))
+            story.append(Paragraph(f"GÜNLÜK NÖBET DEFTERİ VE KONTROL RAPORU ({school.academic_year})", doc_heading))
+            story.append(Spacer(1, 3))
+
+            # Bilgi Şeridi
+            meta_data = [
+                [
+                    Paragraph(f"<b>Tarih / Gün:</b> {tr_date_str} {day_name} &nbsp;&nbsp;|&nbsp;&nbsp; <b>Öğretim Şekli:</b> {getattr(school, 'education_type', 'Normal (Tekli)')}", meta_style),
+                    Paragraph(f"<b>Nöbet Görev Süresi:</b> {duty_hours_str}", meta_right)
+                ]
+            ]
+            t_meta = Table(meta_data, colWidths=[360, 185])
+            t_meta.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            story.append(t_meta)
+            story.append(Spacer(1, 5))
+
+            # BÖLÜM 1: NÖBETÇİ PERSONEL
+            story.append(Paragraph("<b>I. GÖREVLİ NÖBETÇİ ÖĞRETMENLER VE GÖREV YERLERİ</b>", sec_hdr_style))
+            story.append(Spacer(1, 2))
+
+            duty_headers = ["Sıra", "Nöbet / Görev Yeri", "Nöbetçi Öğretmen Adı Soyadı", "Branşı", "Görev Saati", "İmza / Teslim"]
+            duty_table_data = [[Paragraph(h, tbl_hdr_style) for h in duty_headers]]
+
+            if cur_assigns:
+                for s_i, a in enumerate(cur_assigns, start=1):
+                    loc = loc_map.get(a.location_id)
+                    loc_name = loc.name if loc else "-"
+                    t = teachers_all.get(a.teacher_id)
+                    t_name = t.name if t else "-"
+                    t_branch = t.branch if (t and t.branch) else "-"
+                    duty_table_data.append([
+                        Paragraph(str(s_i), tbl_cell_center),
+                        Paragraph(f"<b>{loc_name}</b>", tbl_cell_left),
+                        Paragraph(f"<b>{t_name}</b>", tbl_cell_bold_left),
+                        Paragraph(t_branch, tbl_cell_left),
+                        Paragraph(duty_hours_str.split(" (")[0], tbl_cell_center),
+                        Paragraph("", tbl_cell_center)
+                    ])
+            else:
+                duty_table_data.append([
+                    Paragraph("—", tbl_cell_center),
+                    Paragraph("<i>Bu gün için tanımlı nöbet ataması bulunamadı.</i>", tbl_cell_left),
+                    Paragraph("—", tbl_cell_center),
+                    Paragraph("—", tbl_cell_center),
+                    Paragraph("—", tbl_cell_center),
+                    Paragraph("", tbl_cell_center)
+                ])
+
+            t_duty = Table(duty_table_data, colWidths=[28, 135, 145, 95, 75, 67])
+            t_duty_style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1E293B")),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ('TOPPADDING', (0, 0), (-1, -1), 2.5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+            ]
+            for r in range(1, len(duty_table_data)):
+                if r % 2 == 0:
+                    t_duty_style.append(('BACKGROUND', (0, r), (-1, r), colors.HexColor("#F8FAFC")))
+            t_duty.setStyle(TableStyle(t_duty_style))
+            story.append(t_duty)
+            story.append(Spacer(1, 5))
+
+            # BÖLÜM 2: GELMEYEN ÖĞRETMENLER VE BOŞ DERS GÖREVLENDİRMELERİ (İKAME)
+            story.append(Paragraph("<b>II. GELMEYEN ÖĞRETMENLER VE BOŞ DERS DOLDURMA (İKAME) DURUMU</b>", sec_hdr_style))
+            story.append(Spacer(1, 2))
+
+            if att_records or subs:
+                sub_headers = ["Ders", "Gelmeyen Öğretmen", "Sınıf", "Ders Kodu", "İkame Görevlendirilen Nöbetçi", "Ek Ders / Durum"]
+                sub_table_data = [[Paragraph(h, tbl_hdr_style) for h in sub_headers]]
+                for sub in subs:
+                    absent_t = teachers_all.get(sub.absent_teacher_id)
+                    duty_t = teachers_all.get(sub.duty_teacher_id) if sub.duty_teacher_id else None
+                    abs_name = absent_t.name if absent_t else "-"
+                    duty_name = duty_t.name if duty_t else "— Boş / Atanmadı —"
+                    ek_text = "⭐ Ek Ders" if sub.is_ek_ders else "Nöbet Görevi"
+                    sub_table_data.append([
+                        Paragraph(f"{sub.period}. Ders", tbl_cell_center),
+                        Paragraph(f"<b>{abs_name}</b>", tbl_cell_left),
+                        Paragraph(sub.class_name or "-", tbl_cell_center),
+                        Paragraph(sub.subject_code or "-", tbl_cell_center),
+                        Paragraph(f"<b>{duty_name}</b>", tbl_cell_left),
+                        Paragraph(ek_text, tbl_cell_center)
+                    ])
+                t_sub = Table(sub_table_data, colWidths=[45, 130, 50, 65, 155, 100])
+                t_sub_style = [
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#2563EB")),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                    ('TOPPADDING', (0, 0), (-1, -1), 2),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                ]
+                for r in range(1, len(sub_table_data)):
+                    if r % 2 == 0:
+                        t_sub_style.append(('BACKGROUND', (0, r), (-1, r), colors.HexColor("#EFF6FF")))
+                t_sub.setStyle(TableStyle(t_sub_style))
+                story.append(t_sub)
+            else:
+                no_abs_box = [
+                    [Paragraph("✓ <b>Gelmeyen Öğretmen Yok:</b> Bugün kurumumuzda izinli/raporlu öğretmen bulunmamaktadır. Tüm dersler zamanında ve eksiksiz işlenmiştir.", ParagraphStyle("NoAbs", fontName=font_family, fontSize=7.5, textColor=colors.HexColor("#166534")))]
+                ]
+                t_no_abs = Table(no_abs_box, colWidths=[545])
+                t_no_abs.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F0FDF4")),
+                    ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor("#86EFAC")),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ]))
+                story.append(t_no_abs)
+
+            story.append(Spacer(1, 5))
+
+            # BÖLÜM 3: GÜNLÜK DENETİM MADDELERİ
+            story.append(Paragraph("<b>III. GÜNLÜK NÖBET KONTROL MADDELERİ VE TESPİTLER</b>", sec_hdr_style))
+            story.append(Spacer(1, 2))
+
+            chk_items = [
+                "[ ✓ ] 1. Okul binası, bahçe, kazan dairesi, elektrik ve su tesisatlarının emniyet kontrolleri yapıldı.",
+                "[ ✓ ] 2. Nöbetçi öğretmenler görev yerlerine zamanında intikal ederek öğrenci gözetim ve güvenliğini sağladı.",
+                "[ ✓ ] 3. Teneffüslerde koridor, bahçe ve lavabo temizlikleri ile genel okul düzeni denetlendi.",
+                "[ ✓ ] 4. Günlük ders başlama ve bitiş vakit çizelgesine titizlikle riayet edildi."
+            ]
+            chk_data = [[Paragraph(item, item_chk_style)] for item in chk_items]
+            t_chk = Table(chk_data, colWidths=[545])
+            t_chk.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 0.5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 0.5),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t_chk)
+            story.append(Spacer(1, 4))
+
+            # BÖLÜM 4: OLAYLAR VE ALINAN TEDBİRLER (Not Kutusu)
+            story.append(Paragraph("<b>IV. GÜNLÜK MEYDANA GELEN OLAYLAR VE ALINAN TEDBİRLER</b>", sec_hdr_style))
+            story.append(Spacer(1, 2))
+
+            note_content = custom_notes.strip() if custom_notes else (
+                ".......................................................................................................................................................................................................\n\n"
+                ".......................................................................................................................................................................................................\n\n"
+                "......................................................................................................................................................................................................."
+            )
+            note_box = [[Paragraph(note_content.replace("\n", "<br/>"), note_text_style)]]
+            t_notes = Table(note_box, colWidths=[545])
+            t_notes.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#FAFAFA")),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+            ]))
+            story.append(t_notes)
+            story.append(Spacer(1, 7))
+
+            # BÖLÜM 5: İMZA VE ONAY BLOĞU
+            sign_data = [
+                [
+                    Paragraph("Nöbetçi Öğretmenler Adına<br/><br/><br/>İmza", sign_style),
+                    Paragraph(f"Nöbetten Sorumlu Md. Yrd.<br/><b>{vp_name}</b><br/><br/>İmza", sign_style),
+                    Paragraph(f"UYGUNDUR<br/><b>{school.principal_name}</b><br/>Okul Müdürü<br/>İmza", sign_style),
+                ]
+            ]
+            t_sign = Table(sign_data, colWidths=[180, 185, 180])
+            t_sign.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t_sign)
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        doc.build(story)
+        logger.info(f"Resmi Nöbet Defteri PDF çıktısı oluşturuldu: {output_path}")
+        return output_path
+

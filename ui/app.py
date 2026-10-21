@@ -854,6 +854,8 @@ class MainApp(ctk.CTk):
         self.export_menu = tk.Menu(self, tearoff=0)
         self.export_menu.add_command(label="🖨️ Baskı Önizleme ve Yazdırma Penceresi...", command=self.open_print_preview)
         self.export_menu.add_separator()
+        self.export_menu.add_command(label="📖 Resmi Günlük Nöbet Defteri / Rapor Sayfası...", command=self.open_duty_log_dialog)
+        self.export_menu.add_separator()
         self.export_menu.add_command(label="📄 PDF Belgesi Olarak Kaydet (.pdf)", command=self.export_pdf)
         self.export_menu.add_command(label="📊 Excel Tablosu Olarak Kaydet (.xlsx)", command=self.export_excel)
         self.export_menu.add_command(label="📝 Word Belgesi Olarak Kaydet (.docx)", command=self.export_word)
@@ -1540,6 +1542,13 @@ class MainApp(ctk.CTk):
             parent=self,
             db=self.db
         )
+
+    def open_duty_log_dialog(self, initial_date=None):
+        try:
+            from ui.duty_log_dialog import DutyLogDialog
+            DutyLogDialog(self, self.db, initial_date=initial_date)
+        except Exception as e:
+            logger.error(f"DutyLogDialog hatası: {e}", exc_info=True)
 
     def open_ek_ders_dialog(self):
         from ui.ek_ders_dialog import EkDersMonthlySummaryDialog

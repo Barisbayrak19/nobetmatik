@@ -7,6 +7,13 @@ Bu dosya, NöbetMatik projesinde yapılan tüm yenilikleri, geliştirmeleri ve h
 ## 🚀 [Gelecek Büyük Güncelleme - v2.2.0] - Hazırlık Aşamasında
 
 ### ✨ Yeni Özellikler & İyileştirmeler
+- **📖 Resmi MEB Günlük Nöbet Defteri ve Kontrol Raporu Modülü:**
+  - **A4 Resmi Günlük Nöbet Sayfası:** MEB mevzuatına uygun olarak o günün görevli nöbetçi öğretmenleri, nöbet yerleri, nöbet görev saatleri ve imza teslim alanlarını içeren profesyonel sayfa çıktısı (`.pdf`).
+  - **Devamsızlık ve İkame Senkronizasyonu:** O gün gelmeyen öğretmenler ve yerlerine görevlendirilen nöbetçiler (ek ders hak ediş durumlarıyla birlikte) defter sayfasına otomatik yansıtılır; gelmeyen yoksa *"Tüm dersler eksiksiz işlenmiştir"* onay rozeti eklenir.
+  - **Günlük Denetim ve Olay Tutanağı:** Tesisat, hijyen, öğrenci güvenliği ve ders zillerine riayet kontrol maddeleri ile el yazısı veya dijital not girilebilen resmi olaylar alanı.
+  - **5 Günlük Haftalık Kitapçık:** İdarecilerin haftalık nöbet klasörünü tek tıkla hazırlayabilmesi için Pazartesi'den Cuma'ya tüm günleri ardışık sayfalarda basan toplu kitapçık seçeneği.
+  - **Erişim Kolaylığı:** Ana ekran araç çubuğundaki Dışa Aktar menüsünden ve Raporlar Yönetim Merkezi'nden tek tıkla erişilebilir.
+
 - **⏰ Dinamik Ders Saati Yönetimi ve Çizelge Entegrasyonu:**
   - **Canlı Ders Saatleri Çizelgesi:** `Ayarlar ➔ ⏰ Saatler` sekmesine her dersin (1. Ders, 2. Ders... N. Ders) başlangıç ve bitiş saatlerinin doğrudan kutulardan görüntülenebildiği ve özelleştirilebildiği modern bir arayüz eklendi.
   - **⚡ Otomatik Saat Dağıtımı:** İlk ders başlama saati, ders süresi (varsayılan 40 dk) ve teneffüs süresine (varsayılan 10 dk) göre tüm günün ders ve teneffüs saatlerini tek tıkla hesaplayan akıllı motor eklendi.
