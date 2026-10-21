@@ -9,110 +9,130 @@ Tailwind CSS Slate & Indigo/Emerald estetiği ile optimize edilmiş arayüz:
 import tkinter as tk
 from tkinter import ttk
 
-# Modern Renk Paleti (Tailwind Slate & Emerald / Blue)
-COLOR_BG = "#F8FAFC"             # Slate-50: Ferah, temiz çalışma alanı
+"""
+UI Teması ve Stil Tanımları (Apple Human Interface Guidelines & macOS Design System)
+macOS Sonoma / Sequoia ve Apple HIG standartlarına göre optimize edilmiş arayüz:
+- Apple Canvas Arka Plan (#F5F5F7) ve Saf Beyaz Kartlar (#FFFFFF)
+- Apple System Blue (#007AFF), System Green (#34C759), System Orange (#FF9500), System Red (#FF3B30)
+- macOS Pro Dark Sidebar (#18181B / #1C1C1E) ve Traffic Lights (#FF5F56, #FFBD2E, #27C93F)
+- Apple Tipografisi: Segoe UI Variable / SF Pro uyumlu zengin antrasit (#1D1D1F) ve ikincil (#86868B)
+- Ultra ince, pürüzsüz Apple kenarlıkları (#E5E5EA) ve squircle köşe yarıçapları (10-14px)
+"""
+import tkinter as tk
+from tkinter import ttk
+
+# --- APPLE macOS RENK PALETİ (APPLE HUMAN INTERFACE GUIDELINES) ---
+COLOR_BG = "#F5F5F7"             # Apple Light Gray Canvas (Ferah, pürüzsüz çalışma alanı)
 COLOR_CARD = "#FFFFFF"           # Pure White kart yüzeyleri
-COLOR_CARD_HOVER = "#F1F5F9"     # Slate-100: Hafif kart hover vurgusu
-COLOR_PRIMARY = "#2563EB"        # Blue-600: Güvenilir kurumsal aksiyon mavisi
-COLOR_PRIMARY_HOVER = "#1D4ED8"  # Blue-700
-COLOR_PRIMARY_ACTIVE = "#1E40AF"
-COLOR_SECONDARY = "#0284C7"      # Sky-600
-COLOR_SUCCESS = "#059669"        # Emerald-600: Onay / Kayıt yeşili
-COLOR_SUCCESS_HOVER = "#047857"  # Emerald-700
-COLOR_WARNING = "#D97706"        # Amber-600: Sabit nöbet uyarısı
-COLOR_DANGER = "#DC2626"         # Red-600: Eksik nöbet vurgusu
-COLOR_BORDER = "#E2E8F0"         # Slate-200: Gözü yormayan yumuşak 1px sınır
-COLOR_BORDER_STRONG = "#CBD5E1"  # Slate-300: Belirgin ikincil sınır
-COLOR_TEXT_MAIN = "#0F172A"      # Slate-900: Derin, net tipografi
-COLOR_TEXT_MUTED = "#64748B"     # Slate-500: İkincil soluk açıklamalar
-COLOR_HEADER_BG = "#0F172A"      # Slate-900: Kurumsal derin grafit
-COLOR_HEADER_NAVY = "#1E293B"    # Slate-800: Sade koyu lacivert başlık satırı
-COLOR_HEADER_DAY_BG = "#F1F5F9"  # Slate-100: Gün sütunu açık gri-mavi zemin
-COLOR_HEADER_DAY_TXT = "#0F172A" # Gün sütunu yazı rengi
-COLOR_HEADER_TEXT = "#FFFFFF"
+COLOR_CARD_HOVER = "#FAFAFC"     # Apple hafif kart hover vurgusu
+COLOR_CARD_SECONDARY = "#FBFBFD" # İkincil hafif pastel kart zemini
+COLOR_PRIMARY = "#007AFF"        # Apple System Blue: Canlı, güvenilir kurumsal aksiyon mavisi
+COLOR_PRIMARY_HOVER = "#0062D2"  # Apple Blue Hover
+COLOR_PRIMARY_ACTIVE = "#004CB3" # Apple Blue Active
+COLOR_SECONDARY = "#5856D6"      # Apple System Indigo / Purple
+COLOR_SUCCESS = "#34C759"        # Apple System Green: Onay / Kayıt yeşili
+COLOR_SUCCESS_HOVER = "#28A745"  # Apple Green Hover
+COLOR_WARNING = "#FF9500"        # Apple System Orange: Sabit nöbet ve dikkat uyarısı
+COLOR_DANGER = "#FF3B30"         # Apple System Red: Eksik nöbet ve silme uyarısı
+COLOR_BORDER = "#E5E5EA"         # Apple System Gray 5: İnce, gözü yormayan 1px sınır
+COLOR_BORDER_STRONG = "#D1D1D6"  # Apple System Gray 4: İkincil net sınır
+COLOR_TEXT_MAIN = "#1D1D1F"      # Apple Primary Label: Zengin antrasit-siyah net tipografi
+COLOR_TEXT_MUTED = "#86868B"     # Apple Secondary Label: Zarif, okunaklı ikincil açıklamalar
+COLOR_TEXT_TERTIARY = "#A1A1A6"  # Apple Tertiary Label
+COLOR_HEADER_BG = "#FFFFFF"      # Apple macOS Window Header (Saf Beyaz Toolbar)
+COLOR_HEADER_NAVY = "#1C1C1E"    # Apple Dark Graphite
+COLOR_HEADER_DAY_BG = "#F5F5F7"  # Gün sütunu açık gri zemin
+COLOR_HEADER_DAY_TXT = "#1D1D1F" # Gün sütunu yazı rengi
+COLOR_HEADER_TEXT = "#1D1D1F"
 
-# --- DÜĞME TASARIM SİSTEMİ (BUTTON DESIGN SYSTEM) STANDARTLARI ---
-BTN_RADIUS = 8                   # Standart köşe yuvarlatma (8 px)
+# macOS Pencere Trafik Işıkları (Traffic Lights)
+COLOR_TRAFFIC_RED = "#FF5F56"
+COLOR_TRAFFIC_YELLOW = "#FFBD2E"
+COLOR_TRAFFIC_GREEN = "#27C93F"
 
-# 1. Primary Dark (Kılavuzdaki Koyu Kurumsal Lacivert Butonlar: + Nöbet Ekle, Programı Yayınla)
-COLOR_BTN_PRIMARY_DARK_BG = "#0F172A"
-COLOR_BTN_PRIMARY_DARK_HOVER = "#1E293B"
-COLOR_BTN_PRIMARY_DARK_ACTIVE = "#1E3A8A"
+# --- DÜĞME TASARIM SİSTEMİ (APPLE HIG BUTTON SYSTEM) ---
+BTN_RADIUS = 10                  # macOS Standart düğme köşe yuvarlatma (10 px)
+CARD_RADIUS = 12                 # macOS Standart kart köşe yuvarlatma (12-14 px)
+
+# 1. Primary Dark (macOS Koyu Buton: + Nöbet Ekle, Yayınla)
+COLOR_BTN_PRIMARY_DARK_BG = "#1D1D1F"
+COLOR_BTN_PRIMARY_DARK_HOVER = "#2D2D2F"
+COLOR_BTN_PRIMARY_DARK_ACTIVE = "#000000"
 COLOR_BTN_PRIMARY_DARK_TEXT = "#FFFFFF"
 
-# 2. Primary Blue (Kılavuzdaki Canlı Aksiyon Mavisi Butonlar)
-COLOR_BTN_BLUE_BG = "#1D4ED8"
-COLOR_BTN_BLUE_HOVER = "#2563EB"
-COLOR_BTN_BLUE_ACTIVE = "#172554"
+# 2. Primary Blue (Apple System Blue Aksiyon Butonları)
+COLOR_BTN_BLUE_BG = "#007AFF"
+COLOR_BTN_BLUE_HOVER = "#0062D2"
+COLOR_BTN_BLUE_ACTIVE = "#004CB3"
 COLOR_BTN_BLUE_TEXT = "#FFFFFF"
 
-# 3. Secondary / Outline (Kılavuzdaki Beyaz Kart Butonlar: Taslak Kaydet, Excel'e Aktar, Düzenle)
+# 3. Secondary / Outline (Apple Beyaz Kart Butonlar)
 COLOR_BTN_SECONDARY_BG = "#FFFFFF"
-COLOR_BTN_SECONDARY_BORDER = "#CBD5E1"
-COLOR_BTN_SECONDARY_HOVER = "#EFF6FF"
-COLOR_BTN_SECONDARY_HOVER_BORDER = "#93C5FD"
-COLOR_BTN_SECONDARY_ACTIVE = "#DBEAFE"
-COLOR_BTN_SECONDARY_TEXT = "#0F172A"
+COLOR_BTN_SECONDARY_BORDER = "#D1D1D6"
+COLOR_BTN_SECONDARY_HOVER = "#F5F5F7"
+COLOR_BTN_SECONDARY_HOVER_BORDER = "#007AFF"
+COLOR_BTN_SECONDARY_ACTIVE = "#E5E5EA"
+COLOR_BTN_SECONDARY_TEXT = "#1D1D1F"
 
-# 4. Success (Kılavuzdaki Yeşil: ✓ Onayla)
-COLOR_BTN_SUCCESS_BG = "#059669"
-COLOR_BTN_SUCCESS_HOVER = "#047857"
-COLOR_BTN_SUCCESS_ACTIVE = "#065F46"
+# 4. Success (Apple Green: ✓ Onayla)
+COLOR_BTN_SUCCESS_BG = "#34C759"
+COLOR_BTN_SUCCESS_HOVER = "#28A745"
+COLOR_BTN_SUCCESS_ACTIVE = "#208637"
 COLOR_BTN_SUCCESS_TEXT = "#FFFFFF"
 
-# 5. Danger (Kılavuzdaki Kırmızı: ✕ Reddet / Sil)
-COLOR_BTN_DANGER_BG = "#DC2626"
-COLOR_BTN_DANGER_HOVER = "#B91C1C"
-COLOR_BTN_DANGER_ACTIVE = "#991B1B"
+# 5. Danger (Apple Red: ✕ Reddet / Sil)
+COLOR_BTN_DANGER_BG = "#FF3B30"
+COLOR_BTN_DANGER_HOVER = "#D72C23"
+COLOR_BTN_DANGER_ACTIVE = "#B5221B"
 COLOR_BTN_DANGER_TEXT = "#FFFFFF"
 
-# 6. Warning / Pending (Kılavuzdaki Amber: ⏱ Beklemede)
-COLOR_BTN_WARNING_BG = "#D97706"
-COLOR_BTN_WARNING_HOVER = "#B45309"
-COLOR_BTN_WARNING_ACTIVE = "#92400E"
+# 6. Warning / Pending (Apple Orange: ⏱ Beklemede)
+COLOR_BTN_WARNING_BG = "#FF9500"
+COLOR_BTN_WARNING_HOVER = "#E08300"
+COLOR_BTN_WARNING_ACTIVE = "#C27100"
 COLOR_BTN_WARNING_TEXT = "#FFFFFF"
 
-# 7. Soft Tinted Pills (Pastel Hap Butonlar)
-COLOR_BTN_SOFT_BLUE_BG = "#DBEAFE"
-COLOR_BTN_SOFT_BLUE_HOVER = "#BFDBFE"
-COLOR_BTN_SOFT_BLUE_TEXT = "#1D4ED8"
+# 7. Soft Tinted Pills (Pastel Apple Rozet & Butonlar)
+COLOR_BTN_SOFT_BLUE_BG = "#EBF5FF"
+COLOR_BTN_SOFT_BLUE_HOVER = "#D0E7FF"
+COLOR_BTN_SOFT_BLUE_TEXT = "#007AFF"
 
-COLOR_BTN_SOFT_EMERALD_BG = "#D1FAE5"
-COLOR_BTN_SOFT_EMERALD_HOVER = "#A7F3D0"
-COLOR_BTN_SOFT_EMERALD_TEXT = "#047857"
+COLOR_BTN_SOFT_EMERALD_BG = "#E8F8EE"
+COLOR_BTN_SOFT_EMERALD_HOVER = "#D1F2DD"
+COLOR_BTN_SOFT_EMERALD_TEXT = "#1E7E34"
 
 # 8. Disabled State (Pasif Butonlar)
-COLOR_BTN_DISABLED_BG = "#F8FAFC"
-COLOR_BTN_DISABLED_BORDER = "#E2E8F0"
-COLOR_BTN_DISABLED_TEXT = "#94A3B8"
+COLOR_BTN_DISABLED_BG = "#F5F5F7"
+COLOR_BTN_DISABLED_BORDER = "#E5E5EA"
+COLOR_BTN_DISABLED_TEXT = "#A1A1A6"
 
-# Hücre Durum Renkleri (Sadece İstisnalar Renkli)
-COLOR_CELL_BG = "#FFFFFF"        # Normal görev: Sade beyaz kart
-COLOR_CELL_EMPTY = "#F8FAFC"     # Boş slot: Ferah slate-50 zemin
-COLOR_CELL_EMPTY_BORDER = "#CBD5E1" # Boş slot: Yumuşak slate-300 sınır
-COLOR_CELL_EMPTY_TXT = "#2563EB" # Boş slot: Davetkar aksiyon mavisi yazı
-COLOR_FIXED = "#FEF3C7"          # Sabit nöbet: Amber sarı vurgu
-COLOR_FIXED_BORDER = "#F59E0B"   # Sabit nöbet: Turuncu sınır
-COLOR_CELL_HOVER = "#F1F5F9"     # Fare üzerine gelince yumuşak hover
-COLOR_CELL_DRAG = "#DBEAFE"      # Blue-100: Sürükleme vurgusu
-COLOR_CELL_SELECTED = "#EFF6FF"  # Seçili hücre: Hafif mavi zemin
-COLOR_CELL_SELECTED_BORDER = "#2563EB" # Seçili hücre: Canlı mavi ince sınır
+# Hücre Durum Renkleri (macOS Numbers / Calendar Temiz Stil)
+COLOR_CELL_BG = "#FFFFFF"            # Normal görev: Saf beyaz squircle kart
+COLOR_CELL_EMPTY = "#FBFBFD"         # Boş slot: Ferah açık zemin
+COLOR_CELL_EMPTY_BORDER = "#E5E5EA"  # Boş slot: İnce zarif sınır
+COLOR_CELL_EMPTY_TXT = "#007AFF"     # Boş slot: Apple Blue davetkar yazı
+COLOR_FIXED = "#FFF8ED"              # Sabit nöbet: Apple Soft Amber Pastel
+COLOR_FIXED_BORDER = "#FF9500"       # Sabit nöbet: Apple Orange sınır
+COLOR_CELL_HOVER = "#F5F5F7"         # Fare üzerine gelince yumuşak hover
+COLOR_CELL_DRAG = "#EBF5FF"          # Apple Blue Light Glow
+COLOR_CELL_SELECTED = "#EBF5FF"      # Seçili hücre: Hafif mavi zemin
+COLOR_CELL_SELECTED_BORDER = "#007AFF" # Seçili hücre: Canlı Apple Blue sınır
 
-# Durum Rozet Renkleri (Nötr ve Sade Stil)
-COLOR_BADGE_FREE = "#F1F5F9"         # Slate-100: Nötr bilgilendirme zemini
-COLOR_BADGE_FREE_TXT = "#475569"     # Slate-600: Okunaklı nötr metin
-COLOR_BADGE_FREE_BORDER = "#E2E8F0"  # Slate-200: İnce sınır
-COLOR_BADGE_FIXED = "#FEF3C7"
+# Durum Rozet Renkleri (Apple Pastel Rozetler)
+COLOR_BADGE_FREE = "#F5F5F7"         # Nötr gri zemin
+COLOR_BADGE_FREE_TXT = "#6E6E73"     # Okunaklı Apple gri metin
+COLOR_BADGE_FREE_BORDER = "#E5E5EA"  # İnce sınır
+COLOR_BADGE_FIXED = "#FFF8ED"
 COLOR_BADGE_FIXED_TXT = "#B45309"
-COLOR_BADGE_EMPTY = "#FEE2E2"
-COLOR_BADGE_EMPTY_TXT = "#DC2626"
+COLOR_BADGE_EMPTY = "#FEECEB"
+COLOR_BADGE_EMPTY_TXT = "#FF3B30"
 
-# Yan Menü Renkleri (Yüksek Kontrast > 4.5:1)
-COLOR_SIDEBAR_BG = "#0F172A"      # Koyu lacivert sidebar
-COLOR_SIDEBAR_HOVER = "#1E293B"   # Sidebar hover
-COLOR_SIDEBAR_ACTIVE = "#2563EB"  # Sidebar aktif mavi menü
-COLOR_SIDEBAR_TEXT = "#E2E8F0"    # Okunaklı açık metin
-COLOR_SIDEBAR_MUTED = "#CBD5E1"   # Yüksek kontrastlı alt metin
+# macOS Pro Dark Sidebar Renkleri
+COLOR_SIDEBAR_BG = "#18181B"          # Apple Dark Slate / macOS Sidebar (#18181B)
+COLOR_SIDEBAR_HOVER = "#27272A"       # Sidebar hover
+COLOR_SIDEBAR_ACTIVE = "#007AFF"      # Sidebar aktif Apple Blue
+COLOR_SIDEBAR_TEXT = "#F4F4F5"        # Okunaklı açık metin
+COLOR_SIDEBAR_MUTED = "#A1A1AA"       # İkincil soluk gri metin
 
 # Spacing / Boşluk Ölçeği (4, 8, 12, 16, 24 px)
 SPACING_XS = 4
@@ -121,15 +141,15 @@ SPACING_MD = 12
 SPACING_LG = 16
 SPACING_XL = 24
 
-# Tipografi Hiyerarşisi (CTkFont piksel tabanlı çalıştığı için ClearType netliğinde boyutlar)
-FONT_FAMILY = "Segoe UI"
-FONT_SIZE_PAGE_TITLE = 18        # Sayfa başlığı (18 px bold ~ 13.5 pt)
-FONT_SIZE_SECTION_TITLE = 15     # Bölüm başlıkları (15 px bold ~ 11.5 pt)
-FONT_SIZE_TEACHER = 15           # Öğretmen adı (15 px bold ~ 11.5 pt net görünüm)
-FONT_SIZE_HEADER = 13            # Tablo kat ve gün başlıkları (13 px bold ~ 10 pt)
-FONT_SIZE_BODY = 13              # Genel gövde yazısı (13 px ~ 10 pt)
-FONT_SIZE_SECONDARY = 12         # İkincil / Branş / Açıklama (12 px ~ 9 pt net)
-FONT_SIZE_SMALL = 11             # Küçük etiket / Boş ders (11 px ~ 8.5 pt net)
+# Tipografi Hiyerarşisi (Apple Optik Boyutlandırma)
+FONT_FAMILY = "Segoe UI Variable Text"
+FONT_SIZE_PAGE_TITLE = 18        # Sayfa başlığı (18 px bold)
+FONT_SIZE_SECTION_TITLE = 15     # Bölüm başlıkları (15 px bold)
+FONT_SIZE_TEACHER = 15           # Öğretmen adı (15 px bold net görünüm)
+FONT_SIZE_HEADER = 13            # Tablo kat ve gün başlıkları (13 px bold)
+FONT_SIZE_BODY = 13              # Genel gövde yazısı (13 px)
+FONT_SIZE_SECONDARY = 12         # İkincil / Branş / Açıklama (12 px)
+FONT_SIZE_SMALL = 11             # Küçük etiket / Boş ders (11 px)
 FONT_SIZE_KPI_VALUE = 22         # KPI büyük rakam (22 px bold)
 FONT_SIZE_BASE = 10
 FONT_SIZE_UI = 13

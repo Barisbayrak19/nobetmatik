@@ -7,6 +7,12 @@ Bu dosya, NöbetMatik projesinde yapılan tüm yenilikleri, geliştirmeleri ve h
 ## 🚀 [Gelecek Büyük Güncelleme - v2.2.0] - Hazırlık Aşamasında
 
 ### ✨ Yeni Özellikler & İyileştirmeler
+- **🎨 Apple Human Interface Guidelines & macOS Sonoma / Sequoia Tasarım Yenilemesi:**
+  - **Ferah Apple Canvas & Saf Beyaz Kartlar:** Çalışma alanı açık gri Apple Canvas zeminine (`#F5F5F7`), nöbet hücreleri ve pencereler saf beyaz squircle kartlara (`#FFFFFF`, `corner_radius=10-12`) dönüştürüldü.
+  - **macOS Pro Dark Yan Menü & Pencere Trafik Işıkları:** Sol navigasyon barı macOS Dark Slate (`#18181B`) temasına, üstüne ikonik Kırmızı (`#FF5F56`), Sarı (`#FFBD2E`) ve Yeşil (`#27C93F`) trafik ışıkları entegre edilerek modern macOS Finder/Settings hissi kazandırıldı. Menü butonlarında Apple Blue (`#007AFF`) aktif hap (pill) seçimi uygulandı.
+  - **macOS Toolbar & Apple Segmented Control:** Üst araç çubuğu saf beyaz macOS Toolbar formuna, hafta geçişi Apple Segmented Control pill yapısına kavuşturuldu; hızlı eylem butonları Apple yumuşak pastel tonlarıyla (Soft Blue `#007AFF`, Soft Indigo `#5856D6`, Soft Emerald `#34C759`) revize edildi.
+  - **Numbers / Calendar Çizelge Tipografisi & Izgara Uyumu:** Tablo başlıkları, boş slotlar, sürükle-bırak animasyonları ve rozetler Apple HIG tipografi standartlarıyla (antrasit `#1D1D1F`, ikincil `#86868B`, ince 1px `#E5E5EA` pürüzsüz sınırlar) harmonize edildi.
+
 - **📖 Resmi MEB Günlük Nöbet Defteri ve Kontrol Raporu Modülü:**
   - **A4 Resmi Günlük Nöbet Sayfası:** MEB mevzuatına uygun olarak o günün görevli nöbetçi öğretmenleri, nöbet yerleri, nöbet görev saatleri ve imza teslim alanlarını içeren profesyonel sayfa çıktısı (`.pdf`).
   - **Devamsızlık ve İkame Senkronizasyonu:** O gün gelmeyen öğretmenler ve yerlerine görevlendirilen nöbetçiler (ek ders hak ediş durumlarıyla birlikte) defter sayfasına otomatik yansıtılır; gelmeyen yoksa *"Tüm dersler eksiksiz işlenmiştir"* onay rozeti eklenir.

@@ -106,7 +106,7 @@ class TeacherInfoPopover:
         main_box = tk.Frame(
             tw,
             bg="#FFFFFF",
-            highlightbackground="#CBD5E1",
+            highlightbackground="#E5E5EA",
             highlightthickness=1,
             relief="flat",
             bd=0
@@ -119,10 +119,10 @@ class TeacherInfoPopover:
         branch_str = t.branch if t.branch else "Genel"
 
         # 1. Başlık Alanı (Koyu Lacivert #1E293B, beyaz metin, kapat butonu)
-        header_fr = tk.Frame(main_box, bg="#1E293B", padx=10, pady=6)
+        header_fr = tk.Frame(main_box, bg="#1C1C1E", padx=10, pady=6)
         header_fr.pack(fill="x")
 
-        top_row = tk.Frame(header_fr, bg="#1E293B")
+        top_row = tk.Frame(header_fr, bg="#1C1C1E")
         top_row.pack(fill="x")
 
         lbl_tname = tk.Label(
@@ -130,7 +130,7 @@ class TeacherInfoPopover:
             text=f"👤 {to_title_case(t.name)}",
             font=(FONT_FAMILY, 9, "bold"),
             fg="#F8FAFC",
-            bg="#1E293B",
+            bg="#1C1C1E",
             anchor="w"
         )
         lbl_tname.pack(side="left", fill="x", expand=True)
@@ -139,21 +139,21 @@ class TeacherInfoPopover:
             top_row,
             text="✕",
             font=(FONT_FAMILY, 9, "bold"),
-            fg="#94A3B8",
-            bg="#1E293B",
+            fg="#86868B",
+            bg="#1C1C1E",
             cursor="hand2"
         )
         btn_close.pack(side="right")
         btn_close.bind("<Button-1>", lambda e: self.hide())
-        btn_close.bind("<Enter>", lambda e: btn_close.configure(fg="#EF4444"))
-        btn_close.bind("<Leave>", lambda e: btn_close.configure(fg="#94A3B8"))
+        btn_close.bind("<Enter>", lambda e: btn_close.configure(fg="#FF3B30"))
+        btn_close.bind("<Leave>", lambda e: btn_close.configure(fg="#86868B"))
 
         lbl_sub = tk.Label(
             header_fr,
             text=f"◉ {branch_str}  •  📍 {loc_name} ({day_name})",
             font=(FONT_FAMILY, 8),
-            fg="#94A3B8",
-            bg="#1E293B",
+            fg="#86868B",
+            bg="#1C1C1E",
             anchor="w"
         )
         lbl_sub.pack(fill="x", pady=(2, 0))
@@ -265,8 +265,8 @@ class DragGhostWindow(tk.Toplevel):
 
         card = tk.Frame(
             self,
-            bg="#2563EB",
-            highlightbackground="#1D4ED8",
+            bg="#007AFF",
+            highlightbackground="#0062D2",
             highlightthickness=1,
             padx=10,
             pady=6
@@ -278,7 +278,7 @@ class DragGhostWindow(tk.Toplevel):
             text=f"👤 {teacher_name}",
             font=(FONT_FAMILY, 10, "bold"),
             fg="#FFFFFF",
-            bg="#2563EB"
+            bg="#007AFF"
         )
         lbl_name.pack(anchor="w")
 
@@ -287,8 +287,8 @@ class DragGhostWindow(tk.Toplevel):
                 card,
                 text=branch,
                 font=(FONT_FAMILY, 8),
-                fg="#DBEAFE",
-                bg="#2563EB"
+                fg="#EBF5FF",
+                bg="#007AFF"
             )
             lbl_branch.pack(anchor="w", pady=(1, 0))
 
@@ -327,7 +327,7 @@ class CellWidget(ctk.CTkFrame):
         border_col = self._default_border()
         super().__init__(
             parent,
-            corner_radius=8,
+            corner_radius=10,
             border_width=1,
             border_color=border_col,
             fg_color=card_bg
@@ -404,10 +404,10 @@ class CellWidget(ctk.CTkFrame):
             self.top_bar.pack(fill="x", padx=6, pady=(4, 2))
             self.badge_lock = ctk.CTkFrame(
                 self.top_bar,
-                fg_color="#FEF3C7",
+                fg_color="#FFF8ED",
                 border_width=1,
-                border_color="#F59E0B",
-                corner_radius=4,
+                border_color="#FF9500",
+                corner_radius=5,
                 height=18
             )
             self.badge_lock.pack(side="left")
@@ -434,7 +434,7 @@ class CellWidget(ctk.CTkFrame):
                 self.name_container,
                 text=name_text,
                 font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_TEACHER, weight=theme.FONT_WEIGHT_TEACHER),
-                text_color="#0F172A",
+                text_color="#1D1D1F",
                 wraplength=135,
                 justify="center",
                 cursor="hand2"
@@ -449,7 +449,7 @@ class CellWidget(ctk.CTkFrame):
                     self.center_box,
                     text=branch_disp,
                     font=ctk.CTkFont(family=theme.FONT_FAMILY, size=max(10, theme.FONT_SIZE_SECONDARY - 1), weight="normal"),
-                    text_color="#64748B",
+                    text_color="#86868B",
                     wraplength=135,
                     justify="center",
                     cursor="hand2"
@@ -461,21 +461,21 @@ class CellWidget(ctk.CTkFrame):
             if free_periods:
                 free_str = ", ".join(map(str, free_periods))
                 badge_text = f"Boş: {free_str}. Ders"
-                badge_bg = "#F1F5F9"
-                badge_fg = "#475569"
-                badge_border = "#CBD5E1"
+                badge_bg = "#F5F5F7"
+                badge_fg = "#6E6E73"
+                badge_border = "#E5E5EA"
             else:
                 badge_text = "Tüm saatler dolu"
-                badge_bg = "#F8FAFC"
-                badge_fg = "#94A3B8"
-                badge_border = "#E2E8F0"
+                badge_bg = "#FBFBFD"
+                badge_fg = "#86868B"
+                badge_border = "#E5E5EA"
 
             self.badge_free = ctk.CTkFrame(
                 self.center_box,
                 fg_color=badge_bg,
                 border_width=1,
                 border_color=badge_border,
-                corner_radius=5
+                corner_radius=6
             )
             self.badge_free.pack(pady=(0, 2))
             self.lbl_free = ctk.CTkLabel(
@@ -531,9 +531,9 @@ class CellWidget(ctk.CTkFrame):
     def _on_hover_enter(self, event=None):
         if not self.is_selected and not self.assignment.fixed:
             if self.teacher:
-                self.configure(fg_color="#F1F5F9", border_color="#CBD5E1")
+                self.configure(fg_color="#F5F5F7", border_color="#E5E5EA")
             else:
-                self.configure(fg_color="#EFF6FF", border_color="#3B82F6")
+                self.configure(fg_color="#EBF5FF", border_color="#007AFF")
 
     def _on_hover_leave(self, event=None):
         if not self.is_selected:
@@ -668,14 +668,14 @@ class ScheduleGrid(ttk.Frame):
 
     def _build_container(self):
         # Boş hafta bildirim bandı (Önceki haftanın nöbetlerini hızlı aktarma)
-        self.banner_frame = tk.Frame(self, bg="#EFF6FF", highlightbackground="#BFDBFE", highlightthickness=1)
+        self.banner_frame = tk.Frame(self, bg="#EBF5FF", highlightbackground="#B9E1FF", highlightthickness=1)
         
         lbl_info = tk.Label(
             self.banner_frame,
             text="💡 Bu haftada henüz nöbet planlanmamış.",
             font=(FONT_FAMILY, 9, "bold"),
-            fg="#1E40AF",
-            bg="#EFF6FF"
+            fg="#007AFF",
+            bg="#EBF5FF"
         )
         lbl_info.pack(side="left", padx=10, pady=5)
 
@@ -683,9 +683,9 @@ class ScheduleGrid(ttk.Frame):
             self.banner_frame,
             text="📋 Önceki Haftanın Aynısını Aktar",
             font=(FONT_FAMILY, 8, "bold"),
-            bg="#2563EB",
+            bg="#007AFF",
             fg="#FFFFFF",
-            activebackground="#1D4ED8",
+            activebackground="#0062D2",
             activeforeground="#FFFFFF",
             relief="flat",
             padx=8,
@@ -699,9 +699,9 @@ class ScheduleGrid(ttk.Frame):
             self.banner_frame,
             text="🔄 1 Gün Kaydırarak Aktar",
             font=(FONT_FAMILY, 8, "bold"),
-            bg="#059669",
+            bg="#34C759",
             fg="#FFFFFF",
-            activebackground="#047857",
+            activebackground="#28A745",
             activeforeground="#FFFFFF",
             relief="flat",
             padx=8,
@@ -715,9 +715,9 @@ class ScheduleGrid(ttk.Frame):
             self.banner_frame,
             text="📍 Yerleri Kaydırarak Aktar",
             font=(FONT_FAMILY, 8),
-            bg="#475569",
+            bg="#5856D6",
             fg="#FFFFFF",
-            activebackground="#334155",
+            activebackground="#4745B8",
             activeforeground="#FFFFFF",
             relief="flat",
             padx=8,
@@ -872,19 +872,19 @@ class ScheduleGrid(ttk.Frame):
             lbl.pack(pady=40)
             return
 
-        # Sütun Başlıkları: Günler / Nöbet Yerleri (Açık gri-mavi #F1F5F9 zemin, ince border)
+        # Sütun Başlıkları: Günler / Nöbet Yerleri (Apple Canvas #F5F5F7, 1px #E5E5EA)
         corner_frame = ctk.CTkFrame(
             self.table_frame,
-            corner_radius=8,
-            fg_color="#F1F5F9",
+            corner_radius=10,
+            fg_color="#F5F5F7",
             border_width=1,
-            border_color="#CBD5E1"
+            border_color="#E5E5EA"
         )
         lbl_corner = ctk.CTkLabel(
             corner_frame,
             text="Gün / Nöbet Yeri",
             font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
-            text_color="#334155"
+            text_color="#1D1D1F"
         )
         lbl_corner.pack(expand=True, fill="both", padx=6, pady=4)
         corner_frame.grid(row=0, column=0, sticky="nsew", padx=3, pady=3)
@@ -901,16 +901,16 @@ class ScheduleGrid(ttk.Frame):
                 
                 loc_frame = ctk.CTkFrame(
                     self.table_frame,
-                    corner_radius=8,
-                    fg_color="#F1F5F9",
+                    corner_radius=10,
+                    fg_color="#F5F5F7",
                     border_width=1,
-                    border_color="#CBD5E1"
+                    border_color="#E5E5EA"
                 )
                 lbl_loc = ctk.CTkLabel(
                     loc_frame,
                     text=f"{icon}{slot_label}",
                     font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
-                    text_color="#0F172A"
+                    text_color="#1D1D1F"
                 )
                 lbl_loc.pack(expand=True, fill="both", padx=6, pady=4)
                 loc_frame.grid(row=0, column=col_idx, sticky="nsew", padx=3, pady=3)
@@ -924,10 +924,10 @@ class ScheduleGrid(ttk.Frame):
 
             day_frame = ctk.CTkFrame(
                 self.table_frame,
-                corner_radius=8,
-                fg_color="#F1F5F9",
+                corner_radius=10,
+                fg_color="#F5F5F7",
                 border_width=1,
-                border_color="#CBD5E1"
+                border_color="#E5E5EA"
             )
             day_center = ctk.CTkFrame(day_frame, fg_color="transparent")
             day_center.pack(expand=True)
@@ -935,14 +935,14 @@ class ScheduleGrid(ttk.Frame):
                 day_center,
                 text=d.name.upper(),
                 font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
-                text_color="#0F172A"
+                text_color="#1D1D1F"
             )
             lbl_day_name.pack(side="top", pady=(0, 1))
             lbl_day_date = ctk.CTkLabel(
                 day_center,
                 text=f"{day_dt.day} {month_name}",
                 font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SECONDARY),
-                text_color="#334155"
+                text_color="#86868B"
             )
             lbl_day_date.pack(side="top", pady=0)
             day_frame.grid(row=row_idx, column=0, sticky="nsew", padx=3, pady=3)
@@ -1059,10 +1059,10 @@ class ScheduleGrid(ttk.Frame):
                 is_valid, _ = self.is_valid_drop_target(self.drag_source_cell, target_cell)
                 if is_valid:
                     # Geçerli hedef hücre: mavi kenarlık ve hafif mavi arka plan (#EFF6FF, #2563EB)
-                    target_cell.configure(fg_color="#EFF6FF", border_color="#2563EB", border_width=2)
+                    target_cell.configure(fg_color="#EBF5FF", border_color="#007AFF", border_width=2)
                 else:
                     # Geçersiz hedef hücre: kırmızı kenarlık ve hafif kırmızı arka plan (#FEE2E2, #EF4444)
-                    target_cell.configure(fg_color="#FEE2E2", border_color="#EF4444", border_width=2)
+                    target_cell.configure(fg_color="#FEE2E2", border_color="#FF3B30", border_width=2)
 
     def on_drag_release(self, event):
         if self.drag_ghost:

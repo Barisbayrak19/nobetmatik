@@ -24,6 +24,7 @@ from ui.theme import (
     COLOR_SIDEBAR_BG, COLOR_SIDEBAR_ACTIVE, COLOR_SIDEBAR_HOVER, COLOR_SIDEBAR_TEXT, COLOR_SIDEBAR_MUTED,
     COLOR_BADGE_FREE, COLOR_BADGE_FREE_TXT, COLOR_BADGE_FIXED, COLOR_BADGE_FIXED_TXT,
     COLOR_BADGE_EMPTY, COLOR_BADGE_EMPTY_TXT, COLOR_CELL_SELECTED, COLOR_CELL_SELECTED_BORDER,
+    COLOR_TRAFFIC_RED, COLOR_TRAFFIC_YELLOW, COLOR_TRAFFIC_GREEN, COLOR_CARD, CARD_RADIUS, BTN_RADIUS,
     FONT_FAMILY
 )
 from ui.schedule_grid import TURKISH_MONTHS
@@ -82,11 +83,11 @@ class SimpleTooltip:
             lbl = tk.Label(
                 tw,
                 text=self.text,
-                font=(FONT_FAMILY, 8),
-                bg="#0F172A",
-                fg="#F8FAFC",
-                padx=6,
-                pady=3,
+                font=(FONT_FAMILY, 9),
+                bg="#1C1C1E",
+                fg="#FFFFFF",
+                padx=8,
+                pady=4,
                 relief="flat",
                 bd=0
             )
@@ -190,29 +191,37 @@ class MainApp(ctk.CTk):
     def get_current_week_str(self) -> str:
         return self.current_week_start.isoformat()
 
-    # --- 1. SOL MODERN NAVİGASYON (SIDEBAR) ---
+    # --- 1. SOL MODERN NAVİGASYON (SIDEBAR - macOS SONOMA / SEQUOIA STYLE) ---
     def _build_sidebar(self):
         self.sidebar_frame = ctk.CTkFrame(
             self,
             width=220,
-            fg_color="#0F172A",
+            fg_color=COLOR_SIDEBAR_BG,
             corner_radius=0
         )
         self.sidebar_frame.pack(side="left", fill="y")
         self.sidebar_frame.pack_propagate(False)
 
+        # macOS Pencere Trafik Işıkları (Traffic Lights - Red, Yellow, Green)
+        traffic_box = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        traffic_box.pack(anchor="w", padx=18, pady=(16, 6))
+        for col in (COLOR_TRAFFIC_RED, COLOR_TRAFFIC_YELLOW, COLOR_TRAFFIC_GREEN):
+            dot = ctk.CTkFrame(traffic_box, width=12, height=12, corner_radius=6, fg_color=col)
+            dot.pack(side="left", padx=(0, 6))
+            dot.pack_propagate(False)
+
         # Üst Okul & Yönetici Bilgi Kartı
         school = self.db.get_school_info()
         brand_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        brand_frame.pack(fill="x", padx=16, pady=(20, 14))
+        brand_frame.pack(fill="x", padx=16, pady=(10, 12))
 
         lbl_logo = ctk.CTkLabel(
             brand_frame,
             text="🛡️ NöbetMatik",
             font=ctk.CTkFont(family=FONT_FAMILY, size=17, weight="bold"),
-            text_color="#38BDF8"
+            text_color="#FFFFFF"
         )
-        lbl_logo.pack(anchor="w", pady=(0, 10))
+        lbl_logo.pack(anchor="w", pady=(0, 8))
 
         self.lbl_sidebar_school = ctk.CTkLabel(
             brand_frame,
@@ -222,40 +231,40 @@ class MainApp(ctk.CTk):
             wraplength=188,
             justify="left"
         )
-        self.lbl_sidebar_school.pack(anchor="w", pady=(0, 8))
+        self.lbl_sidebar_school.pack(anchor="w", pady=(0, 6))
 
         self.lbl_sidebar_year = ctk.CTkLabel(
             brand_frame,
             text=f"🎓 {school.academic_year or '2026-2027'} Eğitim Yılı",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            text_color="#38BDF8",
-            fg_color="#1E293B",
+            text_color=COLOR_PRIMARY,
+            fg_color="#27272A",
             corner_radius=6,
             padx=8,
-            pady=4
+            pady=3
         )
-        self.lbl_sidebar_year.pack(anchor="w", pady=(0, 8))
+        self.lbl_sidebar_year.pack(anchor="w", pady=(0, 6))
 
         self.lbl_sidebar_principal = ctk.CTkLabel(
             brand_frame,
             text=f"Müdür: {school.principal_name}" if school.principal_name else "Müdürlük",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            text_color="#94A3B8",
+            text_color=COLOR_SIDEBAR_MUTED,
             wraplength=188,
             justify="left"
         )
         self.lbl_sidebar_principal.pack(anchor="w", pady=(0, 2))
 
         # İnce ayırıcı çizgi
-        div1 = ctk.CTkFrame(self.sidebar_frame, fg_color="#1E293B", height=1)
-        div1.pack(fill="x", padx=12, pady=(10, 10))
+        div1 = ctk.CTkFrame(self.sidebar_frame, fg_color="#27272A", height=1)
+        div1.pack(fill="x", padx=12, pady=(8, 8))
 
         # 1. ANA MENÜ Başlığı
         lbl_main_title = ctk.CTkLabel(
             self.sidebar_frame,
             text="ANA MENÜ",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            text_color="#94A3B8"
+            text_color="#71717A"
         )
         lbl_main_title.pack(anchor="w", padx=16, pady=(0, 4))
 
@@ -273,7 +282,7 @@ class MainApp(ctk.CTk):
         ]
 
         def _create_sidebar_pill(key: str, text: str, is_active: bool = False):
-            row = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent", height=38)
+            row = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent", height=36)
             row.pack(fill="x", padx=(0, 8), pady=2)
             row.pack_propagate(False)
 
@@ -281,7 +290,7 @@ class MainApp(ctk.CTk):
                 row,
                 width=3,
                 corner_radius=1,
-                fg_color="#38BDF8" if is_active else "transparent"
+                fg_color=COLOR_PRIMARY if is_active else "transparent"
             )
             ind.pack(side="left", fill="y", padx=(0, 6), pady=4)
 
@@ -291,10 +300,10 @@ class MainApp(ctk.CTk):
                 height=34,
                 font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if is_active else "normal"),
                 anchor="w",
-                fg_color="#1E293B" if is_active else "transparent",
-                hover_color="#1E293B",
-                text_color="#38BDF8" if is_active else "#E2E8F0",
-                corner_radius=10,
+                fg_color=COLOR_PRIMARY if is_active else "transparent",
+                hover_color=COLOR_PRIMARY if is_active else COLOR_SIDEBAR_HOVER,
+                text_color="#FFFFFF" if is_active else "#D4D4D8",
+                corner_radius=8,
                 border_width=0,
                 command=lambda k=key: self.switch_page(k)
             )
@@ -306,15 +315,15 @@ class MainApp(ctk.CTk):
             _create_sidebar_pill(key, text, is_active=(key == "weekly"))
 
         # İnce ayırıcı çizgi
-        div2 = ctk.CTkFrame(self.sidebar_frame, fg_color="#1E293B", height=1)
-        div2.pack(fill="x", padx=12, pady=(12, 10))
+        div2 = ctk.CTkFrame(self.sidebar_frame, fg_color="#27272A", height=1)
+        div2.pack(fill="x", padx=12, pady=(10, 8))
 
         # 2. SİSTEM Menü Başlığı
         lbl_sys_title = ctk.CTkLabel(
             self.sidebar_frame,
             text="SİSTEM",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            text_color="#94A3B8"
+            text_color="#71717A"
         )
         lbl_sys_title.pack(anchor="w", padx=16, pady=(0, 4))
 
@@ -332,7 +341,7 @@ class MainApp(ctk.CTk):
         self.sidebar_version_card = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
         self.sidebar_version_card.pack(side="bottom", fill="x", padx=10, pady=12)
 
-        div3 = ctk.CTkFrame(self.sidebar_version_card, fg_color="#1E293B", height=1)
+        div3 = ctk.CTkFrame(self.sidebar_version_card, fg_color="#27272A", height=1)
         div3.pack(fill="x", pady=(0, 8))
 
         self.sidebar_ver_box = ctk.CTkFrame(self.sidebar_version_card, fg_color="transparent")
@@ -342,7 +351,7 @@ class MainApp(ctk.CTk):
             self.sidebar_ver_box,
             text=f"🟢 v{APP_VERSION}",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            text_color="#94A3B8"
+            text_color=COLOR_SIDEBAR_MUTED
         )
         self.lbl_sidebar_version.pack(side="left")
 
@@ -353,8 +362,8 @@ class MainApp(ctk.CTk):
             height=24,
             font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             fg_color="transparent",
-            hover_color="#1E293B",
-            text_color="#64748B",
+            hover_color=COLOR_SIDEBAR_HOVER,
+            text_color="#A1A1AA",
             corner_radius=6,
             command=self.check_updates_manual
         )
@@ -365,14 +374,14 @@ class MainApp(ctk.CTk):
         for key, btn in self.sidebar_buttons.items():
             is_active = (key == active_key)
             btn.configure(
-                fg_color="#1E293B" if is_active else "transparent",
-                hover_color="#1E293B",
-                text_color="#38BDF8" if is_active else "#E2E8F0",
+                fg_color=COLOR_PRIMARY if is_active else "transparent",
+                hover_color=COLOR_PRIMARY if is_active else COLOR_SIDEBAR_HOVER,
+                text_color="#FFFFFF" if is_active else "#D4D4D8",
                 font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if is_active else "normal")
             )
             if hasattr(self, "sidebar_indicators") and key in self.sidebar_indicators:
                 self.sidebar_indicators[key].configure(
-                    fg_color="#38BDF8" if is_active else "transparent"
+                    fg_color=COLOR_PRIMARY if is_active else "transparent"
                 )
 
     def switch_page(self, key: str):
@@ -558,7 +567,7 @@ class MainApp(ctk.CTk):
         self.schedule_grid.refresh()
         self.update_header_info()
 
-    # --- 2. BİRLEŞTİRİLMİŞ TEK ÜST BAR (BAŞLIK + İKON DOCK + HAFTA NAVİGASYONU) ---
+    # --- 2. BİRLEŞTİRİLMİŞ TEK ÜST BAR (APPLE HIG / macOS TOOLBAR STYLE) ---
     def _build_top_header(self):
         self.top_header_frame = ctk.CTkFrame(
             self.main_container,
@@ -566,7 +575,7 @@ class MainApp(ctk.CTk):
             corner_radius=0,
             height=58,
             border_width=1,
-            border_color="#E2E8F0"
+            border_color="#E5E5EA"
         )
         self.top_header_frame.pack(fill="x", side="top")
 
@@ -576,7 +585,7 @@ class MainApp(ctk.CTk):
             self.left_header_box,
             text="",
             font=ctk.CTkFont(family=FONT_FAMILY, size=15, weight="bold"),
-            text_color="#0F172A"
+            text_color="#1D1D1F"
         )
         self.lbl_title.pack(anchor="w")
 
@@ -584,16 +593,17 @@ class MainApp(ctk.CTk):
             self.left_header_box,
             text="",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
-            text_color="#475569"
+            text_color="#86868B"
         )
         self.lbl_header_school.pack(anchor="w")
 
-        # Üst Sağ Hızlı İkon Kapsülü (Duyurular & Geri Bildirim - Minimal İkon Barı)
+        # Üst Sağ Hızlı İkon Kapsülü (Duyurular & Geri Bildirim - Apple Minimal İkon Dock)
         self.header_actions_box = ctk.CTkFrame(
             self.top_header_frame,
-            fg_color="#F1F5F9",
+            fg_color="#F5F5F7",
             corner_radius=10,
-            border_width=0
+            border_width=1,
+            border_color="#E5E5EA"
         )
         self.header_actions_box.pack(side="right", padx=(0, 16), pady=10)
 
@@ -604,8 +614,8 @@ class MainApp(ctk.CTk):
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14),
             fg_color="transparent",
-            hover_color="#E2E8F0",
-            text_color="#334155",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
             border_width=0,
             corner_radius=8,
             command=self.open_feedback_dialog
@@ -620,8 +630,8 @@ class MainApp(ctk.CTk):
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14),
             fg_color="transparent",
-            hover_color="#E2E8F0",
-            text_color="#334155",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
             border_width=0,
             corner_radius=8,
             command=self.open_announcements_dialog
@@ -629,12 +639,13 @@ class MainApp(ctk.CTk):
         self.btn_announcements.pack(side="right", padx=(3, 1), pady=3)
         SimpleTooltip(self.btn_announcements, "Sistem Duyuruları")
 
-        # Üst Sol Hafta Gezinme Kapsülü (Sadeleştirilmiş: < Tarih > Bugün)
+        # Üst Sol Hafta Gezinme Kapsülü (Apple Segmented Control Stili)
         self.nav_card = ctk.CTkFrame(
             self.top_header_frame,
-            fg_color="#F1F5F9",
+            fg_color="#F5F5F7",
             corner_radius=10,
-            border_width=0
+            border_width=1,
+            border_color="#E5E5EA"
         )
         self.nav_card.pack(side="left", padx=(16, 8), pady=10)
 
@@ -643,13 +654,13 @@ class MainApp(ctk.CTk):
 
         btn_prev = ctk.CTkButton(
             self.nav_card,
-            text="<",
+            text="‹",
             width=30,
             height=32,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
             fg_color="transparent",
-            hover_color="#E2E8F0",
-            text_color="#0F172A",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
             border_width=0,
             corner_radius=8,
             command=self.prev_week
@@ -662,9 +673,9 @@ class MainApp(ctk.CTk):
             text="",
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
-            text_color="#0F172A",
+            text_color="#1D1D1F",
             fg_color="#FFFFFF",
-            corner_radius=7,
+            corner_radius=8,
             padx=12,
             pady=0
         )
@@ -672,13 +683,13 @@ class MainApp(ctk.CTk):
 
         btn_next = ctk.CTkButton(
             self.nav_card,
-            text=">",
+            text="›",
             width=30,
             height=32,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
             fg_color="transparent",
-            hover_color="#E2E8F0",
-            text_color="#0F172A",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
             border_width=0,
             corner_radius=8,
             command=self.next_week
@@ -692,9 +703,9 @@ class MainApp(ctk.CTk):
             width=56,
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
-            fg_color="#DBEAFE",
-            hover_color="#BFDBFE",
-            text_color="#1D4ED8",
+            fg_color="#EBF5FF",
+            hover_color="#D6EBFF",
+            text_color="#007AFF",
             border_width=0,
             corner_radius=8,
             command=self.current_week
@@ -710,25 +721,26 @@ class MainApp(ctk.CTk):
 
     # --- 4. ÜST BAŞLIKLA BİRLEŞTİRİLMİŞ ULTRA-MİNİMALİST İKON & PASTEL KAPSÜL DOCK ---
     def _build_action_bar(self, parent=None):
-        # Operasyonel Aksiyon Kapsülü (Dağıtım, İkame, Baskı, İşlemler, Kaydet)
+        # Operasyonel Aksiyon Kapsülü (Apple HIG Soft Pill Dock)
         self.action_bar_frame = ctk.CTkFrame(
             self.top_header_frame,
-            fg_color="#F1F5F9",
+            fg_color="#F5F5F7",
             corner_radius=10,
-            border_width=0
+            border_width=1,
+            border_color="#E5E5EA"
         )
         self.action_bar_frame.pack(side="right", padx=(0, 8), pady=10)
 
-        # 1. ⚡ Dağıt (Pastel / Soft-Tinted Mavi Hap Buton)
+        # 1. ⚡ Dağıt (Apple Soft Blue Pill)
         self.btn_distribute = ctk.CTkButton(
             self.action_bar_frame,
             text="⚡ Dağıt",
             width=82,
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
-            fg_color="#DBEAFE",
-            hover_color="#BFDBFE",
-            text_color="#1D4ED8",
+            fg_color="#EBF5FF",
+            hover_color="#D6EBFF",
+            text_color="#007AFF",
             border_width=0,
             corner_radius=8,
             command=self.open_auto_distribution
@@ -736,16 +748,16 @@ class MainApp(ctk.CTk):
         self.btn_distribute.pack(side="left", padx=2, pady=3)
         SimpleTooltip(self.btn_distribute, "Otomatik Nöbet Dağıtım Sihirbazı")
 
-        # 2. 🔄 İkame Sistemi (Öne Çıkan Ana Operasyonel Buton - Belirgin Etiketli)
+        # 2. 🔄 İkame Sistemi (Apple Indigo/Purple Soft Pill)
         self.btn_substitution = ctk.CTkButton(
             self.action_bar_frame,
             text="🔄 İkame Sistemi",
             width=124,
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
-            fg_color="#EDE9FE",
-            hover_color="#DDD6FE",
-            text_color="#6D28D9",
+            fg_color="#F5F3FF",
+            hover_color="#EDE9FE",
+            text_color="#5856D6",
             border_width=0,
             corner_radius=8,
             command=self.open_substitution_dialog
@@ -761,8 +773,8 @@ class MainApp(ctk.CTk):
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
             fg_color="transparent",
-            hover_color="#E2E8F0",
-            text_color="#0F172A",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
             border_width=0,
             corner_radius=8,
             command=self.open_shift_dialog
@@ -778,8 +790,8 @@ class MainApp(ctk.CTk):
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=14),
             fg_color="transparent",
-            hover_color="#E2E8F0",
-            text_color="#0F172A",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
             border_width=0,
             corner_radius=8,
             command=self.open_print_preview
@@ -795,9 +807,10 @@ class MainApp(ctk.CTk):
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             fg_color="#FFFFFF",
-            hover_color="#E2E8F0",
-            text_color="#0F172A",
-            border_width=0,
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
+            border_width=1,
+            border_color="#E5E5EA",
             corner_radius=8,
             command=self.open_unified_actions_menu
         )
@@ -807,19 +820,19 @@ class MainApp(ctk.CTk):
         self.btn_export = self.btn_actions
         self.btn_more = self.btn_actions
 
-        div_b = ctk.CTkFrame(self.action_bar_frame, fg_color="#CBD5E1", width=1, height=18)
+        div_b = ctk.CTkFrame(self.action_bar_frame, fg_color="#E5E5EA", width=1, height=18)
         div_b.pack(side="left", padx=3, pady=7)
 
-        # 7. ✓ Kaydet (Pastel / Soft-Tinted Zümrüt Yeşili Hap Buton)
+        # 7. ✓ Kaydet (Apple Soft Green Pill Buton)
         self.btn_save = ctk.CTkButton(
             self.action_bar_frame,
             text="✓ Kaydet",
             width=92,
             height=32,
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
-            fg_color="#D1FAE5",
-            hover_color="#A7F3D0",
-            text_color="#047857",
+            fg_color="#E8F8EE",
+            hover_color="#D1F2DE",
+            text_color="#34C759",
             border_width=0,
             corner_radius=8,
             command=self.save_changes
@@ -950,7 +963,7 @@ class MainApp(ctk.CTk):
         pop = tk.Toplevel(self)
         pop.wm_overrideredirect(True)
         pop.attributes("-topmost", True)
-        pop.configure(bg="#CBD5E1")
+        pop.configure(bg="#E5E5EA")
         self._actions_popover = pop
 
         # Dışarı tıklandığında menüyü kapatmak için global listener (tek seferlik bağlanır)
@@ -975,9 +988,9 @@ class MainApp(ctk.CTk):
         card = ctk.CTkFrame(
             pop,
             fg_color="#FFFFFF",
-            corner_radius=10,
+            corner_radius=12,
             border_width=1,
-            border_color="#CBD5E1"
+            border_color="#E5E5EA"
         )
         card.pack(fill="both", expand=True)
 
@@ -997,7 +1010,7 @@ class MainApp(ctk.CTk):
                 card,
                 text=title_txt,
                 font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-                text_color="#475569"
+                text_color="#86868B"
             )
             lbl.pack(anchor="w", padx=12, pady=(8, 2))
 
@@ -1008,17 +1021,17 @@ class MainApp(ctk.CTk):
                 height=30,
                 anchor="w",
                 font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold" if accent else "normal"),
-                fg_color="#EFF6FF" if accent else "transparent",
-                hover_color="#DBEAFE" if accent else "#F1F5F9",
-                text_color="#1D4ED8" if accent else "#0F172A",
+                fg_color="#EBF5FF" if accent else "transparent",
+                hover_color="#D6EBFF" if accent else "#F5F5F7",
+                text_color="#007AFF" if accent else "#1D1D1F",
                 border_width=0,
-                corner_radius=6,
+                corner_radius=8,
                 command=lambda: _run_and_close(cmd)
             )
             btn.pack(fill="x", padx=6, pady=1)
 
         def _add_sep():
-            sep = ctk.CTkFrame(card, fg_color="#E2E8F0", height=1)
+            sep = ctk.CTkFrame(card, fg_color="#E5E5EA", height=1)
             sep.pack(fill="x", padx=10, pady=4)
 
         _add_section_header("ÖNCELİKLİ OPERASYONLAR")
@@ -1076,10 +1089,10 @@ class MainApp(ctk.CTk):
     def show_detail_panel(self, cell):
         pass
 
-    # --- 6. ALT BİLGİ / DURUM ÇUBUĞU / LEGEND ---
+    # --- 6. ALT BİLGİ / DURUM ÇUBUĞU / LEGEND (macOS STATUS BAR STYLE) ---
     def _build_footer(self, parent=None):
         target = parent if parent is not None else self.main_container
-        self.footer_frame = ctk.CTkFrame(target, fg_color="#FFFFFF", height=32, corner_radius=0, border_width=1, border_color="#E2E8F0")
+        self.footer_frame = ctk.CTkFrame(target, fg_color="#FFFFFF", height=32, corner_radius=0, border_width=1, border_color="#E5E5EA")
         self.footer_frame.pack(fill="x", side="bottom")
 
         # Sol Gösterge (Legend)
@@ -1087,10 +1100,10 @@ class MainApp(ctk.CTk):
         legend_box.pack(side="left", padx=12, pady=3)
 
         badges = [
-            ("⚪ Normal Görev", "#334155"),
-            ("🔒 Sabit Görev", "#D97706"),
-            ("🔴 Eksik Nöbet", "#DC2626"),
-            ("🔵 Seçili Hücre", "#2563EB"),
+            ("⚪ Normal Görev", "#1D1D1F"),
+            ("🔒 Sabit Görev", "#FF9500"),
+            ("🔴 Eksik Nöbet", "#FF3B30"),
+            ("🔵 Seçili Hücre", "#007AFF"),
         ]
         for txt, color in badges:
             lbl = ctk.CTkLabel(
@@ -1106,7 +1119,7 @@ class MainApp(ctk.CTk):
             self.footer_frame,
             text="Hazır. Öğretmenleri sürükleyerek veya tıklayarak detayını inceleyebilirsiniz.",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            text_color="#334155"
+            text_color="#6E6E73"
         )
         self.lbl_status.pack(side="left", padx=8)
 
@@ -1115,7 +1128,7 @@ class MainApp(ctk.CTk):
             self.footer_frame,
             text=f"Son kayıt: Bugün {datetime.datetime.now().strftime('%H:%M')}",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12),
-            text_color="#475569"
+            text_color="#86868B"
         )
         self.lbl_last_save.pack(side="right", padx=12)
 
@@ -1817,10 +1830,10 @@ class MainApp(ctk.CTk):
         # Şık Koyu Lacivert / Mavi Vurgulu Bildirim Kartı
         banner_card = ctk.CTkFrame(
             self.update_banner_container,
-            fg_color="#0F172A",
+            fg_color="#1C1C1E",
             corner_radius=10,
             border_width=1,
-            border_color="#3B82F6"
+            border_color="#007AFF"
         )
         banner_card.pack(fill="x", ipady=4)
 
@@ -1831,13 +1844,13 @@ class MainApp(ctk.CTk):
         f_badge_row = ctk.CTkFrame(f_left, fg_color="transparent")
         f_badge_row.pack(fill="x", anchor="w")
 
-        badge = ctk.CTkFrame(f_badge_row, fg_color="#1E293B", corner_radius=6, border_width=1, border_color="#38BDF8")
+        badge = ctk.CTkFrame(f_badge_row, fg_color="#2C2C2E", corner_radius=6, border_width=1, border_color="#007AFF")
         badge.pack(side="left", padx=(0, 8))
         ctk.CTkLabel(
             badge,
             text=f"🚀 YENİ SÜRÜM: {latest_v}",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            text_color="#38BDF8"
+            text_color="#007AFF"
         ).pack(padx=8, pady=2)
 
         ctk.CTkLabel(
@@ -1862,8 +1875,8 @@ class MainApp(ctk.CTk):
             f_actions,
             text="⬇️ Şimdi Güncelle",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
-            fg_color="#2563EB",
-            hover_color="#1D4ED8",
+            fg_color="#007AFF",
+            hover_color="#0062D2",
             text_color="#FFFFFF",
             height=32,
             corner_radius=8,
@@ -1875,9 +1888,9 @@ class MainApp(ctk.CTk):
             f_actions,
             text="📋 Yenilikler",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11),
-            fg_color="#334155",
-            hover_color="#475569",
-            text_color="#F1F5F9",
+            fg_color="#2C2C2E",
+            hover_color="#3A3A3C",
+            text_color="#F4F4F5",
             height=32,
             corner_radius=8,
             command=lambda: self._open_update_center(info, svc)
@@ -1889,8 +1902,8 @@ class MainApp(ctk.CTk):
             text="✕",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             fg_color="transparent",
-            hover_color="#1E293B",
-            text_color="#94A3B8",
+            hover_color="#2C2C2E",
+            text_color="#86868B",
             width=28,
             height=32,
             corner_radius=6,

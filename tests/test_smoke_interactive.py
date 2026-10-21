@@ -24,14 +24,14 @@ class SmokeInteractiveTest(unittest.TestCase):
         # Hücre sınır rengi ve relief kontrolü
         self.assertEqual(first_cell.cget("relief"), "flat")
         self.assertEqual(first_cell.cget("highlightthickness"), 1)
-        self.assertIn(first_cell.cget("highlightbackground"), ["#E2E8F0", "#CBD5E1"])
+        self.assertIn(first_cell.cget("highlightbackground"), ["#E5E5EA", "#E2E8F0", "#CBD5E1"])
 
         # 2. Hücre seçimi (Seçili hücre 2px mavi vurgu almalı)
         first_cell._on_press(type("Event", (), {"x": 10, "y": 10})())
         app.update()
         self.assertTrue(first_cell.is_selected)
         self.assertEqual(first_cell.cget("highlightthickness"), 2)
-        self.assertEqual(first_cell.cget("highlightbackground"), "#2563EB")
+        self.assertIn(first_cell.cget("highlightbackground"), ["#007AFF", "#2563EB"])
 
         # 3. Bilgi kutusu (Popover) kontrolü
         if first_cell.teacher:
