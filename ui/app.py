@@ -352,9 +352,9 @@ class MainApp(ctk.CTk):
         self.btn_sidebar_check = ctk.CTkButton(
             self.sidebar_ver_box,
             text="🔄",
-            width=26,
-            height=24,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            width=30,
+            height=26,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13),
             fg_color="transparent",
             hover_color=COLOR_SIDEBAR_HOVER,
             text_color="#A1A1AA",
@@ -368,9 +368,9 @@ class MainApp(ctk.CTk):
         self.btn_sidebar_theme = ctk.CTkButton(
             self.sidebar_ver_box,
             text="☀️" if self.sidebar_theme_mode == "dark" else "🌙",
-            width=26,
-            height=24,
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            width=30,
+            height=26,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13),
             fg_color="transparent",
             hover_color=COLOR_SIDEBAR_HOVER,
             text_color="#A1A1AA",
@@ -440,8 +440,8 @@ class MainApp(ctk.CTk):
         if hasattr(self, "btn_sidebar_theme"):
             self.btn_sidebar_theme.configure(
                 text="🌙" if is_light else "☀️",
-                hover_color="#F5F5F7" if is_light else COLOR_SIDEBAR_HOVER,
-                text_color="#1D1D1F" if is_light else "#A1A1AA"
+                hover_color="#E5E5EA" if is_light else "#27272A",
+                text_color="#1D1D1F" if is_light else "#F4F4F5"
             )
 
     def toggle_sidebar_theme(self):
@@ -626,6 +626,12 @@ class MainApp(ctk.CTk):
                 self.action_bar_frame.pack(side="right", padx=(0, 8), pady=10)
             else:
                 self.action_bar_frame.pack_forget()
+
+        if hasattr(self, "lbl_toolbar_summary"):
+            if key == "weekly":
+                self.lbl_toolbar_summary.pack(side="left", padx=16, pady=10)
+            else:
+                self.lbl_toolbar_summary.pack_forget()
 
     def on_teachers_data_changed(self):
         self.schedule_grid.refresh()

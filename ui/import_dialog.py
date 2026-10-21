@@ -130,27 +130,28 @@ class ImportView(ttk.Frame):
             self.master.destroy()
 
     def _build_ui(self):
-        # 1. Başlık
-        top_frame = tk.Frame(self, bg="#0F172A", padx=20, pady=12)
-        top_frame.pack(fill="x", side="top")
+        # 1. Başlık (Yalnızca bağımsız Toplevel modal pencere olarak açıldığında gösterilir)
+        if isinstance(self.master, tk.Toplevel):
+            top_frame = tk.Frame(self, bg="#FFFFFF", padx=20, pady=12, highlightthickness=1, highlightbackground="#E5E5EA")
+            top_frame.pack(fill="x", side="top")
 
-        lbl_title = tk.Label(
-            top_frame,
-            text="📥 KURUMSAL VERİ VE ÇİZELGE İÇE AKTARMA MERKEZİ",
-            font=(FONT_FAMILY, 12, "bold"),
-            fg="#FFFFFF",
-            bg="#0F172A"
-        )
-        lbl_title.pack(anchor="w")
+            lbl_title = tk.Label(
+                top_frame,
+                text="📥 Kurumsal Veri ve Çizelge İçe Aktarma",
+                font=(FONT_FAMILY, 13, "bold"),
+                fg="#1D1D1F",
+                bg="#FFFFFF"
+            )
+            lbl_title.pack(anchor="w")
 
-        lbl_desc = tk.Label(
-            top_frame,
-            text="Dosyadaki tüm veriler yerine sadece istediğiniz öğretmen, ders ve alanları seçerek esnek ve güvenli aktarım yapın.",
-            font=(FONT_FAMILY, 9),
-            fg="#94A3B8",
-            bg="#0F172A"
-        )
-        lbl_desc.pack(anchor="w", pady=(2, 0))
+            lbl_desc = tk.Label(
+                top_frame,
+                text="Dosyadaki tüm veriler yerine sadece istediğiniz öğretmen, ders ve alanları seçerek esnek ve güvenli aktarım yapın.",
+                font=(FONT_FAMILY, 10),
+                fg="#86868B",
+                bg="#FFFFFF"
+            )
+            lbl_desc.pack(anchor="w", pady=(2, 0))
 
         # 2. Notebook (Sekmeler)
         self.notebook = ttk.Notebook(self)
