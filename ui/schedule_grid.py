@@ -299,7 +299,8 @@ class CellWidget(ctk.CTkFrame):
         day: Day,
         location: Location,
         slot_index: int,
-        grid_controller: "ScheduleGrid"
+        grid_controller: "ScheduleGrid",
+        is_today: bool = False
     ):
         self.assignment = assignment
         self.teacher = teacher
@@ -307,6 +308,7 @@ class CellWidget(ctk.CTkFrame):
         self.location = location
         self.slot_index = slot_index
         self.controller = grid_controller
+        self.is_today = is_today
         self.is_selected = False
         self._is_dragging = False
         self._press_x_root = 0
@@ -314,12 +316,14 @@ class CellWidget(ctk.CTkFrame):
 
         card_bg = self._default_bg()
         border_col = self._default_border()
+        bw = max(2, theme.GRID_BORDER_WIDTH) if self.is_today else theme.GRID_BORDER_WIDTH
         super().__init__(
             parent,
-            corner_radius=10,
-            border_width=1,
+            corner_radius=theme.GRID_CELL_RADIUS,
+            border_width=bw,
             border_color=border_col,
-            fg_color=card_bg
+            fg_color=card_bg,
+            overwrite_preferred_drawing_method="circle_shapes"
         )
 
         self._build_ui()
@@ -331,15 +335,19 @@ class CellWidget(ctk.CTkFrame):
         if self.assignment.fixed:
             return COLOR_FIXED
         elif self.teacher:
+            if getattr(self, "is_today", False):
+                return "#F2FCF6"  # Çok açık neon yeşil pastel zemin (%20 transparan hissi)
             return COLOR_CARD
+        if getattr(self, "is_today", False):
+            return "#F4FCF7"
         return COLOR_CELL_EMPTY
 
     def _default_border(self) -> str:
         if self.assignment.fixed:
             return COLOR_FIXED_BORDER
-        elif self.teacher:
-            return theme.GRID_BORDER_COLOR
-        return theme.COLOR_CELL_EMPTY_BORDER
+        if getattr(self, "is_today", False):
+            return "#34D399"  # Açık canlı neon zümrüt sınırı
+        return theme.GRID_BORDER_COLOR
 
     def configure(self, **kwargs):
         if "bg" in kwargs:
@@ -374,16 +382,18 @@ class CellWidget(ctk.CTkFrame):
         else:
             bg_col = self._default_bg()
             border_col = self._default_border()
+            bw = max(2, theme.GRID_BORDER_WIDTH) if getattr(self, "is_today", False) else theme.GRID_BORDER_WIDTH
             self.configure(
                 fg_color=bg_col,
                 border_color=border_col,
-                border_width=1
+                border_width=bw
             )
 
     def _build_ui(self):
         bg_color = self._default_bg()
         border_col = self._default_border()
-        self.configure(fg_color=bg_color, border_color=border_col, border_width=1)
+        bw = max(2, theme.GRID_BORDER_WIDTH) if getattr(self, "is_today", False) else theme.GRID_BORDER_WIDTH
+        self.configure(fg_color=bg_color, border_color=border_col, border_width=bw)
 
         self.btn_info = None
 
@@ -519,16 +529,19 @@ class CellWidget(ctk.CTkFrame):
 
     def _on_hover_enter(self, event=None):
         if not self.is_selected and not self.assignment.fixed:
-            if self.teacher:
-                self.configure(fg_color="#F5F5F7", border_color="#E5E5EA")
+            if getattr(self, "is_today", False):
+                self.configure(fg_color="#E6FAF0", border_color="#10B981")
+            elif self.teacher:
+                self.configure(fg_color="#F8FAFC", border_color=theme.COLOR_PRIMARY)
             else:
-                self.configure(fg_color="#EBF5FF", border_color="#007AFF")
+                self.configure(fg_color="#EBF5FF", border_color=theme.COLOR_PRIMARY)
 
     def _on_hover_leave(self, event=None):
         if not self.is_selected:
             bg_col = self._default_bg()
             border_col = self._default_border()
-            self.configure(fg_color=bg_col, border_color=border_col)
+            bw = max(2, theme.GRID_BORDER_WIDTH) if getattr(self, "is_today", False) else theme.GRID_BORDER_WIDTH
+            self.configure(fg_color=bg_col, border_color=border_col, border_width=bw)
 
     def _on_info_clicked(self):
         self.controller.select_cell(self, trigger_detail=True)
@@ -868,10 +881,11 @@ class ScheduleGrid(ttk.Frame):
         # Sütun Başlıkları: Günler / Nöbet Yerleri (Apple Canvas #F5F5F7, 1px #E5E5EA)
         corner_frame = ctk.CTkFrame(
             self.table_frame,
-            corner_radius=10,
-            fg_color="#F5F5F7",
-            border_width=1,
-            border_color="#E5E5EA"
+            corner_radius=theme.GRID_CELL_RADIUS,
+            fg_color="#FFFFFF",
+            border_width=theme.GRID_BORDER_WIDTH,
+            border_color=theme.GRID_BORDER_COLOR,
+            overwrite_preferred_drawing_method="circle_shapes"
         )
         lbl_corner = ctk.CTkLabel(
             corner_frame,
@@ -894,10 +908,11 @@ class ScheduleGrid(ttk.Frame):
                 
                 loc_frame = ctk.CTkFrame(
                     self.table_frame,
-                    corner_radius=10,
-                    fg_color="#F5F5F7",
-                    border_width=1,
-                    border_color="#E5E5EA"
+                    corner_radius=theme.GRID_CELL_RADIUS,
+                    fg_color="#FFFFFF",
+                    border_width=theme.GRID_BORDER_WIDTH,
+                    border_color=theme.GRID_BORDER_COLOR,
+                    overwrite_preferred_drawing_method="circle_shapes"
                 )
                 loc_display = to_title_case(slot_label)
                 lbl_loc = ctk.CTkLabel(
@@ -912,16 +927,32 @@ class ScheduleGrid(ttk.Frame):
                 col_idx += 1
 
         # Satırlar (Günler - Açık gri-mavi #F1F5F9 zeminli, ~8px yuvarlak köşe)
+        today_date = datetime.date.today()
         for row_idx, d in enumerate(days, start=1):
             day_dt = cur_dt + datetime.timedelta(days=row_idx - 1)
+            is_today = (day_dt == today_date)
             month_name = TURKISH_MONTHS[day_dt.month] if 1 <= day_dt.month <= 12 else ""
+
+            if is_today:
+                day_bg = "#E6FBF0"       # Çok açık neon yeşil (%20 transparan hissi)
+                day_border = "#10B981"   # Canlı neon zümrüt sınırı
+                day_bw = max(2, theme.GRID_BORDER_WIDTH)
+                name_color = "#047857"   # Koyu zümrüt metin
+                date_color = "#065F46"
+            else:
+                day_bg = "#FFFFFF"
+                day_border = theme.GRID_BORDER_COLOR
+                day_bw = theme.GRID_BORDER_WIDTH
+                name_color = "#1D1D1F"
+                date_color = "#86868B"
 
             day_frame = ctk.CTkFrame(
                 self.table_frame,
-                corner_radius=10,
-                fg_color="#F5F5F7",
-                border_width=1,
-                border_color="#E5E5EA"
+                corner_radius=theme.GRID_CELL_RADIUS,
+                fg_color=day_bg,
+                border_width=day_bw,
+                border_color=day_border,
+                overwrite_preferred_drawing_method="circle_shapes"
             )
             day_center = ctk.CTkFrame(day_frame, fg_color="transparent")
             day_center.pack(expand=True)
@@ -929,16 +960,28 @@ class ScheduleGrid(ttk.Frame):
                 day_center,
                 text=d.name.upper(),
                 font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_HEADER, weight="bold"),
-                text_color="#1D1D1F"
+                text_color=name_color
             )
             lbl_day_name.pack(side="top", pady=(0, 1))
             lbl_day_date = ctk.CTkLabel(
                 day_center,
                 text=f"{day_dt.day} {month_name}",
-                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SECONDARY),
-                text_color="#86868B"
+                font=ctk.CTkFont(family=theme.FONT_FAMILY, size=theme.FONT_SIZE_SECONDARY, weight="bold" if is_today else "normal"),
+                text_color=date_color
             )
             lbl_day_date.pack(side="top", pady=0)
+
+            if is_today:
+                badge_today = ctk.CTkFrame(day_center, fg_color="#10B981", corner_radius=4, height=16)
+                badge_today.pack(side="top", pady=(2, 0))
+                lbl_today = ctk.CTkLabel(
+                    badge_today,
+                    text="★ BUGÜN",
+                    font=ctk.CTkFont(family=theme.FONT_FAMILY, size=9, weight="bold"),
+                    text_color="#FFFFFF"
+                )
+                lbl_today.pack(padx=5, pady=0)
+
             day_frame.grid(row=row_idx, column=0, sticky="nsew", padx=3, pady=3)
 
             # Slot Hücreleri (Hücre arası 6px boşluk: padx=3, pady=3)
@@ -955,7 +998,8 @@ class ScheduleGrid(ttk.Frame):
                         day=d,
                         location=loc,
                         slot_index=slot,
-                        grid_controller=self
+                        grid_controller=self,
+                        is_today=is_today
                     )
                     cell.grid(row=row_idx, column=col, sticky="nsew", padx=3, pady=3)
                     self.cell_widgets.append(cell)
@@ -1047,7 +1091,7 @@ class ScheduleGrid(ttk.Frame):
             if self.active_hover_cell and self.active_hover_cell != self.drag_source_cell:
                 orig_bg = self.active_hover_cell._default_bg()
                 orig_border = self.active_hover_cell._default_border()
-                self.active_hover_cell.configure(fg_color=orig_bg, border_color=orig_border, border_width=1)
+                self.active_hover_cell.configure(fg_color=orig_bg, border_color=orig_border, border_width=theme.GRID_BORDER_WIDTH)
 
             self.active_hover_cell = target_cell
             if target_cell and target_cell != self.drag_source_cell:
@@ -1079,7 +1123,7 @@ class ScheduleGrid(ttk.Frame):
         if self.active_hover_cell:
             orig_bg = self.active_hover_cell._default_bg()
             orig_border = self.active_hover_cell._default_border()
-            self.active_hover_cell.configure(fg_color=orig_bg, border_color=orig_border, border_width=1)
+            self.active_hover_cell.configure(fg_color=orig_bg, border_color=orig_border, border_width=theme.GRID_BORDER_WIDTH)
             self.active_hover_cell = None
 
         source = self.drag_source_cell

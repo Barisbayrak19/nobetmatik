@@ -43,10 +43,10 @@ PERIOD_TIMES = {
 
 # Font kayıtları (Türkçe karakter desteği için sistem Arial fontu)
 _FONT_REGISTERED = False
-def _register_pdf_fonts():
+def _register_pdf_fonts() -> bool:
     global _FONT_REGISTERED
     if _FONT_REGISTERED:
-        return
+        return True
     font_path = Path("C:/Windows/Fonts/arial.ttf")
     font_bold_path = Path("C:/Windows/Fonts/arialbd.ttf")
     if font_path.exists():
@@ -56,9 +56,13 @@ def _register_pdf_fonts():
                 pdfmetrics.registerFont(TTFont("CustomArial-Bold", str(font_bold_path)))
             else:
                 pdfmetrics.registerFont(TTFont("CustomArial-Bold", str(font_path)))
+            from reportlab.pdfbase.pdfmetrics import registerFontFamily
+            registerFontFamily("CustomArial", normal="CustomArial", bold="CustomArial-Bold", italic="CustomArial", boldItalic="CustomArial-Bold")
             _FONT_REGISTERED = True
+            return True
         except Exception as e:
             logger.warning(f"Arial font yüklenirken hata: {e}")
+    return False
 
 class ExportService:
     def __init__(self, db: Database):

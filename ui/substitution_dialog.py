@@ -13,7 +13,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import customtkinter as ctk
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, List, Optional, Any, Set, Callable
 from collections import defaultdict
 
 from core.models import (
@@ -29,53 +29,24 @@ from ui.theme import (
 )
 from ui.whatsapp_dialog import WhatsAppNotifyDialog
 
-class SubstitutionDialog(ctk.CTkToplevel):
-    _instance: Optional['SubstitutionDialog'] = None
-
-    def __new__(cls, parent: Any, db: Database, current_week_start: str):
-        if cls._instance is not None:
-            try:
-                if cls._instance.winfo_exists():
-                    cls._instance.deiconify()
-                    cls._instance.lift()
-                    cls._instance.focus_force()
-                    return cls._instance
-            except Exception:
-                cls._instance = None
-        instance = super().__new__(cls)
-        cls._instance = instance
-        return instance
-
-    def __init__(self, parent: Any, db: Database, current_week_start: str):
-        if getattr(self, '_initialized', False):
-            self.deiconify()
-            self.lift()
-            self.focus_force()
-            return
-        self._initialized = True
-
-        super().__init__(parent)
-        self.title("Boş Ders Doldurma ve Nöbetçi Öğretmen İkame Asistanı (Çoklu Öğretmen Destekli)")
-        
-        # Ekran boyutuna göre güvenli, taşmayan pencere boyutu
-        screen_w = self.winfo_screenwidth()
-        screen_h = self.winfo_screenheight()
-        win_w = min(1200, max(950, int(screen_w * 0.90)))
-        win_h = min(740, max(540, int(screen_h * 0.82)))
-        pos_x = max(10, (screen_w - win_w) // 2)
-        pos_y = max(10, (screen_h - win_h) // 2 - 25)
-        self.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
-        self.minsize(880, 520)
-        self.configure(fg_color=COLOR_BG)
-
-        # Ön plana çıkarma ve odaklanma
-        self.after(100, self.lift)
-        self.after(150, self.focus_force)
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-
+class SubstitutionView(ctk.CTkFrame):
+    """
+    Boş Ders Doldurma ve Nöbetçi İkame Paneli (Gömülü Sayfa Görünümü)
+    """
+    def __init__(
+        self,
+        parent: Any,
+        db: Database,
+        current_week_start: Optional[str] = None,
+        on_data_changed: Optional[Callable[[], None]] = None,
+        on_finish: Optional[Callable[[], None]] = None
+    ):
+        super().__init__(parent, fg_color=COLOR_BG)
         self.db = db
         self.sub_service = SubstitutionService(db)
-        self.current_week_start = self.sub_service._ensure_week_start(current_week_start)
+        self.current_week_start = self.sub_service._ensure_week_start(current_week_start) if current_week_start else None
+        self.on_data_changed = on_data_changed
+        self.on_finish = on_finish
 
         self.teachers = self.db.get_teachers(active_only=True)
         self.all_teachers = self.db.get_teachers(active_only=False)
@@ -119,8 +90,8 @@ class SubstitutionDialog(ctk.CTkToplevel):
             pass
 
         # 1. Üst Başlık ve Bilgilendirme
-        top_frame = ctk.CTkFrame(self, fg_color=COLOR_PRIMARY, corner_radius=0)
-        top_frame.pack(fill="x", side="top", ipady=8)
+        top_frame = ctk.CTkFrame(self, fg_color=COLOR_PRIMARY, corner_radius=8)
+        top_frame.pack(fill="x", side="top", padx=16, pady=(10, 4), ipady=6)
 
         f_inner_top = ctk.CTkFrame(top_frame, fg_color="transparent")
         f_inner_top.pack(fill="x", padx=20, pady=4)
@@ -404,14 +375,14 @@ class SubstitutionDialog(ctk.CTkToplevel):
 
         btn_close = ctk.CTkButton(
             bottom_bar,
-            text="Kapat",
+            text="⬅ Kapat",
             font=(FONT_FAMILY, 10, "bold"),
             fg_color="#94A3B8",
             hover_color="#64748B",
             height=34,
             width=80,
             corner_radius=6,
-            command=self.destroy
+            command=self._on_close_clicked
         )
         btn_close.pack(side="right", padx=(0, 10), pady=5)
 
@@ -446,9 +417,32 @@ class SubstitutionDialog(ctk.CTkToplevel):
             self.f_duty_details.pack_forget()
             self.btn_toggle_duty.configure(text="▼ Detayları Göster")
 
-    def destroy(self):
-        SubstitutionDialog._instance = None
-        super().destroy()
+    def _on_close_clicked(self):
+        if self.on_finish:
+            self.on_finish()
+        elif hasattr(self, "master") and hasattr(self.master, "switch_page"):
+            self.master.switch_page("weekly")
+
+    def set_date(self, date_str: str):
+        try:
+            dt = datetime.date.fromisoformat(date_str)
+            day_names_tr = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+            cur_day_name = day_names_tr[dt.weekday()] if dt.weekday() < 5 else "Pazartesi"
+            self.date_var.set(date_str)
+            self.day_var.set(cur_day_name)
+            self._on_date_changed()
+        except Exception as e:
+            logger.warning(f"SubstitutionView set_date hatası: {e}")
+
+    def load_data(self):
+        self.teachers = self.db.get_teachers(active_only=True)
+        self.all_teachers = self.db.get_teachers(active_only=False)
+        self.teacher_map = {t.id: t for t in self.all_teachers}
+        self.days = self.db.get_days()
+        teacher_names = sorted([t.name for t in self.teachers])
+        if hasattr(self, "cb_add_teacher"):
+            self.cb_add_teacher.configure(values=["— Öğretmen Seçin —"] + teacher_names)
+        self._on_date_changed()
 
     # --- Gelmeyen Öğretmenler Yönetimi ---
     def _load_initial_absent_teachers(self):
@@ -1300,6 +1294,12 @@ class SubstitutionDialog(ctk.CTkToplevel):
             f"Fişler 'exports/slips' klasörüne arşivlendi."
         )
 
+        if self.on_data_changed:
+            try:
+                self.on_data_changed()
+            except Exception as e:
+                logger.warning(f"on_data_changed callback hatası: {e}")
+
         # Kayıt sonrası adalet karnesini göster
         date_str = self.date_var.get().strip()
         day_name = self.day_var.get()
@@ -1832,6 +1832,68 @@ class SubstitutionFairnessDialog(ctk.CTkToplevel):
             self.after(3000, lambda: self.lbl_copy_status.configure(text=""))
         except Exception as e:
             logger.error(f"Pano kopyalama hatası: {e}")
+
+
+class SubstitutionDialog(ctk.CTkToplevel):
+    """Geriye dönük uyumluluk ve modal kullanım için Toplevel sarmalayıcı pencere."""
+    _instance: Optional['SubstitutionDialog'] = None
+
+    def __new__(cls, parent: Any, db: Database, current_week_start: str, on_data_changed: Optional[Callable[[], None]] = None):
+        if cls._instance is not None:
+            try:
+                if cls._instance.winfo_exists():
+                    cls._instance.deiconify()
+                    cls._instance.lift()
+                    cls._instance.focus_force()
+                    return cls._instance
+            except Exception:
+                cls._instance = None
+        instance = super().__new__(cls)
+        cls._instance = instance
+        return instance
+
+    def __init__(self, parent: Any, db: Database, current_week_start: str, on_data_changed: Optional[Callable[[], None]] = None):
+        if getattr(self, '_initialized', False):
+            self.deiconify()
+            self.lift()
+            self.focus_force()
+            return
+        self._initialized = True
+
+        super().__init__(parent)
+        self.title("Boş Ders Doldurma ve Nöbetçi Öğretmen İkame Asistanı (Çoklu Öğretmen Destekli)")
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w = min(1200, max(950, int(screen_w * 0.90)))
+        win_h = min(740, max(540, int(screen_h * 0.82)))
+        pos_x = max(10, (screen_w - win_w) // 2)
+        pos_y = max(10, (screen_h - win_h) // 2 - 25)
+        self.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
+        self.minsize(880, 520)
+        self.configure(fg_color=COLOR_BG)
+
+        self.after(100, self.lift)
+        self.after(150, self.focus_force)
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+
+        self.view = SubstitutionView(
+            self,
+            db=db,
+            current_week_start=current_week_start,
+            on_data_changed=on_data_changed,
+            on_finish=self.destroy
+        )
+        self.view.pack(fill="both", expand=True)
+
+    def destroy(self):
+        SubstitutionDialog._instance = None
+        super().destroy()
+
+    def __getattr__(self, name):
+        if "view" in self.__dict__ and hasattr(self.view, name):
+            return getattr(self.view, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
 
 
 

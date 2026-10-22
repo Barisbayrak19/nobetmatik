@@ -1,168 +1,199 @@
-# 📖 NöbetMatik v2.0 — Kapsamlı Kullanım Kılavuzu
-
-Hoş geldiniz! **NöbetMatik v2.0**, okul idarecilerinin haftalık nöbet çizelgelerini MEB yönetmeliklerine %100 uyumlu, adil, pratik ve hatasız şekilde hazırlamaları için tasarlanmış yeni nesil masaüstü uygulamasıdır.
-
----
-
-## 📑 İçindekiler
-1. [Hızlı Başlangıç ve İlk Kurulum](#1-hızlı-başlangıç-ve-ilk-kurulum)
-2. [Ders Programı İçe Aktarma (e-Okul & aSc)](#2-ders-programı-içe-aktarma-e-okul--asc)
-3. [Öğretmen ve Nöbet Yeri Yönetimi](#3-öğretmen-ve-nöbet-yeri-yönetimi)
-4. [Haftalık Nöbet Çizelgesi ve Otomatik Dağıtım](#4-haftalık-nöbet-çizelgesi-ve-otomatik-dağıtım)
-5. [İnteraktif Çizelge: Sürükle-Bırak, Takas ve Sabitleme](#5-interaktif-çizelge-sürükle-bırak-takas-ve-sabitleme)
-6. [Hafta Rotasyonu ve İleriye Aktarım](#6-hafta-rotasyonu-ve-ileriye-aktarım)
-7. [Boş Ders Doldurma ve İkame Görevlendirme](#7-boş-ders-doldurma-ve-ikame-görevlendirme)
-8. [Raporlar ve Resmi Çıktı Merkezi](#8-raporlar-ve-resmi-çıktı-merkezi)
-9. [Veri Güvenliği, Yedekleme ve Sistem Ayarları](#9-veri-güvenliği-yedekleme-ve-sistem-ayarları)
-10. [Sıkça Sorulan Sorular (SSS)](#10-sıkça-sorulan-sorular-sss)
+# 🛡️ NöbetMatik v2.2 — Resimli ve Adım Adım Kullanma Kılavuzu
+> *Milli Eğitim Bakanlığı mevzuatına tam uyumlu, akıllı, adil ve otomatik okul nöbet & boş ders ikame yönetim rehberi.*
 
 ---
 
-## 1. Hızlı Başlangıç ve İlk Kurulum
-
-### 🚀 Kurulum Gerektirmez (Portable)
-NöbetMatik bağımsız (portable) bir uygulamadır; bilgisayarınıza karmaşık kurulumlar yapmaz, sistem kayıt defterini kirletmez.
-
-1. İndirdiğiniz **`NobetMatik_v2.0.2_Tasinabilir.zip`** arşivini masaüstünüze veya istediğiniz bir klasöre çıkartın.
-2. Klasör içindeki **`NobetMatik.exe`** dosyasına çift tıklayın.
-3. Program ilk kez açıldığında sizi **Kurulum Sihirbazı** karşılar:
-   - **Okul Adı ve Müdür Bilgileri:** Çıktılarda görünecek resmi okul adı ve müdür adını girin.
-   - **Eğitim Öğretim Yılı:** (Örn: `2026-2027`)
-   - **Çalışma Modu:** Normal (Tam Gün), Sabahçı / Öğlenci ikili eğitim seçeneğini belirleyin.
-   - **Başlangıç Seçeneği:** *"e-Okul'dan Kendi Okulumu İçe Aktar"*, *"Örnek Okul Verileriyle Başla"* veya *"Sıfırdan Başla"* seçeneklerinden birini tercih edin.
-4. *"Kurulumu Tamamla"* butonuna bastığınızda ana çalışma ekranına ulaşırsınız.
-
-> [!TIP]
-> NöbetMatik klasörünü bir USB flash belleğe kopyalayarak evinizdeki veya okulunuzdaki herhangi bir Windows bilgisayarda doğrudan çalıştırabilirsiniz.
+## 📌 İçindekiler
+1. [Hızlı Başlangıç & Sisteme Genel Bakış](#1-hızlı-başlangıç--sisteme-genel-bakış)
+2. [Adım 1: Öğretmenler ve Branşların Yönetimi](#2-adım-1-öğretmenler-ve-branşların-yönetimi)
+3. [Adım 2: Nöbet Yerleri ve Bölgelerin Belirlenmesi](#3-adım-2-nöbet-yerleri-ve-bölgelerin-belirlenmesi)
+4. [Adım 3: Ders Programı & Veri İçe Aktarma (e-Okul / Excel / aSc)](#4-adım-3-ders-programı--veri-içe-aktarma-e-okul--excel--asc)
+5. [Adım 4: Akıllı Otomatik Nöbet Dağıtımı](#5-adım-4-akıllı-otomatik-nöbet-dağıtımı)
+6. [Adım 5: Haftalık Nöbet Çizelgesi & Canlı Takip Paneli](#6-adım-5-haftalık-nöbet-çizelgesi--canlı-takip-paneli)
+7. [Adım 6: Günün Özeti & Canlı Nöbetçi Takip Panosu](#7-adım-6-günün-özeti--canlı-nöbetçi-takip-panosu)
+8. [Adım 7: Boş Ders Doldurma & Nöbetçi İkame Asistanı](#8-adım-7-boş-ders-doldurma--nöbetçi-ikame-asistanı)
+9. [Adım 8: Raporlar, Resmi Çıktılar & Nöbet Defterleri](#9-adım-8-raporlar-resmi-çıktılar--nöbet-defterleri)
+10. [Adım 9: Sistem Ayarları, Güvenlik & Veri Yedekleme](#10-adım-9-sistem-ayarları-güvenlik--veri-yedekleme)
+11. [Sıkça Sorulan Sorular (SSS) & Pratik İpuçları](#11-sıkça-sorulan-sorular-sss--pratik-ipuçları)
 
 ---
 
-## 2. Ders Programı İçe Aktarma (e-Okul & aSc)
+## 1. Hızlı Başlangıç & Sisteme Genel Bakış
 
-Öğretmenleri ve haftalık ders programlarını tek tek elle yazmanıza gerek yoktur!
+NöbetMatik, okullarda nöbet çizelgelerinin hazırlanmasını, öğretmenlerin boş günlerini, kıdemlerini, gün tercihlerini ve son dakika gelmeyen öğretmenlerin boş kalan sınıflarını tek bir merkezden yöneten modern bir okul yönetim yazılımıdır.
 
-### 📄 e-Okul PDF'inden İçe Aktarma:
-1. **e-Okul** sistemine giriş yapın:  
-   *Kurum İşlemleri ➔ Ders İşlemleri ➔ Haftalık Ders Programı* ekranından okulun haftalık ders programı PDF raporunu bilgisayarınıza indirin.
-2. NöbetMatik sol menüsünden **📥 İçe Aktarma** sekmesine tıklayın.
-3. *"e-Okul PDF Yükle"* butonuna basarak indirdiğiniz PDF dosyasını seçin.
-4. **Granüler Seçim Ekranı:** Açılan listede e-Okul'daki tüm öğretmenler, branşları ve haftalık ders saatleri listelenir. İstediğiniz öğretmenleri seçebilir veya filtreleyebilirsiniz.
-5. *"Seçilenleri Sisteme Aktar"* dediğinizde öğretmen listesi ve haftalık boş/dolu ders saatleri saniyeler içinde veritabanınıza işlenir.
-
-### 📊 aSc Timetables Dosyasından Aktarma:
-- aSc Timetables programından aldığınız `.xml` veya `.csv` dosyasını aynı ekrandan yükleyerek öğretmen ve ders dağılımını eksiksiz içeri alabilirsiniz.
-
----
-
-## 3. Öğretmen ve Nöbet Yeri Yönetimi
-
-### 👥 Öğretmenler Sekmesi:
-- **Müsait Olmayan Günler:** Öğretmenin dersinin olmadığı veya izinli olduğu günleri işaretleyin; algoritma o günlere nöbet yazmaz.
-- **Tercih Edilen Günler:** Öğretmenin nöbet tutmak istediği öncelikli günler.
-- **Kıdem Yılı:** MEB yönetmeliği gereği kıdemli öğretmenlerin tercih günlerini öncelemek için kıdem yılını girin.
-- **Nöbet Muafiyeti:** Hamilelik, analık izni, sağlık raporu veya engellilik muafiyeti olan öğretmenler için *"Muaf"* kutucuğunu işaretleyin (Gerekçesiyle birlikte arşivlenir).
-
-### 📍 Nöbet Yerleri Sekmesi:
-- Okulunuzdaki nöbet bölgelerini tanımlayın: (Örn: *Bahçe*, *Zemin Kat*, *1. Kat*, *Kantin*, *Spor Salonu*).
-- **Kapasite:** Her nöbet bölgesinde kaç öğretmenin görev yapacağını belirleyin (Örn: Bahçe 2 kişi, 1. Kat 1 kişi).
-- **Sıralama:** Bölgelerin çizelgede hangi sırada görüneceğini `▲` ve `▼` butonlarıyla ayarlayın.
+### 🧭 Sol Gezinti Menüsü (Sidebar)
+Ekranın sol tarafında yer alan menü, tüm işlemlere tek tıkla ulaşmanızı sağlar:
+* **📅 Haftalık Nöbet:** Haftanın tüm günleri ve nöbet yerlerinin ana tablosu.
+* **☀️ Günün Özeti:** Bugün görevli olan nöbetçiler, boş sınıflar ve canlı durum.
+* **🔄 İkame Sistemi:** Gelmeyen öğretmenlerin yerine nöbetçi ve müsait öğretmen görevlendirme.
+* **👥 Öğretmenler:** Öğretmen ekleme, branş tanımlama ve nöbet adalet istatistikleri.
+* **📍 Nöbet Yerleri:** Bahçe, katlar, pansiyon gibi nöbet alanlarının kapasiteleri.
+* **⚡ Otomatik Dağıtım:** Tek tuşla yapay zeka destekli adil nöbet dağıtımı.
+* **📥 İçe Aktarma:** e-Okul, aSc Timetables veya Excel dosyalarından ders programı yükleme.
+* **📊 Raporlar:** İmzalı nöbet defterleri, aylık puantajlar, öğretmen kartları ve çıktılar.
+* **📖 Kullanım Kılavuzu:** Resimli kullanım kılavuzuna doğrudan uygulama içinden ulaşım.
+* **⚙️ Ayarlar & Yedek:** Okul bilgileri, zil saatleri ve güvenli veritabanı yedekleri.
 
 ---
 
-## 4. Haftalık Nöbet Çizelgesi ve Otomatik Dağıtım
+## 2. Adım 1: Öğretmenler ve Branşların Yönetimi
 
-NöbetMatik'in kalbi olan **Akıllı Adalet Motoru**, saatler süren nöbet planlamasını saniyeler içinde tamamlar.
+![Öğretmen Yönetim Paneli](screenshots/05_ogretmenler.png)
 
-### ⚡ Otomatik Dağıtım Adımları:
-1. Üst işlem çubuğundan **`⚡ Dağıt`** butonuna basın (veya sol menüden *Otomatik Dağıtım* sekmesine geçin).
-2. **Dağıtım İlkeleri Paneli:** İhtiyacınıza göre dağıtım kurallarını seçin:
-   - *Tüm Müsait Öğretmenlere Nöbet Ver:* Dersi az olan veya boş saati çok olan öğretmenleri dengeler.
-   - *Kıdemli Öğretmenlere Öncelik Ver:* Kıdem yılı yüksek öğretmenlerin tercih ettiği günlere öncelik tanır.
-   - *Yetersiz Kalırsa 2. Nöbet Günü Ver:* Öğretmen sayısı nöbet yuvasından azsa kimseye haksızlık olmadan 2. nöbetleri eşit paylaştırır.
-3. **`⚡ Dağıtımı Hesapla`** butonuna tıklayın.
-4. **Önizleme & Adalet Analizi:** Sistem dağıtım sonucunu, öğretmenlerin ders yükü dengesini ve varsa uyarıları ekranda gösterir.
-5. *"Çizelgeye Uygula"* butonuna bastığınızda haftalık tablonuz hazır hale gelir!
+Nöbet dağıtımından önce okuldaki tüm öğretmenlerin sisteme tanımlanması gerekir.
 
----
+### Nasıl Kullanılır?
+1. Sol menüden **'👥 Öğretmenler'** seçeneğine tıklayın.
+2. Sağ üstteki yeşil **'➕ Yeni Öğretmen Ekle'** butonuna basın.
+3. Açılan formda öğretmenin:
+   - Adı Soyadı
+   - Branşı (Matematik, Türkçe, Beden Eğitimi vb.)
+   - Telefon Numarası *(WhatsApp bilgilendirmesi için)*
+   - Nöbete dahil olup olmadığı *(Nöbet tutar / Tutamaz)*
+   - Kıdem yılı *(20-25 yıl üzeri muafiyet talepleri için)*
+4. **'Kaydet'** butonuna basarak işlemi tamamlayın.
 
-## 5. İnteraktif Çizelge: Sürükle-Bırak, Takas ve Sabitleme
-
-Oluşan çizelge üzerinde tam kontrole sahipsiniz:
-
-* **Sürükle & Bırak (Drag & Drop):**  
-  Bir öğretmeni farenin sol tuşuyla tutup başka bir güne veya nöbet yerine taşıyın. Eğer hedef yuva doluysa iki öğretmen otomatik olarak **karşılıklı takas (Swap)** edilir.
-* **Sabitleme (🔒 Sabit Kilit):**  
-  Belirli bir öğretmenin nöbet yerini sabitlemek istiyorsanız hücreye sağ tıklayıp **`📌 Sabitle`** seçeneğini işaretleyin. Otomatik dağıtım yeniden çalışsa bile kilitli nöbetçiler asla yerinden oynamaz.
-* **Geri Al / İleri Al (Undo / Redo):**  
-  Yanlışlıkla bir öğretmeni taşıdıysanız klavyeden **`Ctrl + Z`** tuşuna basarak veya üst bardaki **`↶`** simgesine tıklayarak sınırsız adım geri alabilirsiniz.
-* **Öğretmen Bilgi Kartı (Popover):**  
-  Öğretmen kartına **çift tıkladığınızda** o öğretmenin branşı, o günkü boş ders saatleri ve iletişim bilgileri mini pencerede açılır.
+> 💡 **İpucu:** Öğretmenlerin haftalık ders programını elle tek tek girmek zorunda değilsiniz! **'📥 İçe Aktarma'** sekmesinden e-Okul veya Excel ders programını yüklediğinizde tüm öğretmenler ve ders saatleri **otomatik** olarak içeri aktarılır.
 
 ---
 
-## 6. Hafta Rotasyonu ve İleriye Aktarım
+## 3. Adım 2: Nöbet Yerleri ve Bölgelerin Belirlenmesi
 
-Bir sonraki haftanın nöbet çizelgesini sıfırdan hazırlamak zorunda değilsiniz:
+![Nöbet Yerleri Paneli](screenshots/06_nobet_yerleri.png)
 
-1. Üst çubuktan **`›`** butonuna basarak bir sonraki haftaya geçin.
-2. Sistem size otomatik aktarma seçenekleri sunar (veya `••• ▾` menüsünden dilediğiniz modu seçebilirsiniz):
-   - **Birebir Aynı Aktar:** Mevcut haftadaki dağılımı sonraki haftaya aynen kopyalar.
-   - **1 Gün Kaydırarak Aktar (Rotasyon):** Pazartesi nöbetçileri Salı'ya, Salı nöbetçileri Çarşamba'ya kayar; böylece hiçbir öğretmen sürekli aynı gün nöbet tutmaz.
-   - **Nöbet Yerlerini Kaydırarak Aktar:** Bahçe nöbetçisi kata, kat nöbetçisi kantine geçer; nöbet yerleri adilce döner.
+Okul binasındaki görev yerleri (Bahçe, 1. Kat, 2. Kat, Zemin Kat vb.) bu ekrandan yönetilir.
 
----
-
-## 7. Boş Ders Doldurma ve İkame Görevlendirme
-
-Bir öğretmen raporlu veya sevkli olduğunda sınıfların boş kalmaması için:
-
-1. Üst bardaki **`👥`** (İkame) butonuna tıklayın.
-2. O gün izinli olan öğretmeni seçin (Öğretmenin o günkü dersleri listelenir).
-3. Hangi ders saatlerinin doldurulacağını işaretleyin.
-4. Sistem, **o ders saatinde nöbetçi olan ve boş dersi bulunan öğretmenleri** adalet puanına göre sıralar.
-5. İlgili öğretmeni seçip *"Görevi Ata"* dediğinizde ikame işlemi kaydedilir.
-6. **`🖨️ Resmi İkame Tutanağı Yazdır`** butonuna basarak MEB ek ders onayına uygun resmi görevlendirme belgesini anında yazdırabilirsiniz.
+### Nasıl Kullanılır?
+1. Sol menüden **'📍 Nöbet Yerleri'** sekmesine tıklayın.
+2. **'Yeni Nöbet Yeri Ekle'** butonuyla alan oluşturun.
+3. Her alan için **Kapasite** belirleyin:
+   - Örneğin okul bahçesi genişse *'Bahçe'* kapasitesini **2** yaparak aynı anda iki nöbetçi görevlendirebilirsiniz.
+   - Sadece tek öğretmenin yeterli olduğu katlarda kapasiteyi **1** bırakın.
+4. Sıralama oklarını kullanarak tablonun resmi evrakta hangi sırayla basılacağını belirleyin.
 
 ---
 
-## 8. Raporlar ve Resmi Çıktı Merkezi
+## 4. Adım 3: Ders Programı & Veri İçe Aktarma (e-Okul / Excel / aSc)
 
-NöbetMatik, okul müdürlüğü onayına ve panolara asılmaya hazır profesyonel çıktılar üretir:
+![İçe Aktarma Merkezi](screenshots/07_ice_aktarma.png)
 
-* **A4 Yatay Haftalık Nöbet Çizelgesi:** MEB yönetmelik formatında, okul başlıklı, nöbet talimatlı ve müdür onay imzalı resmi belge (PDF, Excel, Word, HTML).
-* **Öğretmen El Programları:** Her öğretmenin sadece kendi ders ve nöbetini içeren kişisel el programları (İster tek tek, ister tüm öğretmenler tek bir PDF dosyasında).
-* **Sınıf / Şube Haftalık Ders Programları:** Sınıf panolarına asılacak haftalık ders çizelgeleri.
-* **Personel Devam Takip Çizelgeleri:** Günlük ve aylık öğretmen imza sirküleri.
-* **Genel Çarşaf Program:** Tüm okulun tek bir Excel tablosunda büyük görünümü.
+NöbetMatik, okullarda en çok kullanılan tüm formatları tek tuşla tanır.
 
-> [!NOTE]
-> Yazdırmadan önce üst bardaki **`🖨️`** simgesine tıklayarak **Baskı Önizleme** penceresinde belgenin sayfa yerleşimini inceleyebilirsiniz.
+### Desteklenen Dosya Formatları:
+* **e-Okul Haftalık Ders Programı (PDF):** e-Okul'dan aldığınız resmi çarşaf programı doğrudan seçebilirsiniz.
+* **aSc Timetables (XML / Excel):** aSc programından dışa aktarılan ders çizelgeleri.
+* **Excel / CSV Çizelgeleri:** Öğretmen listesi ve ders dağılımları.
 
----
-
-## 9. Veri Güvenliği, Yedekleme ve Sistem Ayarları
-
-* **Yönetici Şifresi:** Yetkisiz kişilerin nöbet çizelgesini veya öğretmen bilgilerini değiştirmesini engellemek için *Ayarlar* menüsünden yönetici PIN şifresi belirleyebilirsiniz.
-* **Otomatik Güvenlik Yedeği:** Her önemli işlemden önce (sıfırlama, toplu dağıtım vb.) sistem otomatik olarak `backups/` klasörüne zaman damgalı `.db` yedeği alır.
-* **Manuel Yedekleme:** Sol menüden *Veri Yedekleme* sekmesine giderek dilediğiniz an tek tıkla tam yedek alabilir veya eski bir yedeğe geri dönebilirsiniz.
-* **Geliştirici Geri Bildirim Hattı:** Karşılaştığınız bir sorunu veya yeni özellik önerinizi üst bardaki **`💬`** butonuna tıklayarak doğrudan geliştiriciye iletebilirsiniz.
+### Yükleme Adımları:
+1. **'📥 İçe Aktarma'** sekmesini açın.
+2. Dosya türünü seçip **'Dosya Seç'** butonuna tıklayın.
+3. Sistem verileri tarar, öğretmenleri ve ders programlarını tablo halinde önizler.
+4. **'Veritabanına Aktar'** butonuna bastığınızda okulun tüm ders haritası hazırlanmış olur.
 
 ---
 
-## 10. Sıkça Sorulan Sorular (SSS)
+## 5. Adım 4: Akıllı Otomatik Nöbet Dağıtımı
 
-**S: NöbetMatik internet olmadan çalışır mı?**  
-**C:** Evet, NöbetMatik %100 yerel ve çevrimdışı çalışacak şekilde tasarlanmıştır. İnternet bağlantısı sadece isteğe bağlı sürüm güncellemesi ve geri bildirim için kullanılır.
+![Otomatik Dağıtım Ekranı](screenshots/04_otomatik_dagitim.png)
 
-**S: Bilgisayarım bozulursa veya format atılırsa verilerim kaybolur mu?**  
-**C:** NöbetMatik klasörünün içindeki `data/nobet.db` dosyasını flash belleğinize veya e-postanıza yedeklediğiniz sürece hiçbir veriniz kaybolmaz. Yeni bilgisayara klasörü kopyalamanız yeterlidir.
+MEB mevzuatına uygun şekilde öğretmenlerin boş günlerini, ders saatlerini ve adalet dengesini otomatik analiz eder.
 
-**S: Bir öğretmene haftada en fazla kaç gün nöbet verilebilir?**  
-**C:** MEB mevzuatına göre standart kural haftada 1 gündür. Ancak okulunuzda öğretmen sayısı yetersizse *Otomatik Dağıtım* ekranındaki *"Yetersiz Kalırsa 2. Nöbet Günü Ver"* seçeneğini işaretleyerek 2. nöbetleri eşit dağıtabilirsiniz.
+### Dağıtım Kuralları (İsteğe Bağlı Seçenekler):
+* **Dersi olmayan boş günlere nöbet yazma:** Öğretmenin okulda bulunmadığı güne nöbet yazılmasını engeller.
+* **Ardışık günleri engelle:** Bir öğretmene peş peşe (örneğin Pazartesi ve Salı) nöbet verilmesini önler.
+* **Önceki haftaya göre rotasyon:** Geçen hafta 3. Katta nöbet tutan öğretmeni bu hafta Bahçe veya Zemin Kata kaydırarak adalet sağlar.
+* **Kıdem muafiyeti:** 20-25 yılını doldurmuş öğretmenlerin muafiyet taleplerini gözetir.
+* **Sabit nöbetleri koru:** Önceden elle sabitlediğiniz (kilitlediğiniz) nöbetçilere dokunmaz.
 
-**S: Sürükle-bırak yaparken yanlışlıkla nöbetçiyi sildim, nasıl düzeltirim?**  
-**C:** Hemen klavyenizden `Ctrl + Z` tuşuna basın veya üst bardaki `↶` (Geri Al) butonuna tıklayın.
+> ⚠️ **Önemli:** **'Önizleme Hesapla'** butonuna bastığınızda sistem olası dağıtımı hesaplar ve bir adalet skoru sunar. Sonucu beğendiğinizde **'Dağıtımı Onayla ve Uygula'** demeniz yeterlidir!
 
 ---
 
-*NöbetMatik v2.0 ile iyi çalışmalar ve başarılı eğitim öğretim yılları dileriz!* 🎓
+## 6. Adım 5: Haftalık Nöbet Çizelgesi & Canlı Takip Paneli
+
+![Haftalık Nöbet Ekranı](screenshots/01_haftalik_nobet.png)
+
+Burası uygulamanın ana kumanda merkezidir. Haftanın tüm günleri sütunlar halinde, nöbet yerleri ise satırlar halinde listelenir.
+
+### Önemli Özellikler:
+* **Günün Belirginleştirilmesi (Neon Vurgusu):** İçinde bulunduğunuz gün, göz yormayan özel açık yeşil tonuyla otomatik olarak vurgulanır.
+* **Sürükle - Bırak veya Tıkla - Değiştir:** Bir öğretmenin nöbet yerini değiştirmek için hücreye tıklayıp başka bir öğretmen seçebilir veya sağ tıklayarak sabitleyebilirsiniz.
+* **Kilit Simgesi (🔒):** Özel bir nedenle belirli bir güne sabitlenen öğretmeni kilitlerseniz, otomatik dağıtım bu hücreyi asla değiştirmez.
+* **Geri Al / İleri Al:** Yanlış bir işlem yaptığınızda üst çubuktaki **↶ Geri Al** butonuna basarak her an eski haline dönebilirsiniz.
+
+---
+
+## 7. Adım 6: Günün Özeti & Canlı Nöbetçi Takip Panosu
+
+![Günün Özeti Ekranı](screenshots/02_gunun_ozeti.png)
+
+Okul idarecileri ve nöbetçi müdür yardımcıları için günün canlı durumunu gösteren özel kontrol ekranıdır.
+
+### Bu Ekranda Neler Var?
+1. **Günün Nöbetçileri Listesi:** Bugün hangi öğretmenin hangi bölgede görevli olduğu, branşı ve boş ders saatleri.
+2. **Boş Sınıflar ve İkame Merkezi:** Bugün izinli veya raporlu olan öğretmenlerin boş geçen sınıfları ve yerlerine atanan nöbetçiler.
+3. **Müsait Öğretmenler Sekmesi:** Herhangi bir acil durumda o saatte dersi olmayan boş öğretmenlerin anlık listesi.
+4. **📄 PDF Olarak Kaydet:** Günün özetini resmi A4 formatında tek tıkla imzaya hazır PDF olarak kaydeder.
+5. **💬 WhatsApp Bildirimi:** Nöbetçi öğretmenlere görev yerlerini ve saatlerini WhatsApp üzerinden tek tek veya toplu olarak iletir.
+
+---
+
+## 8. Adım 7: Boş Ders Doldurma & Nöbetçi İkame Asistanı
+
+![İkame Sistemi](screenshots/03_ikame_asistani.png)
+
+Bir veya birden fazla öğretmen okula gelemediğinde, sınıfların boş kalmaması için geliştirilmiş akıllı görevlendirme modülüdür. Artık ana pencere içinde tam sayfa olarak çalışır.
+
+### Adım Adım İkame Görevlendirme:
+1. **Tarih Seçimi:** İkame yapılacak günü seçin.
+2. **Gelmeyen Öğretmeni Seçin:** Açılır listeden okula gelmeyen öğretmeni ve nedenini (Raporlu, İzinli, Görevli vb.) seçip **'➕ Listeye Ekle'** butonuna basın.
+3. **Derslerin Listelenmesi:** Öğretmenin o günkü tüm ders saatleri ve sınıfları ekrana gelir.
+4. **Nöbetçi Önerisi:** Sistem o ders saatinde boşta olan o günün nöbetçi öğretmenlerini listeler.
+5. **Tek Tıkla Atama:** İkame görevlisini seçin veya **'Akıllı Otomatik Doldur'** butonuna basarak tüm boş derslerin sıfır çakışmayla atanmasını sağlayın.
+6. **💾 Kaydet & Yazdır:** **'TÜM GÖREVLENDİRMELERİ KAYDET'** butonuna bastığınızda:
+   - İkameler sisteme işlenir,
+   - İlgili öğretmenler için **Görevlendirme Fişi** ve **Toplu İkame Çizelgesi** hazırlanır.
+
+---
+
+## 9. Adım 8: Raporlar, Resmi Çıktılar & Nöbet Defterleri
+
+![Raporlar ve Belgeler](screenshots/08_raporlar.png)
+
+Okul müdürlüğü ve denetimler için gereken tüm resmi evraklar tek ekrandan üretilir:
+
+* **Haftalık Nöbet Çizelgesi (A4 / A3 Çarşaf):** Öğretmenler odası panosu ve müdürlük onayı için imzalı format.
+* **Resmi Nöbet Defteri Sayfaları:** İdareye teslim edilen günlük imza ve olay takip föyü.
+* **Aylık KBS Ek Ders Puantajı (Excel):** Tutulan nöbetlerin ek ders modülüne hatasız aktarılması için resmi puantaj.
+* **Öğretmen Bireysel Nöbet Kartları:** Her öğretmenin dönem boyunca tutacağı nöbet günlerini gösteren kartlar.
+
+---
+
+## 10. Adım 9: Sistem Ayarları, Güvenlik & Veri Yedekleme
+
+![Sistem Ayarları](screenshots/09_ayarlar.png)
+
+### Ayarlar Menüsünden Yapabilecekleriniz:
+* **Okul Adı ve Müdürü:** Çıktılarda görünecek resmi okul adı, ilçe ve müdür adını düzenleyin.
+* **Ders Saatleri (Zil Saatleri):** 1. Dersten 8. Derse kadar okulunuzun giriş-çıkış saatlerini tanımlayın.
+* **Yönetici Şifresi:** Dağıtımın ve listelerin izinsiz değiştirilmesini önlemek için yönetici parolası koyun.
+* **Otomatik Veri Yedekleme:** Her çıkışta veritabanınız ackups/ klasörüne tarih-saat etiketiyle yedeklenir. Bilgisayar değiştirseniz bile yedeği geri yükleyerek kaldığınız yerden devam edebilirsiniz.
+
+---
+
+## 11. Sıkça Sorulan Sorular (SSS) & Pratik İpuçları
+
+### 💡 Sıkça Karşılaşılan Durumlar ve Çözümleri:
+
+1. **Soru: Bir öğretmen belirli bir gün kesinlikle nöbet tutmak istemiyor, ne yapmalıyım?**
+   - *Cevap:* Öğretmenler sekmesinden ilgili öğretmeni çift tıklayın, *'Nöbet Tutulmayacak Günler'* kısmından o günü işaretleyin. Otomatik dağıtım o güne asla nöbet yazmayacaktır.
+
+2. **Soru: PDF çıktısı aldığımda Türkçe karakterler bozulur mu?**
+   - *Cevap:* Hayır! NöbetMatik v2.2 dahili Unicode font motoru sayesinde Ş, İ, Ğ, Ç, Ö, Ü ve küçük harfler resmi yazışma kalitesinde pürüzsüz basılır.
+
+3. **Soru: Yanlışlıkla otomatik dağıtım yaptım, eski tabloma dönebilir miyim?**
+   - *Cevap:* Evet! Üstteki **↶ Geri Al** butonuna tıklayarak veya sol menüdeki **Veri Yedekleme** ekranından önceki günün yedeğine tek tıkla dönebilirsiniz.
+
+4. **Soru: WhatsApp bildirimleri nasıl çalışıyor?**
+   - *Cevap:* Öğretmenin telefon numarası kayıtlıysa, Günün Özeti ekranındaki WhatsApp butonuna bastığınızda varsayılan tarayıcınızda veya WhatsApp uygulamasında hazır mesaj şablonu açılır. Tek yapmanız gereken Gönder'e basmaktır.

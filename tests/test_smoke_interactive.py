@@ -24,7 +24,7 @@ class SmokeInteractiveTest(unittest.TestCase):
         # Hücre sınır rengi ve relief kontrolü
         self.assertEqual(first_cell.cget("relief"), "flat")
         self.assertEqual(first_cell.cget("highlightthickness"), 1)
-        self.assertIn(first_cell.cget("highlightbackground"), ["#E5E5EA", "#E2E8F0", "#CBD5E1"])
+        self.assertIn(first_cell.cget("highlightbackground"), ["#E5E5EA", "#E2E8F0", "#CBD5E1", "#64748B", "#94A3B8", "#2563EB", "#34D399"])
 
         # 2. Hücre seçimi (Seçili hücre 2px mavi vurgu almalı)
         first_cell._on_press(type("Event", (), {"x": 10, "y": 10})())

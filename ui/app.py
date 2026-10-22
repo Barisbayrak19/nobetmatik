@@ -39,9 +39,11 @@ from ui.backup_dialog import BackupView, BackupDialog
 from ui.settings_dialog import SettingsView, SettingsDialog
 from ui.reports_view import ReportsView
 from ui.shift_dialog import ShiftDialog
-from ui.substitution_dialog import SubstitutionDialog
+from ui.substitution_dialog import SubstitutionDialog, SubstitutionView
 from ui.attendance_dialog import AttendanceDialog
 from ui.timetable_export_dialog import TimetableExportDialog
+from ui.daily_summary_view import DailySummaryView
+from ui.guide_view import GuideView
 
 class SimpleTooltip:
     """Kompakt ve şık düğme ipucu (Tooltip) yöneticisi."""
@@ -104,7 +106,7 @@ class SimpleTooltip:
             self.tip = None
 
 class MainApp(ctk.CTk):
-    def __init__(self):
+    def __init__(self, db: Optional[Database] = None):
         super().__init__()
         setup_customtkinter()
         self.title(f"{APP_NAME} v{APP_VERSION}")
@@ -118,7 +120,7 @@ class MainApp(ctk.CTk):
                 pass
 
         # Temel Servisler
-        self.db = Database()
+        self.db = db if db is not None else Database()
         self.undo_manager = UndoManager()
         self.duty_service = DutyService(self.db, self.undo_manager)
         self.backup_service = BackupService()
@@ -269,6 +271,7 @@ class MainApp(ctk.CTk):
 
         main_nav_items = [
             ("weekly", "📅  Haftalık Nöbet"),
+            ("daily_summary", "☀️  Günün Özeti"),
             ("substitution", "🔄  İkame Sistemi"),
             ("teachers", "👥  Öğretmenler"),
             ("locations", "📍  Nöbet Yerleri"),
@@ -324,6 +327,7 @@ class MainApp(ctk.CTk):
         lbl_sys_title.pack(anchor="w", padx=16, pady=(0, 4))
 
         system_nav_items = [
+            ("guide", "📖  Kullanım Kılavuzu"),
             ("backup", "💾  Veri Yedekleme"),
             ("settings", "⚙️  Ayarlar"),
             ("announcements", "🔔  Duyurular"),
@@ -477,9 +481,6 @@ class MainApp(ctk.CTk):
         if key == "feedback":
             self.open_feedback_dialog()
             return
-        if key == "substitution":
-            self.open_substitution_dialog()
-            return
 
         if hasattr(self, "current_page_key") and key == self.current_page_key and key != "weekly":
             return
@@ -526,6 +527,10 @@ class MainApp(ctk.CTk):
             if key == "weekly":
                 self.schedule_grid.refresh()
                 self.update_header_info()
+            elif key == "daily_summary":
+                view.load_data()
+            elif key == "substitution":
+                view.load_data()
             elif key == "teachers":
                 view.load_teachers()
             elif key == "locations":
@@ -536,7 +541,14 @@ class MainApp(ctk.CTk):
                 view.load_backups()
             return view
 
-        if key == "teachers":
+        if key == "daily_summary":
+            view = DailySummaryView(
+                self.content_container,
+                db=self.db,
+                on_open_substitution=self.open_substitution_dialog,
+                on_open_whatsapp=self.open_whatsapp_notice
+            )
+        elif key == "teachers":
             view = TeacherManagementView(
                 self.content_container,
                 db=self.db,
@@ -585,6 +597,19 @@ class MainApp(ctk.CTk):
                 on_saved=self._on_settings_saved,
                 on_finish=lambda: self.switch_page("weekly")
             )
+        elif key == "substitution":
+            view = SubstitutionView(
+                self.content_container,
+                db=self.db,
+                current_week_start=self.get_current_week_str(),
+                on_data_changed=self.on_substitution_data_changed,
+                on_finish=lambda: self.switch_page("weekly")
+            )
+        elif key == "guide":
+            view = GuideView(
+                self.content_container,
+                on_finish=lambda: self.switch_page("weekly")
+            )
         else:
             view = self.page_weekly
 
@@ -594,11 +619,14 @@ class MainApp(ctk.CTk):
     def _update_header_for_page(self, key: str):
         headers = {
             "weekly": ("", "", True),
+            "daily_summary": ("GÜNÜN ÖZETİ VE CANLI NÖBET PANOSU", "Günün Nöbetçileri, Boş Sınıflar ve İkame Takibi", False),
+            "substitution": ("BOŞ DERS VE NÖBETÇİ İKAME SİSTEMİ", "Gelmeyen Öğretmenler ve Çakışmasız Ders Görevlendirmeleri", True),
             "teachers": ("ÖĞRETMEN YÖNETİMİ", "Öğretmen Listesi, Branşlar ve Müsaitlik Durumları", False),
             "locations": ("NÖBET YERLERİ YÖNETİMİ", "Nöbet Bölgeleri, Kapasiteler ve Sıralama", False),
             "distribute": ("OTOMATİK NÖBET DAĞITIMI", "Akıllı Dağıtım Algoritması ve Adalet Analizi", True),
             "import": ("İÇE AKTARMA MERKEZİ", "e-Okul, Excel, CSV ve Ders Programı Aktarımı", False),
             "reports": ("RAPORLAR", "Resmi belgeler, çizelgeler ve okul çıktılarını tek yerden yönetin.", False),
+            "guide": ("KULLANIM KILAVUZU VE YARDIM MERKEZİ", "Resimli Kılavuz, Modül Anlatımları ve Sıkça Sorulan Sorular", False),
             "backup": ("VERİ YEDEKLEME VE GERİ YÜKLEME", "Sistem Veritabanı Yedekleri ve Geri Yükleme", False),
             "settings": ("SİSTEM VE OKUL AYARLARI", "Okul Bilgileri, Zaman Çizelgesi ve Güvenlik Parametreleri", False),
         }
@@ -714,6 +742,22 @@ class MainApp(ctk.CTk):
         )
         self.btn_feedback.pack(side="right", padx=(1, 3), pady=3)
         SimpleTooltip(self.btn_feedback, "Geri Bildirim Gönder")
+
+        self.btn_guide = ctk.CTkButton(
+            self.header_actions_box,
+            text="📖",
+            width=32,
+            height=32,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=14),
+            fg_color="transparent",
+            hover_color="#E5E5EA",
+            text_color="#1D1D1F",
+            border_width=0,
+            corner_radius=8,
+            command=lambda: self.switch_page("guide")
+        )
+        self.btn_guide.pack(side="right", padx=(3, 1), pady=3)
+        SimpleTooltip(self.btn_guide, "Kullanım Kılavuzu & Yardım")
 
         self.btn_announcements = ctk.CTkButton(
             self.header_actions_box,
@@ -1696,7 +1740,7 @@ class MainApp(ctk.CTk):
             _recursive_update_buttons(self.action_bar_frame)
         if hasattr(self, "footer_frame"):
             _recursive_update_buttons(self.footer_frame)
-        if hasattr(self, "detail_panel"):
+        if hasattr(self, "detail_panel") and self.detail_panel:
             _recursive_update_buttons(self.detail_panel)
 
     def open_print_preview(self):
@@ -1724,22 +1768,21 @@ class MainApp(ctk.CTk):
             logger.error(f"Önizleme açılırken hata: {e}", exc_info=True)
             messagebox.showerror("Hata", f"Baskı önizleme oluşturulamadı:\n{e}", parent=self)
 
-    def open_substitution_dialog(self):
-        if hasattr(self, '_substitution_dialog') and self._substitution_dialog:
-            try:
-                if self._substitution_dialog.winfo_exists():
-                    self._substitution_dialog.deiconify()
-                    self._substitution_dialog.lift()
-                    self._substitution_dialog.focus_force()
-                    return
-            except Exception:
-                self._substitution_dialog = None
+    def open_substitution_dialog(self, date_str: Optional[str] = None):
+        self.switch_page("substitution")
+        if date_str:
+            sub_view = self.page_views.get("substitution")
+            if sub_view and hasattr(sub_view, "set_date"):
+                sub_view.set_date(date_str)
 
-        self._substitution_dialog = SubstitutionDialog(
-            parent=self,
-            db=self.db,
-            current_week_start=self.get_current_week_str()
-        )
+    def on_substitution_data_changed(self):
+        if "daily_summary" in self.page_views:
+            try:
+                self.page_views["daily_summary"].load_data()
+            except Exception as e:
+                logger.warning(f"daily_summary load_data hatası: {e}")
+        self.schedule_grid.refresh()
+        self.update_header_info()
 
     def open_attendance_dialog(self):
         AttendanceDialog(

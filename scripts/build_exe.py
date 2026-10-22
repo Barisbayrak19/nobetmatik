@@ -42,6 +42,18 @@ def build():
         shutil.copy2(src_ann, target_data_dir / "announcements.json")
         print(f"[OK] Varsayilan duyurular kopyalandi: {target_data_dir / 'announcements.json'}")
 
+    src_docs = root_dir / "docs"
+    target_docs_dir = app_dist_dir / "docs"
+    if src_docs.exists():
+        if target_docs_dir.exists():
+            shutil.rmtree(target_docs_dir)
+        shutil.copytree(src_docs, target_docs_dir)
+        print(f"[OK] Kullanim kilavuzu ve gorselleri kopyalandi: {target_docs_dir}")
+
+    src_guide_md = root_dir / "KULLANIM_KILAVUZU.md"
+    if src_guide_md.exists():
+        shutil.copy2(src_guide_md, app_dist_dir / "KULLANIM_KILAVUZU.md")
+
     # 3. Taşınabilir (Portable) ZIP arşivi oluştur
     print("[*] 3. Tasinabilir (Portable) ZIP paketi olusturuluyor...")
     portable_zip = dist_dir / f"NobetMatik_v{APP_VERSION}_Tasinabilir.zip"

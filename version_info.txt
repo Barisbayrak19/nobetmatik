@@ -2,8 +2,8 @@
 # Windows Version Info Resource for PyInstaller
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(2, 1, 1, 0),
-    prodvers=(2, 1, 1, 0),
+    filevers=(2, 2, 0, 0),
+    prodvers=(2, 2, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -18,12 +18,12 @@ VSVersionInfo(
         '041f04b0',
         [StringStruct('CompanyName', 'NöbetMatik Eğitim Yazılımları'),
         StringStruct('FileDescription', 'NöbetMatik - MEB Okul Haftalık Nöbet Yönetim Sistemi'),
-        StringStruct('FileVersion', '2.1.1.0'),
+        StringStruct('FileVersion', '2.2.0.0'),
         StringStruct('InternalName', 'NobetMatik'),
         StringStruct('LegalCopyright', 'Copyright (C) 2026 Barış Bayrak. Tüm hakları saklıdır.'),
         StringStruct('OriginalFilename', 'NobetMatik.exe'),
         StringStruct('ProductName', 'NöbetMatik Okul Nöbet Yönetimi'),
-        StringStruct('ProductVersion', '2.1.1.0')])
+        StringStruct('ProductVersion', '2.2.0.0')])
       ]), 
     VarFileInfo([VarStruct('Translation', [1055, 1200])])
   ]

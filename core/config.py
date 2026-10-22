@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "Nöbet Yönetim Sistemi"
-APP_VERSION = "2.1.1"
+APP_VERSION = "2.2.0"
 DEFAULT_GITHUB_REPO = "Barisbayrak19/nobetmatik"
 
 if getattr(sys, 'frozen', False):

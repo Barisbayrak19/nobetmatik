@@ -119,6 +119,7 @@ class SettingsView(ctk.CTkFrame):
         self.font_weight_teacher_var = tk.StringVar(value="Normal" if "normal" in w_val.lower() else "Kalın (Bold)")
 
         self.grid_border_width_var = tk.StringVar(value=self.db.get_setting("grid_border_width", "1"))
+        self.grid_cell_radius_var = tk.StringVar(value=self.db.get_setting("grid_cell_radius", "6"))
         col_setting = self.db.get_setting("grid_border_color", "#CBD5E1")
         if col_setting and col_setting.upper() == "#94A3B8":
             col_setting = "#CBD5E1"
@@ -1002,7 +1003,10 @@ class SettingsView(ctk.CTkFrame):
 
         ctk.CTkLabel(f_grid_row, text="Çizgi Rengi:", font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0F172A").pack(side="left")
         colors = ["#CBD5E1", "#E2E8F0", "#94A3B8", "#64748B", "#2563EB"]
-        self._create_combobox(f_grid_row, self.grid_border_color_var, colors, width=130, command=lambda _: self._update_appearance_preview()).pack(side="left", padx=8)
+        self._create_combobox(f_grid_row, self.grid_border_color_var, colors, width=110, command=lambda _: self._update_appearance_preview()).pack(side="left", padx=8)
+
+        ctk.CTkLabel(f_grid_row, text="Köşe:", font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0F172A").pack(side="left", padx=(12, 0))
+        self._create_combobox(f_grid_row, self.grid_cell_radius_var, ["0", "4", "6", "8", "10"], width=70, command=lambda _: self._update_appearance_preview()).pack(side="left", padx=8)
 
         self.lbl_color_hint = ctk.CTkLabel(f_grid_row, text="", font=ctk.CTkFont(family=FONT_FAMILY, size=12), text_color="#475569")
         self.lbl_color_hint.pack(side="left", padx=6)
@@ -1163,6 +1167,7 @@ class SettingsView(ctk.CTkFrame):
         self.font_family_var.set("Segoe UI")
         self.grid_border_width_var.set("1")
         self.grid_border_color_var.set("#CBD5E1")
+        self.grid_cell_radius_var.set("6")
         self._set_preset("Standart (%100 - Önerilen)")
 
     def _update_appearance_preview(self):
@@ -1825,6 +1830,7 @@ class SettingsView(ctk.CTkFrame):
             self.db.set_setting("font_weight_teacher", w_val)
             self.db.set_setting("grid_border_width", self.grid_border_width_var.get().strip())
             self.db.set_setting("grid_border_color", self.grid_border_color_var.get().strip())
+            self.db.set_setting("grid_cell_radius", self.grid_cell_radius_var.get().strip())
             self.db.set_setting("font_size", self.font_size_teacher_var.get().strip())
 
             from ui.theme import load_theme_settings, setup_styles

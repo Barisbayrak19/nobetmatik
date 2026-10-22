@@ -109,7 +109,7 @@ COLOR_BTN_DISABLED_TEXT = "#A1A1A6"
 # Hücre Durum Renkleri (macOS Numbers / Calendar Temiz Stil)
 COLOR_CELL_BG = "#FFFFFF"            # Normal görev: Saf beyaz squircle kart
 COLOR_CELL_EMPTY = "#FBFBFD"         # Boş slot: Ferah açık zemin
-COLOR_CELL_EMPTY_BORDER = "#E5E5EA"  # Boş slot: İnce zarif sınır
+COLOR_CELL_EMPTY_BORDER = "#CBD5E1"  # Boş slot: Belirgin, net sınır
 COLOR_CELL_EMPTY_TXT = "#007AFF"     # Boş slot: Apple Blue davetkar yazı
 COLOR_FIXED = "#FFF8ED"              # Sabit nöbet: Apple Soft Amber Pastel
 COLOR_FIXED_BORDER = "#FF9500"       # Sabit nöbet: Apple Orange sınır
@@ -204,7 +204,7 @@ FONT_PRESETS = {
 GRID_BORDER_COLOR = "#CBD5E1"    # İnce (1 px) açık gri-mavi çizgi (#CBD5E1)
 GRID_BORDER_WIDTH = 1
 GRID_RELIEF = "flat"
-GRID_CELL_RADIUS = 8             # Yuvarlatılmış köşe yarıçapı (~8 px)
+GRID_CELL_RADIUS = 6             # Yuvarlatılmış köşe yarıçapı (~6 px, daha net ve belirgin köşe hatları)
 GRID_CELL_GAP = 6                # Hücre arası boşluk (6-8 px)
 
 def load_theme_settings(db=None):
@@ -212,7 +212,7 @@ def load_theme_settings(db=None):
     global FONT_FAMILY, FONT_SIZE_BASE, FONT_SIZE_UI, FONT_SIZE_TEACHER, FONT_SIZE_SECONDARY
     global FONT_SIZE_HEADER, FONT_SIZE_PAGE_TITLE, FONT_SIZE_SECTION_TITLE, FONT_SIZE_BODY
     global FONT_SIZE_SMALL, FONT_SIZE_KPI_VALUE, FONT_WEIGHT_TEACHER, FONT_SCALE_PRESET
-    global GRID_BORDER_COLOR, GRID_BORDER_WIDTH, GRID_RELIEF
+    global GRID_BORDER_COLOR, GRID_BORDER_WIDTH, GRID_RELIEF, GRID_CELL_RADIUS, COLOR_CELL_EMPTY_BORDER
     if db:
         try:
             fam = db.get_setting("font_family", "Segoe UI")
@@ -278,6 +278,10 @@ def load_theme_settings(db=None):
             w_str = db.get_setting("grid_border_width", "1")
             if w_str and w_str.isdigit():
                 GRID_BORDER_WIDTH = max(1, min(4, int(w_str)))
+            r_str = db.get_setting("grid_cell_radius", "6")
+            if r_str and r_str.isdigit():
+                GRID_CELL_RADIUS = max(0, min(16, int(r_str)))
+            COLOR_CELL_EMPTY_BORDER = GRID_BORDER_COLOR
         except Exception:
             pass
 
@@ -285,6 +289,9 @@ def setup_customtkinter():
     """CustomTkinter genel tema ve görünüm ayarlarını yapılandırır."""
     try:
         import customtkinter as ctk
+        from customtkinter.windows.widgets.core_rendering.draw_engine import DrawEngine
+        # Font bazlı antialiasing bulanıklığını önleyip net vektör yaylar çizmesi için circle_shapes kullanılır
+        DrawEngine.preferred_drawing_method = "circle_shapes"
         ctk.set_appearance_mode("light")
         ctk.set_default_color_theme("blue")
     except Exception as e:

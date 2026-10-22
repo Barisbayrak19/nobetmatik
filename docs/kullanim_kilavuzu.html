@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NöbetMatik v2.2 — Resimli ve Adım Adım Kullanma Kılavuzu</title>
+    <style>
+        :root {
+            --primary: #1E3A8A;
+            --primary-light: #2563EB;
+            --accent: #10B981;
+            --bg: #F8FAFC;
+            --card-bg: #FFFFFF;
+            --border: #E2E8F0;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        header.top-header {
+            background: linear-gradient(135deg, #1E3A8A 0%, #1E40AF 50%, #2563EB 100%);
+            color: #FFFFFF;
+            padding: 36px 20px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        header.top-header h1 {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        header.top-header p {
+            font-size: 14.5px;
+            color: #E0E7FF;
+            max-width: 720px;
+            margin: 0 auto 16px;
+        }
+
+        .header-actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background-color: rgba(255, 255, 255, 0.18);
+            color: #FFFFFF;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .btn-action:hover {
+            background-color: #FFFFFF;
+            color: var(--primary);
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 32px auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 32px;
+            align-items: start;
+        }
+
+        nav.toc-nav {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            position: sticky;
+            top: 140px;
+            box-shadow: var(--shadow);
+            max-height: calc(100vh - 160px);
+            overflow-y: auto;
+        }
+
+        nav.toc-nav h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        nav.toc-nav ul {
+            list-style: none;
+        }
+
+        nav.toc-nav li {
+            margin-bottom: 6px;
+        }
+
+        nav.toc-nav a {
+            display: block;
+            color: var(--text-main);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 6px 10px;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+        }
+
+        nav.toc-nav a:hover {
+            background-color: #EFF6FF;
+            color: var(--primary-light);
+        }
+
+        main.content {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: var(--shadow);
+        }
+
+        section.guide-step {
+            margin-bottom: 48px;
+            padding-bottom: 36px;
+            border-bottom: 1px solid #F1F5F9;
+        }
+
+        section.guide-step:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        h2 {
+            font-size: 21px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin: 18px 0 10px;
+        }
+
+        p {
+            font-size: 14.5px;
+            color: #334155;
+            margin-bottom: 14px;
+        }
+
+        ul, ol {
+            margin-left: 20px;
+            margin-bottom: 16px;
+            font-size: 14.5px;
+            color: #334155;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        .img-container {
+            margin: 20px 0;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-lg);
+            background-color: #0F172A;
+        }
+
+        .img-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .img-caption {
+            padding: 8px 14px;
+            font-size: 12px;
+            color: #64748B;
+            background-color: #F8FAFC;
+            border-top: 1px solid var(--border);
+            font-style: italic;
+        }
+
+        .callout {
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin: 18px 0;
+            font-size: 13.5px;
+            line-height: 1.5;
+        }
+
+        .callout-tip {
+            background-color: #ECFDF5;
+            border-left: 4px solid var(--accent);
+            color: #065F46;
+        }
+
+        .callout-important {
+            background-color: #EFF6FF;
+            border-left: 4px solid var(--primary-light);
+            color: #1E40AF;
+        }
+
+        .callout-warning {
+            background-color: #FFFBEB;
+            border-left: 4px solid #F59E0B;
+            color: #92400E;
+        }
+
+        footer.doc-footer {
+            text-align: center;
+            padding: 30px;
+            font-size: 13px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+            margin-top: 40px;
+            background-color: #FFFFFF;
+        }
+
+        @media (max-width: 860px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            nav.toc-nav {
+                display: none;
+            }
+            main.content {
+                padding: 24px;
+            }
+        }
+
+        @media print {
+            header.top-header {
+                position: static;
+                background: #1E3A8A !important;
+                color: #FFFFFF !important;
+                padding: 16px;
+            }
+            .header-actions, nav.toc-nav, footer.doc-footer {
+                display: none !important;
+            }
+            .container {
+                max-width: 100%;
+                margin: 0;
+                padding: 0;
+                grid-template-columns: 1fr;
+            }
+            main.content {
+                border: none;
+                box-shadow: none;
+                padding: 0;
+            }
+            section.guide-step {
+                page-break-inside: avoid;
+            }
+            .img-container {
+                box-shadow: none;
+                border: 1px solid #CCC;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header class="top-header">
+    <h1>🛡️ NöbetMatik v2.2 — Kullanım Kılavuzu</h1>
+    <p>Milli Eğitim Bakanlığı mevzuatına tam uyumlu, akıllı, adil ve otomatik okul nöbet & boş ders ikame yönetim rehberi.</p>
+    <div class="header-actions">
+        <button class="btn-action" onclick="window.print()">🖨️ Sayfayı Yazdır / PDF Yap</button>
+        <a class="btn-action" href="#1-hizli-baslangic">🚀 Hızlı Başlangıç</a>
+    </div>
+</header>
+
+<div class="container">
+    <nav class="toc-nav">
+        <h3>İçindekiler</h3>
+        <ul>
+            <li><a href="#1-hizli-baslangic">1. Hızlı Başlangıç</a></li>
+            <li><a href="#2-ogretmenler">2. Öğretmen Yönetimi</a></li>
+            <li><a href="#3-nobet-yerleri">3. Nöbet Yerleri</a></li>
+            <li><a href="#4-ice-aktarma">4. e-Okul / aSc Aktarım</a></li>
+            <li><a href="#5-otomatik-dagitim">5. Otomatik Dağıtım</a></li>
+            <li><a href="#6-haftalik-cizelge">6. Haftalık Nöbet Paneli</a></li>
+            <li><a href="#7-gunun-ozeti">7. Günün Özeti Panosu</a></li>
+            <li><a href="#8-ikame-sistemi">8. İkame Asistanı</a></li>
+            <li><a href="#9-raporlar">9. Resmi Çıktılar & Raporlar</a></li>
+            <li><a href="#10-ayarlar">10. Ayarlar & Yedekleme</a></li>
+            <li><a href="#11-sss">11. SSS & İpuçları</a></li>
+        </ul>
+    </nav>
+
+    <main class="content">
+        <section id="1-hizli-baslangic" class="guide-step">
+            <h2>1. Hızlı Başlangıç & Sisteme Genel Bakış</h2>
+            <p>NöbetMatik, okullarda nöbet çizelgelerinin hazırlanmasını, öğretmenlerin boş günlerini, kıdemlerini, gün tercihlerini ve son dakika gelmeyen öğretmenlerin boş kalan sınıflarını tek bir merkezden yöneten modern bir okul yönetim yazılımıdır.</p>
+            
+            <div class="callout callout-important">
+                <strong>🚀 Kurulum Gerektirmez (Portable):</strong> NöbetMatik bağımsız bir uygulamadır. Klasörü USB belleğe atıp istediğiniz okul veya ev bilgisayarında doğrudan çift tıklayarak çalıştırabilirsiniz.
+            </div>
+
+            <h3>🧭 Sol Gezinti Menüsü (Sidebar)</h3>
+            <ul>
+                <li><strong>📅 Haftalık Nöbet:</strong> Haftanın tüm günleri ve nöbet yerlerinin ana çizelgesi.</li>
+                <li><strong>☀️ Günün Özeti:</strong> Bugün görevli nöbetçiler, boş sınıflar ve canlı okul durumu.</li>
+                <li><strong>🔄 İkame Sistemi:</strong> Gelmeyen öğretmenlerin yerine nöbetçi ve müsait öğretmen görevlendirme.</li>
+                <li><strong>👥 Öğretmenler:</strong> Öğretmen ekleme, branş tanımlama ve nöbet adalet istatistikleri.</li>
+                <li><strong>📍 Nöbet Yerleri:</strong> Bahçe, katlar, pansiyon gibi nöbet alanlarının kapasiteleri.</li>
+                <li><strong>⚡ Otomatik Dağıtım:</strong> Tek tuşla yapay zeka destekli adil nöbet dağıtımı.</li>
+                <li><strong>📥 İçe Aktarma:</strong> e-Okul, aSc Timetables veya Excel dosyalarından ders programı yükleme.</li>
+                <li><strong>📊 Raporlar:</strong> İmzalı nöbet defterleri, aylık puantajlar ve resmi çıktılar.</li>
+                <li><strong>📖 Kullanım Kılavuzu:</strong> İhtiyacınız olduğunda anında açabileceğiniz resimli rehber.</li>
+                <li><strong>⚙️ Ayarlar:</strong> Okul bilgileri, zil saatleri ve güvenli veritabanı yedekleri.</li>
+            </ul>
+        </section>
+
+        <section id="2-ogretmenler" class="guide-step">
+            <h2>2. Öğretmenler ve Branşların Yönetimi</h2>
+            <p>Nöbet dağıtımından önce okuldaki tüm öğretmenlerin sisteme tanımlanması gerekir.</p>
+            <div class="img-container">
+                <img src="screenshots/05_ogretmenler.png" alt="Öğretmen Yönetim Paneli">
+                <div class="img-caption">Öğretmen listesi, branş filtreleri, haftalık ders yükü ve adalet sayaçları.</div>
+            </div>
+            <h3>Nasıl Kullanılır?</h3>
+            <ol>
+                <li>Sol menüden <strong>👥 Öğretmenler</strong> sekmesine tıklayın.</li>
+                <li>Sağ üstteki yeşil <strong>➕ Yeni Öğretmen Ekle</strong> butonuna basın.</li>
+                <li>Açılan pencerede Ad Soyad, Branş, Telefon Numarası ve Kıdem Yılını girin.</li>
+                <li>Nöbet muafiyeti olan öğretmenler için <em>'Nöbet Muaf'</em> seçeneğini işaretleyin.</li>
+                <li><strong>Kaydet</strong> butonuna basarak tamamlayın.</li>
+            </ol>
+            <div class="callout callout-tip">
+                💡 <strong>İpucu:</strong> Öğretmenleri tek tek elle girmek yerine <strong>'📥 İçe Aktarma'</strong> sekmesinden e-Okul PDF'ini seçtiğinizde tüm öğretmenler ve ders programları otomatik içeri aktarılır.
+            </div>
+        </section>
+
+        <section id="3-nobet-yerleri" class="guide-step">
+            <h2>3. Nöbet Yerleri ve Bölgelerin Belirlenmesi</h2>
+            <p>Okul binasındaki görev yerleri (Bahçe, 1. Kat, 2. Kat, Zemin Kat vb.) bu ekrandan yönetilir.</p>
+            <div class="img-container">
+                <img src="screenshots/06_nobet_yerleri.png" alt="Nöbet Yerleri Yönetimi">
+                <div class="img-caption">Nöbet yerleri, alan kapasiteleri ve resmi basım sıralaması.</div>
+            </div>
+            <h3>Nasıl Kullanılır?</h3>
+            <ul>
+                <li><strong>Yeni Nöbet Yeri Ekle:</strong> Okulunuzdaki her alan için bölge adı girin.</li>
+                <li><strong>Kapasite Belirleme:</strong> Bahçe gibi geniş alanlara 2 öğretmen, normal katlara 1 öğretmen atayın.</li>
+                <li><strong>Sıralama:</strong> Tablonun resmi evrakta hangi sırayla basılacağını yukarı/aşağı oklarıyla düzenleyin.</li>
+            </ul>
+        </section>
+
+        <section id="4-ice-aktarma" class="guide-step">
+            <h2>4. Ders Programı & Veri İçe Aktarma (e-Okul / aSc)</h2>
+            <p>e-Okul'dan aldığınız resmi haftalık ders programı PDF'sini saniyeler içinde okur.</p>
+            <div class="img-container">
+                <img src="screenshots/07_ice_aktarma.png" alt="İçe Aktarma Merkezi">
+                <div class="img-caption">e-Okul PDF, aSc XML ve Excel çizelgeleri tek tuşla taranır.</div>
+            </div>
+            <h3>Yükleme Adımları:</h3>
+            <ol>
+                <li>e-Okul Kurum İşlemleri'nden Haftalık Ders Programı PDF raporunu bilgisayarınıza indirin.</li>
+                <li>NöbetMatik'te <strong>📥 İçe Aktarma</strong> sekmesine gelip dosyayı seçin.</li>
+                <li>Önizleme tablosunda öğretmenleri ve ders saatlerini kontrol edin.</li>
+                <li><strong>'Veritabanına Aktar'</strong> butonuna basın. Okulun tüm haftalık ders haritası hazırlanmış olur.</li>
+            </ol>
+        </section>
+
+        <section id="5-otomatik-dagitim" class="guide-step">
+            <h2>5. Akıllı Otomatik Nöbet Dağıtımı</h2>
+            <p>MEB mevzuatına uygun şekilde öğretmenlerin boş günlerini, ders saatlerini ve adalet dengesini otomatik analiz eder.</p>
+            <div class="img-container">
+                <img src="screenshots/04_otomatik_dagitim.png" alt="Otomatik Nöbet Dağıtımı">
+                <div class="img-caption">Yapay zeka destekli kural motoru ve adalet analizi önizlemesi.</div>
+            </div>
+            <h3>Dağıtım Kuralları ve Tercihler:</h3>
+            <ul>
+                <li><strong>Dersi Olmayan Günlere Nöbet Verme:</strong> Öğretmenin okulda bulunmadığı boş gününe nöbet yazmaz.</li>
+                <li><strong>Ardışık Günleri Engelle:</strong> Bir öğretmene peş peşe günlerde nöbet verilmesini engeller.</li>
+                <li><strong>Rotasyon Yap:</strong> Önceki haftanın nöbet yerlerini dikkate alarak yerleri eşit dağıtır.</li>
+                <li><strong>Kilitli / Sabit Nöbetleri Koru:</strong> Daha önce elle sabitlediğiniz hücrelere kesinlikle dokunmaz.</li>
+            </ul>
+            <div class="callout callout-tip">
+                💡 <strong>Önizleme & Onay:</strong> Önce 'Önizleme Hesapla' diyerek adalet skorunu görün, beğendiğinizde 'Dağıtımı Onayla ve Uygula' butonuna basın.
+            </div>
+        </section>
+
+        <section id="6-haftalik-cizelge" class="guide-step">
+            <h2>6. Haftalık Nöbet Çizelgesi & Canlı Takip Paneli</h2>
+            <p>Uygulamanın ana kumanda merkezidir. Haftanın günleri ve nöbet bölgeleri etkileşimli bir tabloda sunulur.</p>
+            <div class="img-container">
+                <img src="screenshots/01_haftalik_nobet.png" alt="Haftalık Nöbet Çizelgesi">
+                <div class="img-caption">Neon vurgulu aktif gün, hızlı kilit, sürükle-bırak ve anlık durum sayaçları.</div>
+            </div>
+            <h3>Öne Çıkan Özellikler:</h3>
+            <ul>
+                <li><strong>Aktif Gün Vurgusu (Açık Neon Yeşil):</strong> İçinde bulunduğunuz gün, göz yormayan özel transparan yeşil tonla otomatik parlar.</li>
+                <li><strong>Tıkla - Değiştir / Sabitle:</strong> Bir hücreye tıklayarak başka bir nöbetçi seçebilir veya sağ tıklayıp sabitleyebilirsiniz (🔒).</li>
+                <li><strong>↶ Geri Al / İleri Al:</strong> Yaptığınız herhangi bir hatalı işlemi anında geri alabilirsiniz.</li>
+            </ul>
+        </section>
+
+        <section id="7-gunun-ozeti" class="guide-step">
+            <h2>7. Günün Özeti & Canlı Nöbetçi Takip Panosu</h2>
+            <p>Nöbetçi müdür yardımcıları ve okul idaresi için özel olarak tasarlanmış canlı günlük kontrol merkezidir.</p>
+            <div class="img-container">
+                <img src="screenshots/02_gunun_ozeti.png" alt="Günün Özeti Ekranı">
+                <div class="img-caption">Canlı nöbetçi listesi, boş sınıflar, ikame takibi ve PDF/WhatsApp servisleri.</div>
+            </div>
+            <h3>Bu Ekranda Neler Yapabilirsiniz?</h3>
+            <ul>
+                <li><strong>Günün Nöbetçileri:</strong> Hangi öğretmenin hangi katta görevli olduğunu, branşını ve o günkü boş ders saatlerini görün.</li>
+                <li><strong>Boş Sınıflar & İkame:</strong> Raporlu/izinli öğretmenlerin derslerini ve görevlendirilen nöbetçileri canlı takip edin.</li>
+                <li><strong>Müsait Öğretmenler:</strong> Beklenmedik bir acil durumda o ders saati boş olan öğretmenleri listeleyin.</li>
+                <li><strong>📄 PDF Olarak Kaydet:</strong> Günün nöbet özetini resmi A4 formatında tek tıkla imzaya hazır PDF olarak kaydedin.</li>
+                <li><strong>💬 WhatsApp Bildirimi:</strong> Nöbetçi öğretmenlere görev yerlerini WhatsApp üzerinden tek tek veya toplu gönderin.</li>
+            </ul>
+        </section>
+
+        <section id="8-ikame-sistemi" class="guide-step">
+            <h2>8. Boş Ders Doldurma & Nöbetçi İkame Asistanı</h2>
+            <p>Okula gelemeyen öğretmenlerin sınıflarının boş kalmaması için geliştirilmiş akıllı görevlendirme modülüdür. Artık ana pencere içinde tam sayfa olarak çalışır.</p>
+            <div class="img-container">
+                <img src="screenshots/03_ikame_asistani.png" alt="İkame Asistanı">
+                <div class="img-caption">Gelmeyen öğretmenler, boş saatler ve çakışmasız nöbetçi ikame ataması.</div>
+            </div>
+            <h3>Adım Adım İkame İşlemi:</h3>
+            <ol>
+                <li>Gelmeyen öğretmeni seçip <strong>➕ Listeye Ekle</strong> butonuna basın.</li>
+                <li>Sistem öğretmenin o günkü tüm ders saatlerini ve sınıflarını listeler.</li>
+                <li>O saatte boş olan nöbetçi öğretmenleri otomatik önerir.</li>
+                <li><strong>💾 TÜM GÖREVLENDİRMELERİ KAYDET</strong> butonuna basarak hem veritabanını güncelleyin hem de resmi ikame fişlerini oluşturun.</li>
+            </ol>
+        </section>
+
+        <section id="9-raporlar" class="guide-step">
+            <h2>9. Raporlar, Resmi Çıktılar & Nöbet Defterleri</h2>
+            <p>Okul müdürlüğü onayı ve denetimler için gereken tüm resmi evraklar tek ekrandan üretilir.</p>
+            <div class="img-container">
+                <img src="screenshots/08_raporlar.png" alt="Raporlar ve Resmi Belgeler">
+                <div class="img-caption">Baskı önizleme, A4/A3 çarşaf nöbet, resmi nöbet defteri ve aylık KBS puantajı.</div>
+            </div>
+            <ul>
+                <li><strong>Haftalık Nöbet Çizelgesi (PDF / Excel / HTML / Word):</strong> Panolara asılacak resmi imzalı çizelge.</li>
+                <li><strong>Resmi Nöbet Defteri Sayfaları:</strong> İdareye teslim edilen günlük imza ve olay takip föyü.</li>
+                <li><strong>Aylık KBS Nöbet Puantajı:</strong> Ek ders modülüne hatasız aktarım için resmi aylık Excel cetveli.</li>
+            </ul>
+        </section>
+
+        <section id="10-ayarlar" class="guide-step">
+            <h2>10. Sistem Ayarları, Güvenlik & Veri Yedekleme</h2>
+            <p>Okul parametreleri, zil saatleri ve güvenli veritabanı yedekleri bu ekrandan yönetilir.</p>
+            <div class="img-container">
+                <img src="screenshots/09_ayarlar.png" alt="Sistem Ayarları">
+                <div class="img-caption">Okul bilgileri, vakit çizelgesi, yönetici şifresi ve yedekleme merkezi.</div>
+            </div>
+            <ul>
+                <li><strong>Okul Bilgileri:</strong> Resmi evrakta çıkacak okul adı, müdür adı ve öğretim yılını düzenleyin.</li>
+                <li><strong>Zil Saatleri:</strong> Ders giriş ve çıkış saatlerini okulunuzun saatlerine göre ayarlayın.</li>
+                <li><strong>Otomatik Yedekleme:</strong> Her işlemde güvenli veritabanı yedeği alınır. Bilgisayar değişse bile 'Yedekten Geri Yükle' ile kaldığınız yerden devam edersiniz.</li>
+            </ul>
+        </section>
+
+        <section id="11-sss" class="guide-step">
+            <h2>11. Sıkça Sorulan Sorular (SSS)</h2>
+            <div class="callout callout-important">
+                <strong>1. Soru: PDF çıktısında Türkçe karakterler bozulur mu?</strong><br>
+                Cevap: Hayır! NöbetMatik v2.2 dahili Windows TrueType Unicode motoru kullanır; 'Ş, İ, Ğ, Ç, Ö, Ü' karakterleri resmi yazışma kalitesinde kusursuz basılır.
+            </div>
+            <div class="callout callout-tip">
+                <strong>2. Soru: Yanlışlıkla otomatik dağıtım yaptım, eski tabloma nasıl dönerim?</strong><br>
+                Cevap: Üst çubuktaki '↶ Geri Al' butonuna tıklayarak veya sol menüden '💾 Veri Yedekleme' sekmesine geçip önceki yedeği seçerek saniyeler içinde geri dönebilirsiniz.
+            </div>
+            <div class="callout callout-warning">
+                <strong>3. Soru: Bir öğretmene kesinlikle belirli bir gün nöbet vermek istemiyorum?</strong><br>
+                Cevap: '👥 Öğretmenler' sekmesinden öğretmeni açın, 'Müsait Olmayan Günler'den o günü işaretleyin. Otomatik dağıtım o güne asla nöbet yazmayacaktır.
+            </div>
+        </section>
+    </main>
+</div>
+
+<footer class="doc-footer">
+    NöbetMatik v2.2 &copy; 2026. Tüm Hakları Saklıdır. MEB Okul Nöbet Yönetim Sistemi.
+</footer>
+
+</body>
+</html>
