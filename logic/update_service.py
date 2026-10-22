@@ -229,26 +229,69 @@ class UpdateService:
 
     @staticmethod
     def launch_installer_and_exit(installer_path: Path):
-        """İndirilen kurulum dosyasını başlatır veya zip paketini klasörde gösterir."""
+        """İndirilen kurulum dosyasını başlatır veya taşınabilir paketi otomatik uygular ve uygulamayı yeniden başlatır."""
         if not installer_path.exists():
             raise FileNotFoundError(f"Kurulum dosyası bulunamadı: {installer_path}")
 
-        logger.info(f"Yeni sürüm dosyası açılıyor: {installer_path}")
+        logger.info(f"Yeni sürüm dosyası kuruluyor/açılıyor: {installer_path}")
         is_zip = str(installer_path).lower().endswith(".zip")
+        
         if is_zip:
-            if sys.platform.startswith("win"):
-                import subprocess
-                subprocess.Popen(f'explorer /select,"{installer_path}"')
-            else:
-                import subprocess
-                subprocess.Popen(["xdg-open", str(installer_path.parent)])
-            return
+            import subprocess
+            if getattr(sys, "frozen", False):
+                # Taşınabilir (Portable) çalışma modunda çalışan uygulama:
+                # Arka plan bat betiği mevcut sürecin kapanmasını bekler, zip'i açıp dosyaları yeniler ve uygulamayı açar.
+                app_dir = Path(sys.executable).resolve().parent
+                temp_dir = Path(tempfile.gettempdir())
+                bat_path = temp_dir / "nobet_apply_update.bat"
+                temp_extract = temp_dir / f"nobet_update_{os.getpid()}"
+                
+                bat_script = f"""@echo off
+chcp 65001 >nul
+:: 1. Eski sürecin tamamen kapanmasını bekle
+timeout /t 2 /nobreak >nul
 
+:: 2. ZIP paketini geçici dizine aç
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -LiteralPath '{installer_path}' -DestinationPath '{temp_extract}' -Force"
+
+:: 3. Yeni dosyaları uygulama dizinine kopyala (veritabanı güvenle korunur)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if (Test-Path '{temp_extract}\\NobetMatik') {{ Copy-Item -Path '{temp_extract}\\NobetMatik\\*' -Destination '{app_dir}' -Recurse -Force }} else {{ Copy-Item -Path '{temp_extract}\\*' -Destination '{app_dir}' -Recurse -Force }}"
+
+:: 4. Geçici klasörleri temizle
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Path '{temp_extract}' -Recurse -Force -ErrorAction SilentlyContinue"
+
+:: 5. Güncellenen uygulamayı başlat
+start "" "{app_dir}\\NobetMatik.exe"
+
+:: 6. İndirilen paketi ve bu betiği temizle
+del "{installer_path}" >nul 2>&1
+(goto) 2>nul & del "%~f0"
+"""
+                bat_path.write_text(bat_script, encoding="utf-8")
+                flags = subprocess.CREATE_NO_WINDOW if sys.platform.startswith("win") else 0
+                subprocess.Popen(["cmd.exe", "/c", str(bat_path)], creationflags=flags)
+                sys.exit(0)
+            else:
+                # Geliştirme (kaynak kod) ortamında dosyayı klasörde göster
+                if sys.platform.startswith("win"):
+                    subprocess.Popen(f'explorer /select,"{installer_path}"')
+                else:
+                    subprocess.Popen(["xdg-open", str(installer_path.parent)])
+                return
+
+        # Kurulum programı (.exe)
         if sys.platform.startswith("win"):
-            os.startfile(str(installer_path))
+            import subprocess
+            import time
+            # Inno Setup sessiz kurulum ve otomatik başlatma parametreleri
+            try:
+                subprocess.Popen([str(installer_path), "/SILENT", "/SP-", "/CLOSEAPPLICATIONS"])
+            except Exception:
+                os.startfile(str(installer_path))
+            time.sleep(0.5)
         else:
             import subprocess
             subprocess.Popen([str(installer_path)])
 
-        # Kurulum programı başlatıldığında mevcut süreci temiz bir şekilde sonlandır
+        # Mevcut süreci temiz bir şekilde sonlandır
         sys.exit(0)

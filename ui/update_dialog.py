@@ -237,42 +237,24 @@ class UpdateDialog(ctk.CTkToplevel):
 
     def _on_download_complete(self):
         self.progress_bar.set(1.0)
-        self.lbl_progress.configure(text="✔ İndirme tamamlandı!", text_color=COLOR_SUCCESS)
+        self.lbl_progress.configure(
+            text="✔ İndirme tamamlandı! Güncelleme kuruluyor ve uygulama yeniden başlatılıyor...",
+            text_color=COLOR_SUCCESS
+        )
+        self.btn_download.configure(state="disabled", text="⏳ Kuruluyor...")
+        self.btn_close.configure(state="disabled")
 
-        is_zip = str(self.target_path).lower().endswith(".zip")
-        if is_zip:
-            ask = messagebox.askyesno(
-                "Güncelleme Paketi İndirildi",
-                f"Yeni sürüm taşınabilir paketi ({self.update_info.get('latest_version')}) başarıyla indirildi:\n{self.target_path.name}\n\n"
-                f"İndirilen zip dosyasını klasörde açmak ister misiniz?",
-                parent=self
-            )
-            if ask:
-                try:
-                    self.update_service.launch_installer_and_exit(self.target_path)
-                except Exception as e:
-                    messagebox.showerror("Hata", f"Klasör açılamadı:\n{e}", parent=self)
-            self.btn_download.configure(state="normal", text="📂 Dosyayı Göster")
-            self.btn_close.configure(text="Kapat")
-        else:
-            ask = messagebox.askyesno(
-                "Güncelleme Hazır",
-                f"Yeni sürüm ({self.update_info.get('latest_version')}) başarıyla indirildi.\n\n"
-                f"Kurulumun tamamlanabilmesi için mevcut NöbetMatik uygulaması kapatılacaktır.\n"
-                f"(Okul verileriniz korunacaktır).\n\n"
-                f"Şimdi kurulsun mu?",
-                parent=self
-            )
-            if ask:
-                try:
-                    self.update_service.launch_installer_and_exit(self.target_path)
-                except Exception as e:
-                    messagebox.showerror("Hata", f"Kurulum dosyası başlatılamadı:\n{e}", parent=self)
-                    self.btn_download.configure(state="normal")
-                    self.btn_close.configure(text="Kapat")
-            else:
-                self.btn_download.configure(state="normal", text="🚀 Kurulumu Başlat")
-                self.btn_close.configure(text="Kapat")
+        # Kısa bir görsel onay sonrası (900ms) otomatik kurulum ve yeniden başlatma
+        self.after(900, self._do_launch_update)
+
+    def _do_launch_update(self):
+        try:
+            self.update_service.launch_installer_and_exit(self.target_path)
+        except Exception as e:
+            self.lbl_progress.configure(text=f"❌ Kurulum başlatılamadı: {e}", text_color="#DC2626")
+            self.btn_download.configure(state="normal", text="🚀 Yeniden Dene")
+            self.btn_close.configure(state="normal", text="Kapat")
+            messagebox.showerror("Hata", f"Kurulum dosyası başlatılamadı:\n{e}", parent=self)
 
     def _on_download_error(self, err: Exception):
         self.is_downloading = False
