@@ -158,6 +158,60 @@ class TestSchoolAndSecurity(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_network_sync_manager(self):
+        import time
+        from logic.network_service import (
+            NetworkHostService, NetworkDiscoveryClient, NetworkSyncManager
+        )
+        from core.database import Database
+
+        # İstemci için ayrı geçici bir veritabanı oluştur
+        client_temp_dir = tempfile.mkdtemp()
+        client_db_path = Path(client_temp_dir) / "client_nobet.db"
+        client_db = Database(client_db_path)
+
+        # Host ve client rolleri ayarla
+        NetworkSyncManager.set_lan_config(self.db, role="host", auto_host=True)
+        h_cfg = NetworkSyncManager.get_lan_config(self.db)
+        self.assertEqual(h_cfg["role"], "host")
+        self.assertTrue(h_cfg["auto_host"])
+
+        NetworkSyncManager.set_lan_config(client_db, role="client", auto_client_sync=True, last_host_ip="127.0.0.1")
+        c_cfg = NetworkSyncManager.get_lan_config(client_db)
+        self.assertEqual(c_cfg["role"], "client")
+        self.assertTrue(c_cfg["auto_client_sync"])
+
+        # Host DB'ye özel bir kayıt ekle
+        self.db.set_setting("sync_test_key", "sync_test_value_123")
+
+        # Sunucuyu başlat
+        srv = NetworkHostService(self.db_path, "Eşitleme Test Okulu")
+        ok, _ = srv.start()
+        self.assertTrue(ok)
+
+        try:
+            time.sleep(0.5)
+            # İstemciden doğrudan kontrol
+            direct_info = NetworkDiscoveryClient.check_host_direct("127.0.0.1", timeout=1.0)
+            self.assertIsNotNone(direct_info)
+            self.assertEqual(direct_info.get("school_name"), "Eşitleme Test Okulu")
+
+            # İstemciden eşitleme yap
+            sync_ok, sync_msg, updated = NetworkSyncManager.sync_from_host(client_db, host_info=direct_info, force=True)
+            self.assertTrue(sync_ok)
+            self.assertTrue(updated)
+
+            # İstemci veritabanında host verisinin olup olmadığını ve istemci ayarlarının korunduğunu doğrula
+            self.assertEqual(client_db.get_setting("sync_test_key"), "sync_test_value_123")
+            self.assertEqual(client_db.get_setting("lan_role"), "client")
+            self.assertEqual(client_db.get_setting("lan_auto_sync"), "1")
+        finally:
+            srv.stop()
+            try:
+                shutil.rmtree(client_temp_dir, ignore_errors=True)
+            except Exception:
+                pass
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -805,6 +805,49 @@ class Database:
             """, (key, value))
             conn.commit()
 
+    def get_vice_principals(self) -> List[str]:
+        """Kayıtlı müdür yardımcılarının listesini döndürür."""
+        import json
+        raw = self.get_setting("vice_principals_list", "")
+        if raw:
+            try:
+                lst = json.loads(raw)
+                if isinstance(lst, list) and lst:
+                    return [x.strip() for x in lst if str(x).strip()]
+            except Exception:
+                pass
+        # Geriye dönük uyumluluk: Eski tekil ayardan çek
+        single = self.get_setting("vice_principal_name", "").strip()
+        if single:
+            return [single]
+        return ["Müdür Yardımcısı"]
+
+    def set_vice_principals(self, names: List[str]):
+        """Müdür yardımcıları listesini günceller."""
+        import json
+        cleaned = [x.strip() for x in names if str(x).strip()]
+        if not cleaned:
+            cleaned = ["Müdür Yardımcısı"]
+        self.set_setting("vice_principals_list", json.dumps(cleaned, ensure_ascii=False))
+        # Tekil eski ayarı da ilk müdür yardımcısı ile senkronize tut
+        self.set_setting("vice_principal_name", cleaned[0])
+
+    def get_active_vice_principal(self) -> str:
+        """Bu bilgisayarda aktif çalışan müdür yardımcısının adını döndürür."""
+        active = self.get_setting("active_vice_principal", "").strip()
+        all_vps = self.get_vice_principals()
+        if active and active in all_vps:
+            return active
+        if active:
+            return active
+        return all_vps[0] if all_vps else "Müdür Yardımcısı"
+
+    def set_active_vice_principal(self, name: str):
+        """Bu bilgisayarda aktif çalışan müdür yardımcısını kaydeder."""
+        val = name.strip()
+        if val:
+            self.set_setting("active_vice_principal", val)
+
     # --- Personel Devam Takip (Attendance Records) ---
     def save_attendance_record(self, record: AttendanceRecord):
         with self.connection() as conn:

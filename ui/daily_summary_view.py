@@ -1181,9 +1181,10 @@ class DailySummaryView(ctk.CTkFrame):
             elements.append(Spacer(1, 20))
 
             # İmza Alanı
+            vp_active = self.db.get_active_vice_principal() if hasattr(self.db, 'get_active_vice_principal') else 'Nöbetçi Müdür Yardımcısı'
             sign_row = [
-                [Paragraph("<b>Hazırlayan</b><br/>Nöbetçi Müdür Yardımcısı<br/>........................................", cell_norm),
-                 Paragraph(f"<b>Tasdik Olunur</b><br/>{school.principal_name or 'Okul Müdürü'}<br/>Okul Müdürü", cell_norm)]
+                [Paragraph(f"<b>Hazırlayan</b><br/><b>{vp_active}</b><br/>Nöbetçi Müdür Yardımcısı<br/>İmza", cell_norm),
+                 Paragraph(f"<b>Tasdik Olunur</b><br/><b>{school.principal_name or 'Okul Müdürü'}</b><br/>Okul Müdürü<br/>İmza", cell_norm)]
             ]
             t_sign = Table(sign_row, colWidths=[260, 260])
             t_sign.setStyle(TableStyle([

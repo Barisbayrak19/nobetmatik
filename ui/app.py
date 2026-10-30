@@ -192,6 +192,7 @@ class MainApp(ctk.CTk):
         self.update_header_info()
         self.after(600, self._check_announcements_background)
         self.after(1200, self._check_updates_background)
+        self.after(800, self._init_lan_auto_features)
 
     def get_current_week_str(self) -> str:
         return self.current_week_start.isoformat()
@@ -726,6 +727,41 @@ class MainApp(ctk.CTk):
             border_color="#E5E5EA"
         )
         self.header_actions_box.pack(side="right", padx=(0, 16), pady=10)
+
+        # Aktif Müdür Yardımcısı Profili (Bu Bilgisayarda İşlem Yapan Yönetici)
+        cur_vp = self.db.get_active_vice_principal() if hasattr(self.db, "get_active_vice_principal") else "Müdür Yrd."
+        self.btn_vp_profile = ctk.CTkButton(
+            self.header_actions_box,
+            text=f"👤 {cur_vp}",
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#F0F9FF",
+            hover_color="#E0F2FE",
+            text_color="#0369A1",
+            border_width=1,
+            border_color="#BAE6FD",
+            corner_radius=8,
+            command=self._on_vp_profile_clicked
+        )
+        self.btn_vp_profile.pack(side="left", padx=(4, 4), pady=3)
+        self.vp_tooltip = SimpleTooltip(self.btn_vp_profile, f"Aktif Yönetici: {cur_vp}. Değiştirmek veya ayarları açmak için tıklayın.")
+
+        # Yerel Ağ & Eşitleme Durum Rozeti (Offline-First Canlı Gösterge)
+        self.btn_lan_badge = ctk.CTkButton(
+            self.header_actions_box,
+            text="🌐 Yerel Mod",
+            height=30,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#F8FAFC",
+            hover_color="#F1F5F9",
+            text_color="#64748B",
+            border_width=1,
+            border_color="#CBD5E1",
+            corner_radius=8,
+            command=self._on_lan_badge_clicked
+        )
+        self.btn_lan_badge.pack(side="left", padx=(2, 6), pady=3)
+        self.lan_tooltip = SimpleTooltip(self.btn_lan_badge, "Ağ Durumu: Yerel veritabanı aktif")
 
         self.btn_feedback = ctk.CTkButton(
             self.header_actions_box,
@@ -1363,6 +1399,11 @@ class MainApp(ctk.CTk):
             self.lbl_sidebar_year.configure(text=f"🎓 {school.academic_year or '2026-2027'} Eğitim Yılı")
         if hasattr(self, "lbl_sidebar_principal"):
             self.lbl_sidebar_principal.configure(text=f"Müdür: {school.principal_name}" if school.principal_name else "Müdürlük")
+        if hasattr(self, "btn_vp_profile") and hasattr(self.db, "get_active_vice_principal"):
+            active_vp = self.db.get_active_vice_principal()
+            self.btn_vp_profile.configure(text=f"👤 {active_vp}")
+            if hasattr(self, "vp_tooltip"):
+                self.vp_tooltip.text = f"Aktif Yönetici: {active_vp}. Değiştirmek veya ayarları açmak için tıklayın." 
 
         end_date = self.current_week_start + datetime.timedelta(days=4)
         m_start = TURKISH_MONTHS[self.current_week_start.month] if 1 <= self.current_week_start.month <= 12 else ""
@@ -2263,6 +2304,179 @@ class MainApp(ctk.CTk):
                 orig_text = self.lbl_sidebar_version.cget("text")
                 self.lbl_sidebar_version.configure(text="✔ Sürümünüz Güncel", text_color="#10B981")
                 self.after(3500, lambda: self.lbl_sidebar_version.configure(text=orig_text, text_color="#94A3B8"))
+
+    def _init_lan_auto_features(self):
+        """Açılışta rol ve otomatik eşitleme mantığını arka planda arayüzü kilitlemeden çalıştırır."""
+        def worker():
+            try:
+                from logic.network_service import NetworkSyncManager, get_global_host_service
+                cfg = NetworkSyncManager.get_lan_config(self.db)
+
+                # 1. Ana Sunucu Rolü
+                if cfg["role"] == "host" or cfg["auto_host"]:
+                    try:
+                        school = self.db.get_school_info()
+                        srv = get_global_host_service(self.db.db_path, school.name or "Okul")
+                        srv.start()
+                        self.after(0, lambda: self.update_lan_badge("host"))
+                        logger.info("NöbetMatik Ana Sunucu servisi açılışta otomatik başlatıldı.")
+                    except Exception as e:
+                        logger.warning(f"Ana sunucu otomatik başlatma uyarısı: {e}")
+                        self.after(0, lambda err=str(e): self.update_lan_badge("error", err))
+                    return
+
+                # 2. İstemci Rolü (Offline-First Otomatik Eşitleme)
+                if cfg["role"] == "client" or cfg["auto_client_sync"] or cfg["last_host_ip"]:
+                    self.after(0, lambda: self.update_lan_badge("syncing"))
+                    self._run_async_client_sync(force=False, is_startup=True)
+                    # 60 saniyede bir sessiz arka plan kontrolü
+                    self.after(60000, self._periodic_lan_sync)
+                else:
+                    self.after(0, lambda: self.update_lan_badge("standalone"))
+            except Exception as e:
+                logger.error(f"Yerel ağ servis başlatma hatası: {e}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _periodic_lan_sync(self):
+        """Arka planda periyodik olarak ana sunucuyu kontrol eder."""
+        try:
+            from logic.network_service import NetworkSyncManager
+            cfg = NetworkSyncManager.get_lan_config(self.db)
+            if cfg["role"] == "client" or cfg["auto_client_sync"]:
+                self._run_async_client_sync(force=False, is_startup=False)
+                self.after(60000, self._periodic_lan_sync)
+        except Exception:
+            pass
+
+    def _run_async_client_sync(self, force: bool = False, is_startup: bool = False):
+        from logic.network_service import NetworkSyncManager
+        def worker():
+            ok, msg, updated = NetworkSyncManager.sync_from_host(self.db, force=force)
+            def done():
+                cfg = NetworkSyncManager.get_lan_config(self.db)
+                if ok:
+                    self.update_lan_badge("synced", cfg.get("last_sync_time") or "")
+                    if updated:
+                        self._on_remote_data_synced(msg)
+                else:
+                    self.update_lan_badge("offline", cfg.get("last_sync_time") or "")
+            self.after(0, done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_remote_data_synced(self, msg: str):
+        """Ana sunucudan yeni veriler geldiğinde arayüzü canlandırır."""
+        try:
+            if hasattr(self, "schedule_grid") and self.schedule_grid:
+                self.schedule_grid.build_grid()
+                self.schedule_grid.refresh()
+            self.update_header_info()
+            if hasattr(self, "update_kpi_cards"):
+                self.update_kpi_cards()
+            logger.info(f"Senkronizasyon sonrası ekran yenilendi: {msg}")
+        except Exception as e:
+            logger.error(f"Ekran yenileme hatası: {e}")
+
+    def update_lan_badge(self, status: str, detail: str = ""):
+        """Ağ durum rozetini günceller."""
+        if not hasattr(self, "btn_lan_badge") or not self.btn_lan_badge:
+            return
+
+        if status == "host":
+            self.btn_lan_badge.configure(
+                text="🖥️ Ana Sunucu",
+                fg_color="#ECFDF5",
+                hover_color="#D1FAE5",
+                text_color="#065F46",
+                border_color="#A7F3D0"
+            )
+            if hasattr(self, "lan_tooltip"):
+                self.lan_tooltip.text = "Bu bilgisayar okul ağında Ana Sunucu olarak yayın yapıyor. Tıklayarak ağ ayarlarını açabilirsiniz."
+        elif status == "synced":
+            t = f"🟢 Eşitlendi ({detail})" if detail else "🟢 Eşitlendi"
+            self.btn_lan_badge.configure(
+                text=t,
+                fg_color="#ECFDF5",
+                hover_color="#D1FAE5",
+                text_color="#065F46",
+                border_color="#A7F3D0"
+            )
+            if hasattr(self, "lan_tooltip"):
+                self.lan_tooltip.text = f"Ana sunucu ile eşitlendi. Son: {detail}. Yeniden eşitlemek için tıklayın."
+        elif status == "syncing":
+            self.btn_lan_badge.configure(
+                text="🔄 Eşitleniyor...",
+                fg_color="#EFF6FF",
+                hover_color="#DBEAFE",
+                text_color="#1D4ED8",
+                border_color="#BFDBFE"
+            )
+            if hasattr(self, "lan_tooltip"):
+                self.lan_tooltip.text = "Ana sunucu taranıyor ve güncellemeler kontrol ediliyor..."
+        elif status == "offline":
+            self.btn_lan_badge.configure(
+                text="🟡 Yerel Mod (Çevrimdışı)",
+                fg_color="#FFFBEB",
+                hover_color="#FEF3C7",
+                text_color="#B45309",
+                border_color="#FDE68A"
+            )
+            if hasattr(self, "lan_tooltip"):
+                self.lan_tooltip.text = "Ana sunucu şu an kapalı veya ulaşılamıyor. Yerel verilerle kesintisiz çalışıyorsunuz. Yeniden bağlanmak için tıklayın."
+        else:
+            self.btn_lan_badge.configure(
+                text="🌐 Yerel Mod",
+                fg_color="#F8FAFC",
+                hover_color="#F1F5F9",
+                text_color="#64748B",
+                border_color="#CBD5E1"
+            )
+            if hasattr(self, "lan_tooltip"):
+                self.lan_tooltip.text = "Yalnızca bu bilgisayarda çalışılıyor. Ağ ayarlarını açmak için tıklayın."
+
+    def _on_vp_profile_clicked(self):
+        """Müdür yardımcısı rozetine tıklandığında hızlı geçiş menüsü açar."""
+        all_vps = self.db.get_vice_principals() if hasattr(self.db, "get_vice_principals") else []
+        active_vp = self.db.get_active_vice_principal() if hasattr(self.db, "get_active_vice_principal") else ""
+        
+        # Eğer birden fazla müdür yardımcısı varsa popup menü ile hızlı seçim sun
+        if len(all_vps) > 1:
+            menu = tk.Menu(self, tearoff=0, font=(FONT_FAMILY, 10))
+            for vp in all_vps:
+                is_cur = (vp == active_vp)
+                label_txt = f"✓ {vp} (Aktif)" if is_cur else f"   {vp}"
+                def _select(val=vp):
+                    self.db.set_active_vice_principal(val)
+                    self.update_header_info()
+                    if hasattr(self, "page_views") and "daily_summary" in self.page_views:
+                        ds = self.page_views["daily_summary"]
+                        if hasattr(ds, "refresh_summary"):
+                            ds.refresh_summary()
+                menu.add_command(label=label_txt, command=_select)
+            menu.add_separator()
+            menu.add_command(label="⚙️ Yönetici Ayarlarını Aç...", command=lambda: self.open_settings(initial_tab="school"))
+            try:
+                x = self.btn_vp_profile.winfo_rootx()
+                y = self.btn_vp_profile.winfo_rooty() + self.btn_vp_profile.winfo_height()
+                menu.tk_popup(x, y)
+            finally:
+                menu.grab_release()
+        else:
+            self.open_settings(initial_tab="school")
+
+    def _on_lan_badge_clicked(self):
+        """Rozete tıklandığında duruma göre işlem yapar."""
+        try:
+            from logic.network_service import NetworkSyncManager
+            cfg = NetworkSyncManager.get_lan_config(self.db)
+            if cfg["role"] == "client" or cfg["auto_client_sync"] or cfg["last_host_ip"]:
+                self.update_lan_badge("syncing")
+                self._run_async_client_sync(force=True, is_startup=False)
+            else:
+                self.open_settings(initial_tab="security")
+        except Exception:
+            self.open_settings(initial_tab="security")
 
     def on_close(self):
         try:

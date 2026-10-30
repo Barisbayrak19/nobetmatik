@@ -1001,7 +1001,7 @@ class ExportService:
 
         # İmza Bloğu (Müdür Yardımcısı & Okul Müdürü)
         sign_table_data = [
-            [Paragraph(f"{today_str}<br/>Düzenleyen<br/>Müdür Yardımcısı", sign_style),
+            [Paragraph(f"{today_str}<br/>Düzenleyen<br/><b>{self.db.get_active_vice_principal() if hasattr(self.db, 'get_active_vice_principal') else 'Müdür Yardımcısı'}</b><br/>Müdür Yardımcısı", sign_style),
              Paragraph(f"{today_str}<br/>{school.principal_name}<br/>Okul Müdürü", sign_style)]
         ]
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1863,7 +1863,8 @@ class ExportService:
 
         row_idx += 2
         # İmza Bloğu
-        ws.cell(row=row_idx, column=2, value=f"{today_str}\nDüzenleyen\nMüdür Yardımcısı").alignment = align_center
+        vp_active = self.db.get_active_vice_principal() if hasattr(self.db, 'get_active_vice_principal') else 'Müdür Yardımcısı'
+        ws.cell(row=row_idx, column=2, value=f"{today_str}\nDüzenleyen\n{vp_active}\nMüdür Yardımcısı").alignment = align_center
         ws.cell(row=row_idx, column=2).font = font_bold
 
         ws.cell(row=row_idx, column=6, value=f"{today_str}\n{school.principal_name}\nOkul Müdürü").alignment = align_center
@@ -2068,7 +2069,7 @@ class ExportService:
         # İmza Bloğu
         sign_table_data = [
             [
-                Paragraph(f"{today_str}<br/>Düzenleyen<br/>Müdür Yardımcısı", sign_style),
+                Paragraph(f"{today_str}<br/>Düzenleyen<br/><b>{self.db.get_active_vice_principal() if hasattr(self.db, 'get_active_vice_principal') else 'Müdür Yardımcısı'}</b><br/>Müdür Yardımcısı", sign_style),
                 Paragraph(f"{today_str}<br/>{school.principal_name}<br/>Okul Müdürü", sign_style)
             ]
         ]
@@ -2133,7 +2134,7 @@ class ExportService:
         except Exception:
             duty_hours_str = f"{first_s} - {last_e}"
 
-        vp_name = self.db.get_setting("vice_principal_name", "Nöbetten Sorumlu Md. Yrd.")
+        vp_name = self.db.get_active_vice_principal() if hasattr(self.db, "get_active_vice_principal") else self.db.get_setting("vice_principal_name", "Nöbetten Sorumlu Md. Yrd.")
 
         try:
             base_dt = datetime.date.fromisoformat(date_str)
@@ -2659,7 +2660,8 @@ class ExportService:
         ws.merge_cells(f"B{cur_row}:E{cur_row}")
         ws.merge_cells(f"{get_column_letter(c_tot_duty - 2)}{cur_row}:{last_col_letter}{cur_row}")
 
-        ws[f"B{cur_row}"] = "DÜZENLEYEN\nNöbetten Sorumlu Müdür Yardımcısı\n\n\nİmza"
+        vp_active_kbs = self.db.get_active_vice_principal() if hasattr(self.db, 'get_active_vice_principal') else 'Nöbetten Sorumlu Müdür Yardımcısı'
+        ws[f"B{cur_row}"] = f"DÜZENLEYEN\n{vp_active_kbs}\nMüdür Yardımcısı\n\n\nİmza"
         ws[f"B{cur_row}"].font = font_cell
         ws[f"B{cur_row}"].alignment = align_center
 

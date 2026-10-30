@@ -27,7 +27,7 @@ from ui.theme import (
 )
 from logic.network_service import (
     get_global_host_service, is_global_host_running, stop_global_host_service,
-    NetworkDiscoveryClient, get_local_ip, get_hostname
+    NetworkDiscoveryClient, NetworkSyncManager, get_local_ip, get_hostname
 )
 
 
@@ -70,7 +70,10 @@ class SettingsView(ctk.CTkFrame):
         self.district_var = tk.StringVar(value=self.school.district)
         self.year_var = tk.StringVar(value=self.school.academic_year)
         self.principal_var = tk.StringVar(value=self.school.principal_name)
-        self.vice_principal_var = tk.StringVar(value=self.db.get_setting("vice_principal_name", "Nöbetten Sorumlu Müdür Yrd."))
+        # Müdür Yardımcıları Listesi & Bu Bilgisayarda Aktif Müdür Yardımcısı
+        vps = self.db.get_vice_principals()
+        self.vice_principals_text_var = tk.StringVar(value=", ".join(vps))
+        self.active_vp_var = tk.StringVar(value=self.db.get_active_vice_principal())
         self.school_level_var = tk.StringVar(value=getattr(self.school, "school_level", "Ortaokul"))
         self.education_type_var = tk.StringVar(value=getattr(self.school, "education_type", "Normal (Tekli)"))
 
@@ -131,6 +134,10 @@ class SettingsView(ctk.CTkFrame):
         from core.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
         self.telegram_bot_token_var = tk.StringVar(value=self.db.get_setting("telegram_bot_token", TELEGRAM_BOT_TOKEN))
         self.telegram_chat_id_var = tk.StringVar(value=self.db.get_setting("telegram_chat_id", TELEGRAM_CHAT_ID))
+
+        # 7. Yerel Ağ & Otomatik Eşitleme (Offline-First) Tercihleri
+        self.auto_host_var = tk.BooleanVar(value=self.db.get_setting("lan_auto_host", "0") == "1")
+        self.auto_sync_var = tk.BooleanVar(value=self.db.get_setting("lan_auto_sync", "1") == "1")
 
         self.current_tab_key = "school"
         self.tab_buttons: Dict[str, ctk.CTkButton] = {}
@@ -489,32 +496,73 @@ class SettingsView(ctk.CTkFrame):
         )
         cb_edu.grid(row=2, column=3, sticky="ew", pady=5, padx=(8, 0))
 
-        # Kart 2: İdare ve Yetkililer (Yan Yana)
+        # Kart 2: İdare ve Yetkililer (Müdür & Çoklu Müdür Yardımcısı Yönetimi)
         body_admin = self._create_section_card(
             tab,
-            "✍️ İdare ve Yetkililer (Belge İmzaları)",
-            "Çıktıların altındaki resmi onay ve imza bloklarında görünecek yönetici isimleri."
+            "✍️ İdare ve Yetkililer (Resmi Belge İmzaları)",
+            "Raporların, nöbet defterinin ve ikame fişlerinin altında yer alacak onay ve imza yetkilileri."
         )
-        body_admin.columnconfigure(0, weight=0, minsize=155)
+        body_admin.columnconfigure(0, weight=0, minsize=165)
         body_admin.columnconfigure(1, weight=1)
-        body_admin.columnconfigure(2, weight=0, minsize=155)
-        body_admin.columnconfigure(3, weight=1)
 
         ctk.CTkLabel(
             body_admin, text="Okul Müdürü:",
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0F172A"
-        ).grid(row=0, column=0, sticky="w", pady=5)
-        self._create_entry(body_admin, self.principal_var, width=250).grid(
-            row=0, column=1, sticky="ew", pady=5, padx=(8, 20)
+        ).grid(row=0, column=0, sticky="w", pady=6)
+        self._create_entry(body_admin, self.principal_var, width=320).grid(
+            row=0, column=1, sticky="w", pady=6, padx=(8, 0)
         )
 
         ctk.CTkLabel(
-            body_admin, text="Müdür Yardımcısı:",
+            body_admin, text="Müdür Yardımcıları:",
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0F172A"
-        ).grid(row=0, column=2, sticky="w", pady=5)
-        self._create_entry(body_admin, self.vice_principal_var, width=250).grid(
-            row=0, column=3, sticky="ew", pady=5, padx=(8, 0)
+        ).grid(row=1, column=0, sticky="w", pady=6)
+        
+        ent_vps = self._create_entry(body_admin, self.vice_principals_text_var, width=420)
+        ent_vps.grid(row=1, column=1, sticky="w", pady=6, padx=(8, 0))
+        
+        lbl_hint = ctk.CTkLabel(
+            body_admin,
+            text="💡 Birden fazla müdür yardımcısı varsa virgül (,) ile ayırarak yazınız. (Örn: Ahmet YILMAZ, Mehmet KAYA)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#64748B"
         )
+        lbl_hint.grid(row=2, column=1, sticky="w", pady=(0, 6), padx=(8, 0))
+
+        ctk.CTkLabel(
+            body_admin, text="Bu Bilgisayarı Kullanan:",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"), text_color="#0284C7"
+        ).grid(row=3, column=0, sticky="w", pady=6)
+
+        current_vps = [x.strip() for x in self.vice_principals_text_var.get().split(",") if x.strip()]
+        if not current_vps:
+            current_vps = ["Müdür Yardımcısı"]
+        
+        self.cb_active_vp = self._create_combobox(
+            body_admin,
+            variable=self.active_vp_var,
+            values=current_vps,
+            width=320
+        )
+        self.cb_active_vp.grid(row=3, column=1, sticky="w", pady=6, padx=(8, 0))
+        
+        def _on_vps_entry_changed(*args):
+            names = [x.strip() for x in self.vice_principals_text_var.get().split(",") if x.strip()]
+            if not names:
+                names = ["Müdür Yardımcısı"]
+            self.cb_active_vp.configure(values=names)
+            if self.active_vp_var.get() not in names:
+                self.active_vp_var.set(names[0])
+        
+        self.vice_principals_text_var.trace_add("write", _on_vps_entry_changed)
+
+        lbl_active_hint = ctk.CTkLabel(
+            body_admin,
+            text="📌 Bu bilgisayarda işlem yapıldığında veya çıktı alındığında bu müdür yardımcısının adı yazılır.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color="#0369A1"
+        )
+        lbl_active_hint.grid(row=4, column=1, sticky="w", pady=(0, 6), padx=(8, 0))
 
     # =========================================================================
     # SEKME 2: DERS VE NÖBET SAATLERİ
@@ -1321,6 +1369,16 @@ class SettingsView(ctk.CTkFrame):
         )
         self.btn_stop_host.pack(side="left")
 
+        self.chk_auto_host = ctk.CTkCheckBox(
+            f_host_in,
+            text="⚡ Program açıldığında bu bilgisayarı her zaman otomatik Ana Sunucu yap (Paylaşımı Otomatik Başlat)",
+            variable=self.auto_host_var,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#1E293B",
+            command=self._on_auto_host_toggled
+        )
+        self.chk_auto_host.pack(anchor="w", pady=(10, 2))
+
         # B. İstemci Kutusu
         f_client_box = ctk.CTkFrame(body_lan, fg_color="#F8FAFC", corner_radius=8, border_width=1, border_color="#E2E8F0")
         f_client_box.pack(fill="x", pady=(0, 12))
@@ -1349,6 +1407,28 @@ class SettingsView(ctk.CTkFrame):
             text_color=COLOR_PRIMARY
         )
         self.lbl_scan_status.pack(side="left")
+
+        f_client_opts = ctk.CTkFrame(f_client_in, fg_color="transparent")
+        f_client_opts.pack(fill="x", pady=(2, 6))
+
+        self.chk_auto_sync = ctk.CTkCheckBox(
+            f_client_opts,
+            text="🔄 Offline-First: Program açılışında ana sunucuya bağlanıp güncellensin (Ana makine kapalıysa yerel veriyle açılsın)",
+            variable=self.auto_sync_var,
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            text_color="#1E293B",
+            command=self._on_auto_sync_toggled
+        )
+        self.chk_auto_sync.pack(side="left", padx=(0, 10))
+
+        self.btn_sync_now = create_modern_button(
+            f_client_opts,
+            text="🔄 Şimdi Verileri Eşitle",
+            command=self._manual_sync_now,
+            variant="default",
+            height=30
+        )
+        self.btn_sync_now.pack(side="left")
 
         self.f_hosts_list = ctk.CTkFrame(f_client_in, fg_color="transparent")
         self.f_hosts_list.pack(fill="x")
@@ -1637,18 +1717,60 @@ class SettingsView(ctk.CTkFrame):
             self.btn_start_host.configure(state="normal")
             self.btn_stop_host.configure(state="disabled")
 
+    def _on_auto_host_toggled(self):
+        val = "1" if self.auto_host_var.get() else "0"
+        self.db.set_setting("lan_auto_host", val)
+        if val == "1":
+            self.db.set_setting("lan_role", "host")
+        elif self.db.get_setting("lan_role") == "host":
+            self.db.set_setting("lan_role", "none")
+
+    def _on_auto_sync_toggled(self):
+        val = "1" if self.auto_sync_var.get() else "0"
+        self.db.set_setting("lan_auto_sync", val)
+        if val == "1":
+            self.db.set_setting("lan_role", "client")
+        elif self.db.get_setting("lan_role") == "client":
+            self.db.set_setting("lan_role", "none")
+
+    def _manual_sync_now(self):
+        self.lbl_scan_status.configure(text="⏳ Ana sunucu ile senkronize ediliyor...")
+        self.btn_sync_now.configure(state="disabled")
+
+        def worker():
+            ok, msg, updated = NetworkSyncManager.sync_from_host(self.db, force=True)
+            def done():
+                self.btn_sync_now.configure(state="normal")
+                self.lbl_scan_status.configure(text="")
+                if ok:
+                    messagebox.showinfo("Eşitleme Başarılı", f"✅ {msg}", parent=self)
+                    if updated and self.on_saved:
+                        self.on_saved()
+                else:
+                    messagebox.showwarning("Eşitleme Uyarısı", f"⚠️ {msg}", parent=self)
+            self.after(0, done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _start_host(self):
         school_name = self.school_name_var.get().strip() or "Okul"
         srv = get_global_host_service(self.db.db_path, school_name)
         ok, msg = srv.start()
         self._update_host_ui()
         if ok:
+            NetworkSyncManager.set_lan_config(
+                self.db,
+                role="host",
+                auto_host=True
+            )
+            self.auto_host_var.set(True)
             messagebox.showinfo(
                 "Ağ Paylaşımı Başlatıldı",
                 f"Bu bilgisayar başarıyla NöbetMatik Ana Sunucusu yapıldı!\n\n"
                 f"• Sunucu Adı: {get_hostname()}\n"
                 f"• Yerel IP: {get_local_ip()}\n"
                 f"• Ağ Yolu: {srv.unc_share_path or 'Dahili Ağ Servisi'}\n\n"
+                f"📌 Otomatik Başlatma Aktif: Program her açıldığında bu bilgisayar kendiliğinden Ana Sunucu olarak başlayacaktır. Her seferinde butona basmanıza gerek yoktur.\n\n"
                 f"Diğer bilgisayarlardaki idareciler, Ayarlar ekranından 'Ağdaki Okul Sunucusunu Otomatik Bul' butonuna basarak tek tıkla bağlanabilir.",
                 parent=self
             )
@@ -1656,6 +1778,12 @@ class SettingsView(ctk.CTkFrame):
     def _stop_host(self):
         if messagebox.askyesno("Onay", "Ağ paylaşımı durdurulacaktır. Diğer bilgisayarlar bu sunucuya erişemeyecektir.\nOnaylıyor musunuz?", parent=self):
             stop_global_host_service()
+            NetworkSyncManager.set_lan_config(
+                self.db,
+                role="none",
+                auto_host=False
+            )
+            self.auto_host_var.set(False)
             self._update_host_ui()
             messagebox.showinfo("Bilgi", "Ağ paylaşımı durduruldu.", parent=self)
 
@@ -1702,20 +1830,40 @@ class SettingsView(ctk.CTkFrame):
             create_modern_button(card_h, text="⚡ Tek Tıkla Bağlan", command=lambda host=h: self._connect_to_host(host), variant="primary", height=32).pack(side="right", padx=12, pady=8)
 
     def _connect_to_host(self, host_info: dict):
-        local_data_dir = self.db.db_path.parent
-        ok, db_path, msg = NetworkDiscoveryClient.test_and_connect(host_info, local_data_dir)
-        if ok:
-            self.db.set_setting("custom_db_path", db_path)
-            self.lbl_cur_db.configure(text=db_path)
-            messagebox.showinfo(
-                "Ağ Bağlantısı Başarılı",
-                f"{msg}\n\nDeğişikliğin tam olarak geçerli olması ve ağdaki güncel verilerin yüklenmesi için programı yeniden başlatınız.",
-                parent=self
+        self.lbl_scan_status.configure(text="⏳ Ana sunucuya bağlanılıyor ve veriler eşitleniyor...")
+        self.btn_scan_hosts.configure(state="disabled")
+
+        def worker():
+            NetworkSyncManager.set_lan_config(
+                self.db,
+                role="client",
+                auto_client_sync=True,
+                last_host_ip=host_info.get("ip", ""),
+                last_host_name=host_info.get("hostname", "")
             )
-            if self.on_saved:
-                self.on_saved()
-        else:
-            messagebox.showerror("Bağlantı Hatası", msg, parent=self)
+            ok, msg, updated = NetworkSyncManager.sync_from_host(self.db, host_info=host_info, force=True)
+
+            def done():
+                self.btn_scan_hosts.configure(state="normal")
+                self.lbl_scan_status.configure(text="")
+                if ok:
+                    self.auto_sync_var.set(True)
+                    self.lbl_cur_db.configure(text=str(self.db.db_path))
+                    school = host_info.get("school_name", host_info.get("hostname", "Ana Bilgisayar"))
+                    messagebox.showinfo(
+                        "Ağ Bağlantısı ve Eşitleme Başarılı",
+                        f"✅ '{school}' Ana Sunucusuna başarıyla bağlanıldı ve veriler eşitlendi!\n\n"
+                        f"• Offline-First Modu: Program her açıldığında ana sunucu açıksa veriler otomatik güncellenir; ana sunucu kapalı olduğunda ise yerel verilerinizle kesintisiz açılır.\n"
+                        f"• Artık her seferinde ağ bağlantısını yeniden kurmanıza gerek yoktur.",
+                        parent=self
+                    )
+                    if self.on_saved:
+                        self.on_saved()
+                else:
+                    messagebox.showerror("Bağlantı Hatası", msg, parent=self)
+            self.after(0, done)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _save_password(self):
         p1 = self.ent_new_pwd.get().strip()
@@ -1780,8 +1928,14 @@ class SettingsView(ctk.CTkFrame):
             self.school.daily_periods = count
             self.db.save_school_info(self.school)
 
-            # 2. Ayarlar (Key-Value)
-            self.db.set_setting("vice_principal_name", self.vice_principal_var.get().strip())
+            # 2. Ayarlar (Key-Value & Çoklu Müdür Yardımcısı)
+            vps_raw = [x.strip() for x in self.vice_principals_text_var.get().split(",") if x.strip()]
+            if not vps_raw:
+                vps_raw = ["Müdür Yardımcısı"]
+            self.db.set_vice_principals(vps_raw)
+            active_vp_chosen = self.active_vp_var.get().strip() or vps_raw[0]
+            self.db.set_active_vice_principal(active_vp_chosen)
+            self.db.set_setting("vice_principal_name", active_vp_chosen)
             self.db.set_setting("daily_lesson_count", str(count))
             self.db.set_setting("first_lesson_start", self.lesson_start_var.get().strip())
             self.db.set_setting("last_lesson_end", self.lesson_end_var.get().strip())
